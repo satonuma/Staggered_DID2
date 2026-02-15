@@ -1,0 +1,687 @@
+"""
+===================================================================
+CATE分析: 属性別の異質的処置効果 (Heterogeneous Treatment Effects)
+===================================================================
+分析次元:
+  1. 地域 (region): 都市部 / 郊外 / 地方
+  2. 施設タイプ (facility_type): 病院 / クリニック
+  3. 経験年数 (experience_cat): 若手 / 中堅 / ベテラン
+  4. 診療科 (specialty): 内科 / 外科 / その他
+  5. ベースライン納入額 (baseline_cat): 低 / 中 / 高
+
+手法: CS推定量をサブグループ別に実行 + Bootstrap SE
+===================================================================
+"""
+
+import os
+import warnings
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from scipy import stats
+
+warnings.filterwarnings("ignore")
+
+for _font in ["Yu Gothic", "MS Gothic", "Meiryo", "Hiragino Sans", "IPAexGothic"]:
+    try:
+        matplotlib.rcParams["font.family"] = _font
+        break
+    except Exception:
+        pass
+matplotlib.rcParams["axes.unicode_minus"] = False
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(SCRIPT_DIR, "data")
+# data/ の整合性チェック → data2/ にフォールバック
+_required = ["delivery_data.csv", "viewing_logs.csv", "rw_doctor_list.csv", "facility_master.csv",
+             "channel_master.csv", "doctor_master.csv"]
+_data_ok = all(os.path.exists(os.path.join(DATA_DIR, f)) for f in _required)
+if not _data_ok:
+    _alt = os.path.join(SCRIPT_DIR, "data2")
+    if all(os.path.exists(os.path.join(_alt, f)) for f in _required):
+        DATA_DIR = _alt
+
+START_DATE = "2023-04-01"
+N_MONTHS = 33
+WASHOUT_MONTHS = 2
+LAST_ELIGIBLE_MONTH = 29
+MIN_ET, MAX_ET = -6, 18
+
+# DGPの真のmodifier
+TRUE_MODIFIERS = {
+    "region":         {"都市部": 0.75, "郊外": 1.00, "地方": 1.40},
+    "facility_type":  {"病院": 0.85, "クリニック": 1.20},
+    "experience_cat": {"若手": 1.30, "中堅": 1.00, "ベテラン": 0.70},
+    "specialty":      {"内科": 1.15, "外科": 0.85, "その他": 1.00},
+}
+
+
+# ================================================================
+# CS推定関数
+# ================================================================
+
+def compute_cs_attgt(pdata):
+    doc_info = pdata.groupby("unit_id").agg({"treated": "first", "cohort_month": "first"})
+    pivot = pdata.pivot_table(values="amount", index="unit_id", columns="month_index", aggfunc="mean")
+    ctrl_docs = doc_info[doc_info["treated"] == 0].index
+    if len(ctrl_docs) == 0:
+        return pd.DataFrame()
+    ctrl_means = pivot.loc[ctrl_docs].mean()
+    cohorts = sorted(doc_info.loc[doc_info["cohort_month"].notna(), "cohort_month"].unique())
+    all_times = sorted(pdata["month_index"].unique())
+    rows = []
+    for g in cohorts:
+        g = int(g)
+        base = g - 1
+        if base not in pivot.columns:
+            continue
+        cdocs = doc_info[doc_info["cohort_month"] == g].index
+        if len(cdocs) == 0:
+            continue
+        tmeans = pivot.loc[cdocs].mean()
+        for t in all_times:
+            if t not in pivot.columns:
+                continue
+            att = (tmeans[t] - tmeans[base]) - (ctrl_means[t] - ctrl_means[base])
+            rows.append({"cohort": g, "time": t, "event_time": t - g, "att_gt": att, "n_cohort": len(cdocs)})
+    return pd.DataFrame(rows)
+
+
+def aggregate_dynamic(att_gt):
+    sub = att_gt[(att_gt["event_time"] >= MIN_ET) & (att_gt["event_time"] <= MAX_ET)]
+    if len(sub) == 0:
+        return pd.DataFrame(columns=["event_time", "att"])
+    dyn = sub.groupby("event_time").apply(lambda x: np.average(x["att_gt"], weights=x["n_cohort"])).reset_index()
+    dyn.columns = ["event_time", "att"]
+    return dyn
+
+
+def aggregate_overall(att_gt):
+    post = att_gt[att_gt["event_time"] >= 0]
+    if len(post) == 0:
+        return 0.0
+    return np.average(post["att_gt"], weights=post["n_cohort"])
+
+
+def cs_with_bootstrap(panel, n_boot=150, label=""):
+    att_gt = compute_cs_attgt(panel)
+    if len(att_gt) == 0:
+        return None, None, None, None
+    dynamic = aggregate_dynamic(att_gt)
+    overall = aggregate_overall(att_gt)
+    doc_data = {uid: grp for uid, grp in panel.groupby("unit_id")}
+    treated_ids = panel.loc[panel["treated"] == 1, "unit_id"].unique()
+    control_ids = panel.loc[panel["treated"] == 0, "unit_id"].unique()
+    boot_overall = []
+    boot_dynamic = {}
+    tag = f"[{label}] " if label else ""
+    print(f"    {tag}Bootstrap (n={n_boot}) ...", end="", flush=True)
+    for b in range(n_boot):
+        if (b + 1) % 50 == 0:
+            print(f" {b + 1}", end="", flush=True)
+        bt = np.random.choice(treated_ids, len(treated_ids), replace=True)
+        bc = np.random.choice(control_ids, len(control_ids), replace=True)
+        parts = []
+        for i, uid in enumerate(np.concatenate([bt, bc])):
+            d = doc_data[uid].copy()
+            d["unit_id"] = f"B{i:04d}"
+            parts.append(d)
+        bpanel = pd.concat(parts, ignore_index=True)
+        try:
+            bgt = compute_cs_attgt(bpanel)
+            if len(bgt) == 0:
+                continue
+            boot_overall.append(aggregate_overall(bgt))
+            bdyn = aggregate_dynamic(bgt)
+            for _, row in bdyn.iterrows():
+                et = int(row["event_time"])
+                boot_dynamic.setdefault(et, []).append(row["att"])
+        except Exception:
+            continue
+    print(" done")
+    se_overall = np.std(boot_overall) if boot_overall else 0.0
+    se_dyn_map = {et: np.std(v) for et, v in boot_dynamic.items()}
+    dynamic["se"] = dynamic["event_time"].map(se_dyn_map).fillna(0)
+    dynamic["ci_lo"] = dynamic["att"] - 1.96 * dynamic["se"]
+    dynamic["ci_hi"] = dynamic["att"] + 1.96 * dynamic["se"]
+    return overall, se_overall, dynamic, boot_overall
+
+
+# ================================================================
+# データ読み込み + 除外フロー
+# ================================================================
+print("=" * 70)
+print(" CATE分析: 属性別の異質的処置効果")
+print("=" * 70)
+
+daily_raw = pd.read_csv(os.path.join(DATA_DIR, "delivery_data.csv"))
+viewing_raw = pd.read_csv(os.path.join(DATA_DIR, "viewing_logs.csv"))
+rw_list = pd.read_csv(os.path.join(DATA_DIR, "rw_doctor_list.csv"))
+facility_master = pd.read_csv(os.path.join(DATA_DIR, "facility_master.csv"))
+channel_master = pd.read_csv(os.path.join(DATA_DIR, "channel_master.csv"))
+doctor_attr_master = pd.read_csv(os.path.join(DATA_DIR, "doctor_master.csv"))
+
+daily = daily_raw[daily_raw["品目"] == "ENT"].copy()
+doctor_master = rw_list[
+    (rw_list["品目"] == "ENT")
+    & (rw_list["rw_flag"].notna())
+    & (rw_list["rw_flag"] != "")
+].copy()
+
+# 視聴ログにチャネル大分類を結合し、「その他」を除外
+viewing_with_cat = viewing_raw.merge(channel_master[["channel_id", "channel_category"]], on="channel_id", how="left")
+viewing = viewing_with_cat[viewing_with_cat["channel_category"] != "その他"].copy()
+
+print(f"  納入データ: {len(daily_raw):,} 行 → ENT品目: {len(daily):,} 行")
+print(f"  RW医師リスト: {len(rw_list)} 行 → ENT+RW: {len(doctor_master)} 行")
+print(f"  視聴ログ: {len(viewing_raw):,} 行 → その他除外: {len(viewing):,} 行")
+
+daily["delivery_date"] = pd.to_datetime(daily["delivery_date"])
+viewing["view_date"] = pd.to_datetime(viewing["view_date"])
+months = pd.date_range(start=START_DATE, periods=N_MONTHS, freq="MS")
+
+# --- DGPの真のmodifierを表示 ---
+print("\n[DGPに組み込まれた処置効果の異質性 (modifier)]")
+print("  処置効果 = チャネル基本効果 x modifier")
+print("  modifier = 地域 x 施設タイプ x 経験年数 x 診療科")
+print()
+for dim_name, mods in TRUE_MODIFIERS.items():
+    print(f"  {dim_name}:")
+    for level, val in mods.items():
+        bar = "#" * int(val * 20)
+        print(f"    {level:<10}: {val:.2f}  {bar}")
+print()
+
+# --- 除外フロー ---
+print("[除外フロー]")
+docs_per_fac = doctor_master.groupby("facility_id")["doctor_id"].nunique()
+single_doc_facs = set(docs_per_fac[docs_per_fac == 1].index)
+
+facs_per_doc = doctor_master.groupby("doctor_id")["facility_id"].nunique()
+single_fac_docs = set(facs_per_doc[facs_per_doc == 1].index)
+
+clean_pairs = doctor_master[
+    (doctor_master["facility_id"].isin(single_doc_facs))
+    & (doctor_master["doctor_id"].isin(single_fac_docs))
+].copy()
+
+fac_to_doc = dict(zip(clean_pairs["facility_id"], clean_pairs["doctor_id"]))
+doc_to_fac = dict(zip(clean_pairs["doctor_id"], clean_pairs["facility_id"]))
+clean_doc_ids = set(clean_pairs["doctor_id"])
+
+washout_end = months[WASHOUT_MONTHS - 1] + pd.offsets.MonthEnd(0)
+viewing_clean = viewing[viewing["doctor_id"].isin(clean_doc_ids)].copy()
+washout_viewers = set(
+    viewing_clean[viewing_clean["view_date"] <= washout_end]["doctor_id"].unique()
+)
+clean_doc_ids -= washout_viewers
+
+viewing_after_washout = viewing_clean[
+    (viewing_clean["doctor_id"].isin(clean_doc_ids))
+    & (viewing_clean["view_date"] > washout_end)
+]
+first_view = viewing_after_washout.groupby("doctor_id")["view_date"].min().reset_index()
+first_view.columns = ["doctor_id", "first_view_date"]
+first_view["first_view_month"] = (
+    (first_view["first_view_date"].dt.year - 2023) * 12
+    + first_view["first_view_date"].dt.month - 4
+)
+late_adopters = set(first_view[first_view["first_view_month"] > LAST_ELIGIBLE_MONTH]["doctor_id"])
+clean_doc_ids -= late_adopters
+
+treated_doc_ids = set(first_view[
+    first_view["first_view_month"] <= LAST_ELIGIBLE_MONTH
+]["doctor_id"]) & clean_doc_ids
+all_viewing_doc_ids = set(viewing["doctor_id"].unique())
+control_doc_ids = clean_doc_ids - all_viewing_doc_ids
+
+analysis_doc_ids = treated_doc_ids | control_doc_ids
+analysis_fac_ids = {doc_to_fac[d] for d in analysis_doc_ids}
+
+print(f"  処置群: {len(treated_doc_ids)} 施設, 対照群: {len(control_doc_ids)} 施設, 合計: {len(analysis_fac_ids)} 施設")
+
+# ================================================================
+# パネルデータ構築
+# ================================================================
+daily_target = daily[daily["facility_id"].isin(analysis_fac_ids)].copy()
+daily_target["month_index"] = (
+    (daily_target["delivery_date"].dt.year - 2023) * 12
+    + daily_target["delivery_date"].dt.month - 4
+)
+monthly = daily_target.groupby(["facility_id", "month_index"])["amount"].sum().reset_index()
+
+full_idx = pd.MultiIndex.from_product(
+    [sorted(analysis_fac_ids), list(range(N_MONTHS))],
+    names=["facility_id", "month_index"]
+)
+panel_base = (
+    monthly.set_index(["facility_id", "month_index"])
+    .reindex(full_idx, fill_value=0).reset_index()
+)
+panel_base["unit_id"] = panel_base["facility_id"]
+panel_base["doctor_id"] = panel_base["facility_id"].map(fac_to_doc)
+
+first_view_eligible = first_view[
+    first_view["doctor_id"].isin(treated_doc_ids)
+][["doctor_id", "first_view_month"]].copy()
+first_view_eligible["facility_id"] = first_view_eligible["doctor_id"].map(doc_to_fac)
+first_view_eligible = first_view_eligible.rename(columns={"first_view_month": "cohort_month"})
+
+panel = panel_base.merge(
+    first_view_eligible[["facility_id", "cohort_month"]], on="facility_id", how="left",
+)
+panel["treated"] = panel["cohort_month"].notna().astype(int)
+
+# ================================================================
+# 属性のマージ
+# ================================================================
+print("\n[属性のマージ]")
+doc_attrs = doctor_attr_master[["doctor_id", "experience_years", "experience_cat", "specialty"]]
+fac_attrs = facility_master[["facility_id", "region", "facility_type"]]
+
+panel = panel.merge(doc_attrs, left_on="doctor_id", right_on="doctor_id", how="left")
+panel = panel.merge(fac_attrs, on="facility_id", how="left")
+
+# ベースライン納入額 (wash-out期間の平均)
+baseline = panel[panel["month_index"] < WASHOUT_MONTHS].groupby("unit_id")["amount"].mean().reset_index()
+baseline.columns = ["unit_id", "baseline_amount"]
+baseline["baseline_cat"] = pd.qcut(baseline["baseline_amount"], q=3, labels=["低", "中", "高"])
+panel = panel.merge(baseline[["unit_id", "baseline_cat"]], on="unit_id", how="left")
+
+# 属性分布
+for attr in ["region", "facility_type", "experience_cat", "specialty", "baseline_cat"]:
+    dist = panel.drop_duplicates("unit_id").groupby(["treated", attr]).size().unstack(fill_value=0)
+    print(f"\n  {attr}:")
+    print(f"    {'':>8} " + " ".join(f"{c:>8}" for c in dist.columns))
+    for idx in dist.index:
+        lbl = "処置群" if idx == 1 else "対照群"
+        print(f"    {lbl:>8} " + " ".join(f"{dist.loc[idx, c]:>8}" for c in dist.columns))
+
+
+# ================================================================
+# CATE推定
+# ================================================================
+print("\n" + "=" * 70)
+print(" CATE推定: サブグループ別CS")
+print("=" * 70)
+
+CATE_DIMS = [
+    ("region", ["都市部", "郊外", "地方"]),
+    ("facility_type", ["病院", "クリニック"]),
+    ("experience_cat", ["若手", "中堅", "ベテラン"]),
+    ("specialty", ["内科", "外科", "その他"]),
+    ("baseline_cat", ["低", "中", "高"]),
+]
+
+N_BOOT = 150
+cate_results = {}
+
+for dim_name, levels in CATE_DIMS:
+    print(f"\n{'='*50}")
+    print(f"  次元: {dim_name}")
+    print(f"{'='*50}")
+
+    dim_results = {}
+    for level in levels:
+        unit_info = panel.drop_duplicates("unit_id")
+        treated_units = unit_info[(unit_info["treated"] == 1) & (unit_info[dim_name] == level)]["unit_id"].unique()
+        control_units = unit_info[unit_info["treated"] == 0]["unit_id"].unique()
+        n_t = len(treated_units)
+        print(f"\n  {level}: 処置群={n_t}, 対照群={len(control_units)}")
+
+        if n_t < 2:
+            print(f"    -> スキップ (N<2)")
+            dim_results[level] = {"att": np.nan, "se": np.nan, "ci_lo": np.nan,
+                                   "ci_hi": np.nan, "n": n_t, "boot_samples": [], "dynamic": None}
+            continue
+
+        sub_panel = panel[panel["unit_id"].isin(set(treated_units) | set(control_units))].copy()
+        result = cs_with_bootstrap(sub_panel, n_boot=N_BOOT, label=level)
+        overall, se, dynamic, boot_samples = result
+
+        if overall is None:
+            dim_results[level] = {"att": np.nan, "se": np.nan, "ci_lo": np.nan,
+                                   "ci_hi": np.nan, "n": n_t, "boot_samples": [], "dynamic": None}
+            continue
+
+        ci_lo = overall - 1.96 * se
+        ci_hi = overall + 1.96 * se
+        z = overall / se if se > 0 else float("inf")
+        p = 2 * (1 - stats.norm.cdf(abs(z)))
+        sig = "***" if p < 0.001 else "**" if p < 0.01 else "*" if p < 0.05 else "n.s."
+        print(f"    ATT={overall:.1f}, SE={se:.1f}, 95%CI=[{ci_lo:.1f}, {ci_hi:.1f}] {sig}")
+
+        dim_results[level] = {"att": overall, "se": se, "ci_lo": ci_lo, "ci_hi": ci_hi,
+                               "n": n_t, "boot_samples": boot_samples, "dynamic": dynamic}
+
+    cate_results[dim_name] = dim_results
+
+
+# ================================================================
+# サブグループ間の差の検定
+# ================================================================
+print("\n" + "=" * 70)
+print(" サブグループ間の差の検定")
+print("=" * 70)
+
+diff_results = {}
+for dim_name, levels in CATE_DIMS:
+    print(f"\n  --- {dim_name} ---")
+    valid_levels = [l for l in levels if not np.isnan(cate_results[dim_name][l]["att"])]
+    if len(valid_levels) < 2:
+        continue
+    dim_diffs = {}
+    for i, l1 in enumerate(valid_levels):
+        for l2 in valid_levels[i+1:]:
+            r1, r2 = cate_results[dim_name][l1], cate_results[dim_name][l2]
+            diff = r1["att"] - r2["att"]
+            b1, b2 = np.array(r1["boot_samples"]), np.array(r2["boot_samples"])
+            n_common = min(len(b1), len(b2))
+            if n_common > 0:
+                boot_diff = b1[:n_common] - b2[:n_common]
+                se_diff = np.std(boot_diff)
+                z_diff = diff / se_diff if se_diff > 0 else float("inf")
+                p_diff = 2 * (1 - stats.norm.cdf(abs(z_diff)))
+                sig_diff = "***" if p_diff < 0.001 else "**" if p_diff < 0.01 else "*" if p_diff < 0.05 else "n.s."
+            else:
+                se_diff, p_diff, sig_diff = np.nan, np.nan, "N/A"
+            print(f"    {l1} - {l2}: diff={diff:.1f}, SE={se_diff:.1f}, p={p_diff:.4f} {sig_diff}")
+            dim_diffs[f"{l1} - {l2}"] = {"diff": diff, "se": se_diff, "p": p_diff, "sig": sig_diff}
+    diff_results[dim_name] = dim_diffs
+
+
+# ================================================================
+# 推定結果サマリー
+# ================================================================
+print("\n" + "=" * 70)
+print(" 推定結果サマリー")
+print("=" * 70)
+
+print(f"\n  {'次元':<16} {'レベル':<10} {'N':>4} {'ATT':>8} {'SE':>8} {'95%CI':>20} {'DGP':>6}")
+print(f"  {'-' * 78}")
+
+for dim_name, levels in CATE_DIMS:
+    for level in levels:
+        r = cate_results[dim_name][level]
+        if np.isnan(r["att"]):
+            att_s, se_s, ci_s = "   N/A", "   N/A", "        N/A         "
+        else:
+            att_s = f"{r['att']:>8.1f}"
+            se_s = f"{r['se']:>8.1f}"
+            ci_s = f"[{r['ci_lo']:>7.1f}, {r['ci_hi']:>7.1f}]"
+
+        true_mod = TRUE_MODIFIERS.get(dim_name, {}).get(level, None)
+        mod_s = f"{true_mod:>6.2f}" if true_mod is not None else "   N/A"
+
+        print(f"  {dim_name:<16} {level:<10} {r['n']:>4} {att_s} {se_s} {ci_s} {mod_s}")
+    print()
+
+
+# ================================================================
+# 主な知見
+# ================================================================
+print("=" * 70)
+print(" 主な知見")
+print("=" * 70)
+
+for dim_name, levels in CATE_DIMS:
+    valid = {l: cate_results[dim_name][l] for l in levels
+             if not np.isnan(cate_results[dim_name][l]["att"])}
+    if len(valid) < 2:
+        continue
+
+    max_l = max(valid, key=lambda l: valid[l]["att"])
+    min_l = min(valid, key=lambda l: valid[l]["att"])
+    diff_val = valid[max_l]["att"] - valid[min_l]["att"]
+
+    # 対応するdiff_resultを探す
+    p_str = ""
+    if dim_name in diff_results:
+        for key, d in diff_results[dim_name].items():
+            if (max_l in key and min_l in key):
+                p_str = f" (p={d['p']:.3f} {d['sig']})"
+                break
+
+    # DGP modifierとの整合性チェック
+    dgp_check = ""
+    if dim_name in TRUE_MODIFIERS:
+        true_max = max(TRUE_MODIFIERS[dim_name], key=TRUE_MODIFIERS[dim_name].get)
+        true_min = min(TRUE_MODIFIERS[dim_name], key=TRUE_MODIFIERS[dim_name].get)
+        if max_l == true_max:
+            dgp_check = " [DGP整合]"
+        else:
+            dgp_check = f" [DGP: {true_max}が最大のはず]"
+
+    print(f"\n  [{dim_name}]")
+    print(f"    効果が最大: {max_l} (ATT={valid[max_l]['att']:.1f}, N={valid[max_l]['n']})")
+    print(f"    効果が最小: {min_l} (ATT={valid[min_l]['att']:.1f}, N={valid[min_l]['n']})")
+    print(f"    差: {diff_val:.1f}{p_str}{dgp_check}")
+
+
+# ================================================================
+# 可視化 1: Forest plot
+# ================================================================
+print("\n" + "=" * 70)
+print(" 可視化")
+print("=" * 70)
+
+colors_map = {
+    "region": {"都市部": "#4C72B0", "郊外": "#55A868", "地方": "#C44E52"},
+    "facility_type": {"病院": "#4C72B0", "クリニック": "#C44E52"},
+    "experience_cat": {"若手": "#C44E52", "中堅": "#55A868", "ベテラン": "#4C72B0"},
+    "specialty": {"内科": "#C44E52", "外科": "#4C72B0", "その他": "#55A868"},
+    "baseline_cat": {"低": "#4C72B0", "中": "#55A868", "高": "#C44E52"},
+}
+
+n_dims = len(CATE_DIMS)
+fig, axes = plt.subplots(2, 3, figsize=(18, 11))
+fig.suptitle("CATE分析: 属性別の異質的処置効果\n(Callaway-Sant'Anna, サブグループ別推定)",
+             fontsize=13, fontweight="bold")
+axes_flat = axes.flatten()
+
+for idx, (dim_name, levels) in enumerate(CATE_DIMS):
+    ax = axes_flat[idx]
+    y_positions, y_labels, atts, ci_los, ci_his, bar_colors = [], [], [], [], [], []
+
+    for i, level in enumerate(reversed(levels)):
+        r = cate_results[dim_name][level]
+        if np.isnan(r["att"]):
+            continue
+        y_positions.append(i)
+        y_labels.append(f"{level} (N={r['n']})")
+        atts.append(r["att"])
+        ci_los.append(r["ci_lo"])
+        ci_his.append(r["ci_hi"])
+        bar_colors.append(colors_map.get(dim_name, {}).get(level, "#4C72B0"))
+
+    if not atts:
+        ax.set_title(dim_name)
+        continue
+
+    ax.axvline(0, color="gray", lw=0.8, ls=":")
+    for i, (yp, att, cl, ch, col) in enumerate(zip(y_positions, atts, ci_los, ci_his, bar_colors)):
+        ax.errorbar(att, yp, xerr=[[att - cl], [ch - att]], fmt="o", color=col,
+                     capsize=5, ms=8, capthick=1.5, elinewidth=1.5)
+        ax.text(ch + 0.5, yp, f"{att:.1f}", va="center", fontsize=9)
+
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels(y_labels)
+    ax.set_xlabel("ATT")
+    ax.set_title(dim_name)
+    ax.grid(True, alpha=0.3, axis="x")
+
+# ATT vs DGP modifier
+ax = axes_flat[n_dims]
+est_atts, true_mods, labels = [], [], []
+for dim_name, levels in CATE_DIMS:
+    if dim_name not in TRUE_MODIFIERS:
+        continue
+    for level in levels:
+        r = cate_results[dim_name][level]
+        if np.isnan(r["att"]) or level not in TRUE_MODIFIERS[dim_name]:
+            continue
+        est_atts.append(r["att"])
+        true_mods.append(TRUE_MODIFIERS[dim_name][level])
+        labels.append(f"{dim_name}:{level}")
+
+if len(est_atts) > 1:
+    ax.scatter(true_mods, est_atts, s=60, c="#4C72B0", zorder=5)
+    for i, lbl in enumerate(labels):
+        ax.annotate(lbl, (true_mods[i], est_atts[i]),
+                     textcoords="offset points", xytext=(5, 5), fontsize=7)
+    z = np.polyfit(true_mods, est_atts, 1)
+    x_line = np.linspace(min(true_mods) - 0.05, max(true_mods) + 0.05, 50)
+    ax.plot(x_line, np.polyval(z, x_line), "r--", lw=1, alpha=0.7, label=f"slope={z[0]:.1f}")
+    corr = np.corrcoef(true_mods, est_atts)[0, 1]
+    ax.set_title(f"推定ATT vs DGP modifier (r={corr:.2f})")
+    ax.legend(fontsize=9)
+
+ax.set_xlabel("DGP modifier")
+ax.set_ylabel("推定ATT")
+ax.grid(True, alpha=0.3)
+
+plt.tight_layout()
+out_path = os.path.join(SCRIPT_DIR, "cate_results.png")
+plt.savefig(out_path, dpi=150, bbox_inches="tight")
+plt.close(fig)
+print(f"\n  図を保存: {out_path}")
+
+# 可視化 2: 動的効果
+fig2, axes2 = plt.subplots(2, 2, figsize=(16, 11))
+fig2.suptitle("CATE動的効果: サブグループ別イベントスタディ", fontsize=13, fontweight="bold")
+
+plot_dims = [
+    ("region", ["都市部", "郊外", "地方"]),
+    ("facility_type", ["病院", "クリニック"]),
+    ("experience_cat", ["若手", "中堅", "ベテラン"]),
+    ("specialty", ["内科", "外科", "その他"]),
+]
+markers = ["o", "s", "^", "D"]
+
+for idx, (dim_name, levels) in enumerate(plot_dims):
+    ax = axes2[idx // 2, idx % 2]
+    ax.axhline(0, color="black", lw=0.8)
+    ax.axvline(-0.5, color="red", ls="--", lw=0.8, alpha=0.5)
+    for j, level in enumerate(levels):
+        r = cate_results[dim_name][level]
+        if r["dynamic"] is None:
+            continue
+        dyn = r["dynamic"]
+        col = colors_map.get(dim_name, {}).get(level, f"C{j}")
+        ax.fill_between(dyn["event_time"], dyn["ci_lo"], dyn["ci_hi"], alpha=0.08, color=col)
+        ax.plot(dyn["event_time"], dyn["att"], f"{markers[j]}-",
+                color=col, ms=3, label=f"{level} (N={r['n']})", lw=1)
+    ax.set_xlabel("イベント時間 (月)")
+    ax.set_ylabel("ATT")
+    ax.set_title(dim_name)
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3)
+
+plt.tight_layout()
+out_path2 = os.path.join(SCRIPT_DIR, "cate_dynamic_effects.png")
+plt.savefig(out_path2, dpi=150, bbox_inches="tight")
+plt.close(fig2)
+print(f"  図を保存: {out_path2}")
+
+
+# ================================================================
+# 結論
+# ================================================================
+print("\n" + "=" * 70)
+print(" 結論")
+print("=" * 70)
+
+print("""
+  === 方法論 ===
+  - Callaway-Sant'Anna (2021) をサブグループ別に適用
+  - 処置群を属性レベルで分割し、共通の対照群と比較
+  - Bootstrap (N=150) による標準誤差推定
+  - サブグループ間差はBootstrap分布の差で検定""")
+
+print("  === DGPの真の処置効果異質性 ===")
+for dim_name, mods in TRUE_MODIFIERS.items():
+    vals = ", ".join(f"{k}={v}" for k, v in mods.items())
+    print(f"    {dim_name}: {vals}")
+
+print("\n  === 推定されたCATEの要約 ===")
+for dim_name, levels in CATE_DIMS:
+    valid = {l: cate_results[dim_name][l] for l in levels
+             if not np.isnan(cate_results[dim_name][l]["att"])}
+    if len(valid) < 2:
+        continue
+    max_l = max(valid, key=lambda l: valid[l]["att"])
+    min_l = min(valid, key=lambda l: valid[l]["att"])
+    print(f"    {dim_name}: {max_l}({valid[max_l]['att']:.1f}) > {min_l}({valid[min_l]['att']:.1f})")
+
+print("""
+  === 注意点 ===
+  - サブグループのNが小さいため検出力は限定的
+  - 各サブグループのATTは共通の対照群を使用
+  - modifier は乗算で効くため、基本効果が大きいほど差が拡大
+  - baseline_catは処置前アウトカムからの導出 (内生性なし)
+""")
+
+# ================================================================
+# JSON結果保存
+# ================================================================
+import json
+
+results_dir = os.path.join(SCRIPT_DIR, "results")
+os.makedirs(results_dir, exist_ok=True)
+
+# CATE推定結果
+cate_json = {}
+for dim_name, levels in CATE_DIMS:
+    dim_json = {}
+    for level in levels:
+        r = cate_results[dim_name][level]
+        dim_json[level] = {
+            "att": float(r["att"]) if not np.isnan(r["att"]) else None,
+            "se": float(r["se"]) if not np.isnan(r["se"]) else None,
+            "ci_lo": float(r["ci_lo"]) if not np.isnan(r["ci_lo"]) else None,
+            "ci_hi": float(r["ci_hi"]) if not np.isnan(r["ci_hi"]) else None,
+            "n": int(r["n"]),
+        }
+        if r["dynamic"] is not None:
+            dim_json[level]["dynamic"] = r["dynamic"][
+                ["event_time", "att", "se", "ci_lo", "ci_hi"]
+            ].to_dict("records")
+    cate_json[dim_name] = dim_json
+
+# サブグループ間差の検定結果
+diff_json = {}
+for dim_name, diffs in diff_results.items():
+    dim_diff = {}
+    for key, d in diffs.items():
+        dim_diff[key] = {
+            "diff": float(d["diff"]),
+            "se": float(d["se"]) if not np.isnan(d["se"]) else None,
+            "p": float(d["p"]) if not np.isnan(d["p"]) else None,
+            "sig": d["sig"],
+        }
+    diff_json[dim_name] = dim_diff
+
+# 属性分布テーブル
+attr_dist_json = {}
+for attr in ["region", "facility_type", "experience_cat", "specialty", "baseline_cat"]:
+    dist = panel.drop_duplicates("unit_id").groupby(["treated", attr]).size().unstack(fill_value=0)
+    attr_dist_json[attr] = {
+        "treated": {str(c): int(dist.loc[1, c]) for c in dist.columns} if 1 in dist.index else {},
+        "control": {str(c): int(dist.loc[0, c]) for c in dist.columns} if 0 in dist.index else {},
+    }
+
+cate_results_json = {
+    "cate": cate_json,
+    "diff_tests": diff_json,
+    "attr_distribution": attr_dist_json,
+    "true_modifiers": TRUE_MODIFIERS,
+    "dimensions": [{"name": d, "levels": l} for d, l in CATE_DIMS],
+}
+
+json_path = os.path.join(results_dir, "cate_results.json")
+with open(json_path, "w", encoding="utf-8") as f:
+    json.dump(cate_results_json, f, ensure_ascii=False, indent=2)
+print(f"  結果をJSON保存: {json_path}")

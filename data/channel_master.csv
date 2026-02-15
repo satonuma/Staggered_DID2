@@ -1,0 +1,13 @@
+﻿channel_id,channel_name,channel_category
+CH01,Web講演会 LIVE,web講演会
+CH02,Web講演会 オンデマンド,web講演会
+CH03,Web講演会 アーカイブ,web講演会
+CH04,Webinar 社内講演,Webinar
+CH05,Webinar 学術講演,Webinar
+CH06,Webinar セミナー,Webinar
+CH07,e-contents 動画,e-contents
+CH08,e-contents PDF資料,e-contents
+CH09,e-contents インタラクティブ,e-contents
+CH10,メルマガ配信,その他
+CH11,アンケート回答,その他
+CH12,資材ダウンロード,その他
