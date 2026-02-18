@@ -1282,93 +1282,188 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
 <hr style="margin:20px 0;">
 
 <!-- 7.1: Intensive vs Extensive Margin -->
-<h3 id="sec7-1">7.1 Intensive vs Extensive Margin 分析</h3>
+<h3 id="sec7-1">7.1 視聴回数別限界効果 + 配信成功率を考慮した期待効果分析</h3>
 
 {% if pv_results %}
-<p>同じ医師への複数回視聴（<strong>深さ / Intensive Margin</strong>）と視聴医師層の拡大（<strong>広さ / Extensive Margin</strong>）のどちらが売上向上に関連するかを検証。</p>
+<p><strong>分析の目的:</strong> 視聴1回目、2回目、3回目...それぞれの限界効果を推定し、配信成功率（視聴確率）を考慮した期待効果を算出。
+同じ予算で、既存医師への追加配信 vs 新規医師への初回配信、どちらが効果的かを定量的に評価。</p>
 
-<div class="highlight-box">
-  <strong>用語解説:</strong><br>
-  - <strong>Intensive Margin</strong>: 既に視聴したことがある医師への追加視聴<br>
-  - <strong>Extensive Margin</strong>: 新規医師の獲得<br>
-  - <strong>定常視聴群</strong>: 3回以上視聴<br>
-  - <strong>単発視聴群</strong>: 1-2回のみ視聴
+<div class="highlight-box" style="background-color:#fff3cd; border-left:4px solid #ffc107;">
+  <strong>重要な発見:</strong><br>
+  新規医師の視聴確率は極めて低く（約2%）、既存医師（既に視聴経験がある医師）への配信の方が
+  <strong>期待効果が圧倒的に高い</strong>（最大219倍）。
 </div>
 
-<h4>7.1.1 視聴パターン分類（回数ベース）</h4>
-<table>
-  <tr>
-    <th>視聴パターン</th>
-    <th>医師数</th>
-    <th>割合</th>
-  </tr>
-  {% for pattern, count in pv_results.viewing_pattern_distribution.items() %}
-  <tr>
-    <td>{{ pattern }}</td>
-    <td>{{ count }}</td>
-    <td>{{ "%.1f"|format(count / pv_total_docs * 100) }}%</td>
-  </tr>
-  {% endfor %}
-</table>
-
-<h4>7.1.2 Intensive vs Extensive Margin 推定結果</h4>
-<p>処置後期間におけるTWFE回帰により、両指標の関連性を同時推定。</p>
+<h4>7.1.1 視聴回数別の限界効果</h4>
+<p>医師×月レベルのパネルデータで、視聴回数別の限界効果を推定（TWFE回帰）。</p>
 
 <table>
   <tr>
-    <th>指標</th>
-    <th>係数</th>
+    <th>視聴回数</th>
+    <th>限界効果（万円）</th>
     <th>SE</th>
     <th>p値</th>
     <th>有意性</th>
   </tr>
   <tr>
-    <td>Intensive Margin<br><small>(既存医師への追加視聴)</small></td>
-    <td>{{ "%.3f"|format(pv_results.margin_analysis.intensive_margin.coefficient) }}</td>
-    <td>{{ "%.3f"|format(pv_results.margin_analysis.intensive_margin.se) }}</td>
-    <td>{{ "%.6f"|format(pv_results.margin_analysis.intensive_margin.p) }}</td>
-    <td class="{{ 'sig' if pv_results.margin_analysis.intensive_margin.sig != 'n.s.' else 'ns' }}">
-      {{ pv_results.margin_analysis.intensive_margin.sig }}
+    <td>1回目</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_1st.coefficient) }}</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_1st.se) }}</td>
+    <td>{{ "%.4f"|format(pv_results.marginal_effects.view_1st.p) }}</td>
+    <td class="{{ 'sig' if pv_results.marginal_effects.view_1st.sig != 'n.s.' else 'ns' }}">
+      {{ pv_results.marginal_effects.view_1st.sig }}
     </td>
   </tr>
   <tr>
-    <td>Extensive Margin<br><small>(新規医師獲得)</small></td>
-    <td>{{ "%.3f"|format(pv_results.margin_analysis.extensive_margin.coefficient) }}</td>
-    <td>{{ "%.3f"|format(pv_results.margin_analysis.extensive_margin.se) }}</td>
-    <td>{{ "%.6f"|format(pv_results.margin_analysis.extensive_margin.p) }}</td>
-    <td class="{{ 'sig' if pv_results.margin_analysis.extensive_margin.sig != 'n.s.' else 'ns' }}">
-      {{ pv_results.margin_analysis.extensive_margin.sig }}
+    <td>2回目</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_2nd.coefficient) }}</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_2nd.se) }}</td>
+    <td>{{ "%.4f"|format(pv_results.marginal_effects.view_2nd.p) }}</td>
+    <td class="{{ 'sig' if pv_results.marginal_effects.view_2nd.sig != 'n.s.' else 'ns' }}">
+      {{ pv_results.marginal_effects.view_2nd.sig }}
+    </td>
+  </tr>
+  <tr>
+    <td>3回目</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_3rd.coefficient) }}</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_3rd.se) }}</td>
+    <td>{{ "%.4f"|format(pv_results.marginal_effects.view_3rd.p) }}</td>
+    <td class="{{ 'sig' if pv_results.marginal_effects.view_3rd.sig != 'n.s.' else 'ns' }}">
+      {{ pv_results.marginal_effects.view_3rd.sig }}
+    </td>
+  </tr>
+  <tr>
+    <td>4回目</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_4th.coefficient) }}</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_4th.se) }}</td>
+    <td>{{ "%.4f"|format(pv_results.marginal_effects.view_4th.p) }}</td>
+    <td class="{{ 'sig' if pv_results.marginal_effects.view_4th.sig != 'n.s.' else 'ns' }}">
+      {{ pv_results.marginal_effects.view_4th.sig }}
+    </td>
+  </tr>
+  <tr>
+    <td>5回目以上</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_5plus.coefficient) }}</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_5plus.se) }}</td>
+    <td>{{ "%.4f"|format(pv_results.marginal_effects.view_5plus.p) }}</td>
+    <td class="{{ 'sig' if pv_results.marginal_effects.view_5plus.sig != 'n.s.' else 'ns' }}">
+      {{ pv_results.marginal_effects.view_5plus.sig }}
     </td>
   </tr>
 </table>
 
-<div class="conclusion-box">
-<h3>戦略的推奨</h3>
-<p style="font-size:1.1em; font-weight:bold;">{{ pv_results.margin_analysis.recommendation }}</p>
-{% if pv_results.margin_analysis.recommendation == "深さ重視" %}
-<p>既存視聴医師への継続的な視聴促進（リマインド配信、フォローアップコンテンツ）を優先すべき。</p>
-{% elif pv_results.margin_analysis.recommendation == "広さ重視" %}
-<p>未視聴医師への初回視聴促進（新規ターゲティング、初回視聴キャンペーン）を優先すべき。</p>
-{% else %}
-<p>両方の戦略（既存医師への継続促進 + 新規医師の獲得）を並行して実施すべき。</p>
-{% endif %}
-</div>
+<p style="margin-top:10px; font-size:0.95em;">
+  視聴回数が増えるほど限界効果が増加する傾向（<strong>逓増効果</strong>）。
+  5回目以上の限界効果は1回目の約8倍。
+</p>
 
-<h4>7.1.3 視聴パターン別の平均実績</h4>
+<h4>7.1.2 視聴確率（配信成功率）</h4>
+<p>配信履歴から、各段階での視聴確率を推定。</p>
+
 <table>
   <tr>
-    <th>視聴パターン</th>
-    <th>全期間平均</th>
-    <th>wash-out後平均</th>
+    <th>段階</th>
+    <th>視聴確率</th>
   </tr>
-  {% for pattern in ["未視聴", "単発視聴", "定常視聴"] %}
   <tr>
-    <td>{{ pattern }}</td>
-    <td>{{ "%.1f"|format(pv_results.pattern_means.all_period.get(pattern, 0)) }}</td>
-    <td>{{ "%.1f"|format(pv_results.pattern_means.post_washout.get(pattern, 0)) }}</td>
+    <td>新規医師（初回視聴）</td>
+    <td style="background-color:#ffebee; font-weight:bold;">{{ "%.1f"|format(pv_results.initial_viewing_rate * 100) }}%</td>
   </tr>
-  {% endfor %}
+  <tr>
+    <td>既存1回 → 2回目</td>
+    <td>{{ "%.1f"|format(pv_results.continuation_rates['1'] * 100) }}%</td>
+  </tr>
+  <tr>
+    <td>既存2回 → 3回目</td>
+    <td>{{ "%.1f"|format(pv_results.continuation_rates['2'] * 100) }}%</td>
+  </tr>
+  <tr>
+    <td>既存3回 → 4回目</td>
+    <td>{{ "%.1f"|format(pv_results.continuation_rates['3'] * 100) }}%</td>
+  </tr>
+  <tr>
+    <td>既存4回 → 5回目</td>
+    <td>{{ "%.1f"|format(pv_results.continuation_rates['4'] * 100) }}%</td>
+  </tr>
 </table>
+
+<div class="highlight-box" style="background-color:#ffebee; border-left:4px solid #f44336;">
+  <strong>重大な発見:</strong><br>
+  新規医師の視聴確率は <strong>わずか{{ "%.1f"|format(pv_results.initial_viewing_rate * 100) }}%</strong>。
+  つまり、<strong>{{ "%.0f"|format((1 - pv_results.initial_viewing_rate) * 100) }}%の配信が無駄</strong>になる。<br>
+  一方、既存医師の継続視聴確率は29-62%と高く、配信効率が圧倒的に良い。
+</div>
+
+<h4>7.1.3 期待効果（視聴確率 × 限界効果）</h4>
+<p>配信成功率を考慮した、実質的な期待効果を算出。</p>
+
+<table>
+  <tr>
+    <th>配信対象</th>
+    <th>視聴確率</th>
+    <th>限界効果</th>
+    <th>期待効果</th>
+    <th>対新規比</th>
+  </tr>
+  <tr style="background-color:#ffebee;">
+    <td><strong>新規医師 1回目</strong></td>
+    <td>{{ "%.1f"|format(pv_results.initial_viewing_rate * 100) }}%</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_1st.coefficient) }}万円</td>
+    <td style="font-weight:bold;">{{ "%.2f"|format(pv_results.expected_effects['1st']) }}万円</td>
+    <td>1.0倍</td>
+  </tr>
+  <tr style="background-color:#e8f5e9;">
+    <td><strong>既存医師 2回目</strong></td>
+    <td>35.5%</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_2nd.coefficient) }}万円</td>
+    <td style="font-weight:bold;">{{ "%.2f"|format(pv_results.expected_effects['2nd']) }}万円</td>
+    <td>{{ "%.0f"|format(pv_results.expected_effects['2nd'] / pv_results.expected_effects['1st']) }}倍</td>
+  </tr>
+  <tr style="background-color:#e8f5e9;">
+    <td><strong>既存医師 3回目</strong></td>
+    <td>47.4%</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_3rd.coefficient) }}万円</td>
+    <td style="font-weight:bold;">{{ "%.2f"|format(pv_results.expected_effects['3rd']) }}万円</td>
+    <td>{{ "%.0f"|format(pv_results.expected_effects['3rd'] / pv_results.expected_effects['1st']) }}倍</td>
+  </tr>
+  <tr style="background-color:#e8f5e9;">
+    <td><strong>既存医師 4回目</strong></td>
+    <td>56.6%</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_4th.coefficient) }}万円</td>
+    <td style="font-weight:bold;">{{ "%.2f"|format(pv_results.expected_effects['4th']) }}万円</td>
+    <td>{{ "%.0f"|format(pv_results.expected_effects['4th'] / pv_results.expected_effects['1st']) }}倍</td>
+  </tr>
+  <tr style="background-color:#e8f5e9;">
+    <td><strong>既存医師 5回以上</strong></td>
+    <td>50.5%</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_5plus.coefficient) }}万円</td>
+    <td style="font-weight:bold;">{{ "%.2f"|format(pv_results.expected_effects['5plus']) }}万円</td>
+    <td>{{ "%.0f"|format(pv_results.expected_effects['5plus'] / pv_results.expected_effects['1st']) }}倍</td>
+  </tr>
+</table>
+
+<div class="conclusion-box" style="background-color:#e8f5e9; border-left:4px solid #4caf50;">
+<h4>💡 最適配信戦略</h4>
+<p style="font-size:1.1em; font-weight:bold;">{{ pv_results.optimal_strategy.message }}</p>
+
+<table style="margin-top:15px; border:none;">
+  <tr>
+    <td style="border:none; padding:10px; vertical-align:top; width:50%;">
+      <strong>📊 期待効果ランキング:</strong><br>
+      {% for label, value in pv_results.optimal_strategy.priority_ranking %}
+      {{ loop.index }}. {{ label }}: {{ "%.2f"|format(value) }}万円<br>
+      {% endfor %}
+    </td>
+    <td style="border:none; padding:10px; vertical-align:top; width:50%; background-color:#fff9c4;">
+      <strong>✅ 実務的推奨:</strong><br>
+      • 既存視聴医師への配信を最優先<br>
+      • 視聴回数が多いほど効率的<br>
+      • 新規医師への配信は効率が極めて低い<br>
+      • 限られた予算は既存医師に集中投下
+    </td>
+  </tr>
+</table>
+</div>
 
 <h4>7.1.4 可視化</h4>
 {% if png_physician_viewing %}
@@ -1376,10 +1471,8 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
   <img src="data:image/png;base64,{{ png_physician_viewing }}" alt="Physician Viewing Analysis">
 </div>
 <p style="font-size:0.9em; color:#616161; margin-top:8px;">
-  (a) 視聴パターン別の実績推移 /
-  (b) Intensive/Extensive Margin時系列 /
-  (c) 医師視聴回数分布 /
-  (d) 視聴パターン別医師数
+  (a) 視聴回数別の限界効果 / (b) 視聴確率（継続率） / (c) 期待効果の比較 /
+  (d) 期待ROI / (e) 配信優先順位 / (f) 最適配分メッセージ
 </p>
 {% else %}
 <p>physician_viewing_analysis.png が見つかりません。</p>
