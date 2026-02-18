@@ -317,11 +317,13 @@ for n in range(0, 15):
         print(f"  累積{n}回 → 次月視聴確率: {continuation_rate:.1%}")
 
 # 初回視聴確率（未視聴医師が視聴を始める確率）
-total_doctor_months = len(doctor_panel)
-first_view_count = doctor_panel["view_1st"].sum()
-initial_viewing_rate = first_view_count / total_doctor_months if total_doctor_months > 0 else 0.0
+# 修正：分母は「未視聴医師×月」のみ（cumulative_views == 0）
+never_viewed_months = doctor_panel[doctor_panel["cumulative_views"] == 0]
+first_view_count = (never_viewed_months["current_views"] > 0).sum()
+initial_viewing_rate = first_view_count / len(never_viewed_months) if len(never_viewed_months) > 0 else 0.0
 
 print(f"\n  初回視聴確率（未視聴→視聴）: {initial_viewing_rate:.1%}")
+print(f"  計算根拠: 未視聴医師×月 {len(never_viewed_months):,}回 のうち {first_view_count}回が初回視聴")
 
 # ================================================================
 # 期待効果の計算
