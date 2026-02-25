@@ -1888,7 +1888,7 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
     <th>売上変化</th>
     <th>ROI</th>
   </tr>
-  {% for scenario in mr_balance_results.scenarios %}
+  {% for scenario in mr_balance_scenarios %}
   <tr style="{{ 'background-color:#fff9c4;' if loop.index == 1 else '' }}">
     <td><strong>{{ scenario.scenario_name }}</strong></td>
     <td>{{ "%.0f"|format(scenario.mr_fte) }}名</td>
@@ -1924,10 +1924,10 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
 <div class="conclusion-box" style="background-color:#e8f5e9; border-left:4px solid #4caf50;">
 <h4>💡 最適シナリオの提案</h4>
 
-{% set best_roi_scenario = mr_balance_results.scenarios | selectattr("roi", "equalto", mr_balance_results.scenarios | map(attribute="roi") | max) | first %}
+{% if mr_balance_best and mr_balance_current %}
 
 <p style="font-size:1.1em; font-weight:bold; margin-top:10px;">
-  推奨: {{ best_roi_scenario.scenario_name }}
+  推奨: {{ mr_balance_best.scenario_name }}
 </p>
 
 <table style="margin-top:10px;">
@@ -1937,26 +1937,29 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
       MR FTE: {{ "%.0f"|format(mr_balance_results.baseline.mr_fte) }}名<br>
       デジタル予算: {{ "{:,.0f}".format(mr_balance_results.baseline.digital_budget) }}万円<br>
       総コスト: {{ "{:,.0f}".format(mr_balance_results.current_status.total_cost) }}万円<br>
-      ROI: {{ "%.2f"|format(mr_balance_results.scenarios[0].roi) }}
+      ROI: {{ "%.2f"|format(mr_balance_current.roi) }}
     </td>
     <td style="width:50%; padding:10px; vertical-align:top; background-color:#e8f5e9;">
       <strong>✅ 推奨配分</strong><br>
-      MR FTE: {{ "%.0f"|format(best_roi_scenario.mr_fte) }}名<br>
-      デジタル予算: {{ "{:,.0f}".format(best_roi_scenario.digital_budget) }}万円<br>
-      総コスト: {{ "{:,.0f}".format(best_roi_scenario.total_cost) }}万円<br>
-      ROI: {{ "%.2f"|format(best_roi_scenario.roi) }}
+      MR FTE: {{ "%.0f"|format(mr_balance_best.mr_fte) }}名<br>
+      デジタル予算: {{ "{:,.0f}".format(mr_balance_best.digital_budget) }}万円<br>
+      総コスト: {{ "{:,.0f}".format(mr_balance_best.total_cost) }}万円<br>
+      ROI: {{ "%.2f"|format(mr_balance_best.roi) }}
     </td>
   </tr>
 </table>
 
 <ul style="margin-top:15px; padding-left:20px;">
-  <li><strong>コスト削減額</strong>: {{ "{:,.0f}".format(-best_roi_scenario.cost_change) }}万円
-      ({{ "%.0f"|format(-best_roi_scenario.cost_change_pct) }}%削減)</li>
-  <li><strong>売上への影響</strong>: {{ "{:+.1f}".format(best_roi_scenario.sales_change_pct) }}%</li>
-  <li><strong>ROI改善</strong>: {{ "%.2f"|format(mr_balance_results.scenarios[0].roi) }} →
-      {{ "%.2f"|format(best_roi_scenario.roi) }}
-      ({{ "%.1f"|format((best_roi_scenario.roi / mr_balance_results.scenarios[0].roi - 1) * 100) }}%向上)</li>
+  <li><strong>コスト削減額</strong>: {{ "{:,.0f}".format(-mr_balance_best.cost_change) }}万円
+      ({{ "%.0f"|format(-mr_balance_best.cost_change_pct) }}%削減)</li>
+  <li><strong>売上への影響</strong>: {{ "{:+.1f}".format(mr_balance_best.sales_change_pct) }}%</li>
+  <li><strong>ROI改善</strong>: {{ "%.2f"|format(mr_balance_current.roi) }} →
+      {{ "%.2f"|format(mr_balance_best.roi) }}
+      {% if mr_balance_current.roi != 0 %}
+      ({{ "%.1f"|format((mr_balance_best.roi / mr_balance_current.roi - 1) * 100) }}%向上)
+      {% endif %}</li>
 </ul>
+{% endif %}
 </div>
 
 <div class="highlight-box" style="background-color:#fff3cd; border-left:4px solid #ffc107;">
@@ -2042,6 +2045,23 @@ print("\n[HTML生成]")
 # チャネル結果をdot-access可能な辞書に変換
 class DotDict(dict):
     __getattr__ = dict.__getitem__
+
+# ─── mr_balance シナリオを Python 側で正規化 ───────────────────────────
+# Jinja2 内で list[0] / selectattr チェーンを使わず、Python 側で安全に計算する
+_mr_balance_scenarios: list = []
+_mr_balance_current = None   # scenario_id=0 (現状維持)
+_mr_balance_best    = None   # ROI最大シナリオ
+if mr_digital_balance_results:
+    _raw_sc = mr_digital_balance_results.get("scenarios", [])
+    if isinstance(_raw_sc, dict):          # dict 形式の場合もリストに変換
+        _raw_sc = list(_raw_sc.values())
+    _mr_balance_scenarios = [DotDict(s) for s in _raw_sc if isinstance(s, dict)]
+    _mr_balance_current = next(
+        (s for s in _mr_balance_scenarios if s.get("scenario_id", -1) == 0),
+        _mr_balance_scenarios[0] if _mr_balance_scenarios else None,
+    )
+    if _mr_balance_scenarios:
+        _mr_balance_best = max(_mr_balance_scenarios, key=lambda s: s.get("roi", 0))
 
 channels = {}
 for ch_name, ch_data in did_results.get("cs_channel", {}).items():
@@ -2130,9 +2150,23 @@ template_data = {
 
     # MR vs デジタルバランス分析
     "mr_balance_results": DotDict(mr_digital_balance_results) if mr_digital_balance_results else None,
+    "mr_balance_scenarios": _mr_balance_scenarios,
+    "mr_balance_current":   _mr_balance_current,
+    "mr_balance_best":      _mr_balance_best,
 }
 
-html_content = HTML_TEMPLATE.render(**template_data)
+try:
+    html_content = HTML_TEMPLATE.render(**template_data)
+except Exception as _render_err:
+    import traceback
+    print(f"\n[警告] テンプレートレンダリングでエラーが発生しました: {_render_err}")
+    traceback.print_exc()
+    # エラー内容を埋め込んだ最小HTMLを生成して処理を継続
+    html_content = (
+        "<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body>"
+        f"<h1>レポート生成エラー</h1><pre>{traceback.format_exc()}</pre>"
+        "</body></html>"
+    )
 
 output_path = os.path.join(REPORTS_DIR, "analysis_report.html")
 with open(output_path, "w", encoding="utf-8") as f:
