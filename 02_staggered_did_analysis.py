@@ -44,6 +44,7 @@ FILE_RW_LIST = "rw_list.csv"
 FILE_SALES = "sales.csv"
 FILE_DIGITAL = "デジタル視聴データ.csv"
 FILE_ACTIVITY = "活動データ.csv"
+FILE_FACILITY_MASTER = "facility_master.csv"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "data")
@@ -250,30 +251,35 @@ print("\n" + "=" * 70)
 print(" Part 2: 除外フロー")
 print("=" * 70)
 
-docs_per_fac = doctor_master.groupby("facility_id")["doctor_id"].nunique()
-single_doc_facs = set(docs_per_fac[docs_per_fac == 1].index)
-multi_doc_facs = set(docs_per_fac[docs_per_fac > 1].index)
+# [A] 施設内医師数==1 の施設に絞り込み (全医師ベース: facility_master.csv)
+fac_master_df = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
+single_staff_facs = set(fac_master_df[fac_master_df["施設内医師数"] == 1]["facility_id"])
+multi_staff_facs  = set(fac_master_df[fac_master_df["施設内医師数"] > 1]["facility_id"])
 
-print(f"\n  [A] 1施設複数医師 の除外")
-print(f"      1医師施設     : {len(single_doc_facs)} 施設")
-print(f"      複数医師施設  : {len(multi_doc_facs)} 施設 -> 除外")
+print(f"\n  [A] 施設内医師数==1 の施設に絞り込み (全医師ベース: facility_master.csv)")
+print(f"      1医師施設    : {len(single_staff_facs)} 施設")
+print(f"      複数医師施設 : {len(multi_staff_facs)} 施設 -> 除外")
 
+# [B] 複数施設所属RW医師の除外 (施設フィルタ前の全所属で確認)
 facs_per_doc = doctor_master.groupby("doctor_id")["facility_id"].nunique()
-multi_fac_docs = set(facs_per_doc[facs_per_doc > 1].index)
+multi_fac_docs  = set(facs_per_doc[facs_per_doc > 1].index)
 single_fac_docs = set(facs_per_doc[facs_per_doc == 1].index)
 
-clean_pairs = doctor_master[
-    (doctor_master["facility_id"].isin(single_doc_facs))
-    & (doctor_master["doctor_id"].isin(single_fac_docs))
-].copy()
 excluded_multi_fac = doctor_master[
-    (doctor_master["facility_id"].isin(single_doc_facs))
-    & (doctor_master["doctor_id"].isin(multi_fac_docs))
+    doctor_master["facility_id"].isin(single_staff_facs)
+    & doctor_master["doctor_id"].isin(multi_fac_docs)
 ]
 
-print(f"\n  [B] 1医師複数施設 の除外")
-print(f"      複数施設所属医師 : {len(multi_fac_docs)} 名")
-print(f"      うち1医師施設内  : {len(excluded_multi_fac)} 名 -> 除外")
+print(f"\n  [B] 複数施設所属RW医師の除外")
+print(f"      複数施設所属RW医師      : {len(multi_fac_docs)} 名")
+print(f"      うち1医師施設に属する   : {len(excluded_multi_fac)} 名 -> 除外")
+
+# クリーンな1:1ペア: 施設内1医師 かつ RW医師が1施設のみ所属
+clean_pairs = doctor_master[
+    doctor_master["facility_id"].isin(single_staff_facs)
+    & doctor_master["doctor_id"].isin(single_fac_docs)
+].copy()
+
 print(f"      クリーンな1:1ペア: {len(clean_pairs)} 施設")
 
 fac_to_doc = dict(zip(clean_pairs["facility_id"], clean_pairs["doctor_id"]))
@@ -769,13 +775,13 @@ exclusion_flow = {
     "total_delivery_rows": n_sales_all,
     "ent_delivery_rows": len(daily),
     "total_rw_list": n_rw_all,
+    "single_staff_facilities": len(single_staff_facs),
     "ent_rw_doctors": len(doctor_master),
     "total_viewing_rows": n_digital_all + n_activity_all,
     "viewing_after_filter": len(viewing),
     "total_doctors": len(doctor_master["doctor_id"].unique()),
     "total_facilities": len(doctor_master["facility_id"].unique()),
-    "single_doc_facilities": len(single_doc_facs),
-    "multi_doc_facilities": len(multi_doc_facs),
+    "multi_staff_facilities": len(multi_staff_facs),
     "multi_fac_doctors": len(multi_fac_docs),
     "clean_pairs": len(fac_to_doc),
     "washout_excluded": len(washout_viewers),
@@ -789,7 +795,6 @@ exclusion_flow = {
 excluded_ids = {
     "washout": sorted(list(washout_viewers)),
     "multi_fac": sorted(list(multi_fac_docs)),
-    "multi_doc_fac": sorted(list(multi_doc_facs)),
     "late": sorted(list(late_adopters)),
 }
 

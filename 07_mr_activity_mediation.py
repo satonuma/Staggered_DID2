@@ -54,6 +54,7 @@ FILE_RW_LIST = "rw_list.csv"
 FILE_SALES = "sales.csv"
 FILE_DIGITAL = "デジタル視聴データ.csv"
 FILE_ACTIVITY = "活動データ.csv"
+FILE_FACILITY_MASTER = "facility_master.csv"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "data")
@@ -125,15 +126,19 @@ viewing["view_date"] = pd.to_datetime(viewing["view_date"], format="mixed")
 months = pd.date_range(start=START_DATE, periods=N_MONTHS, freq="MS")
 
 # 除外フロー
-docs_per_fac = doctor_master_rw.groupby("facility_id")["doctor_id"].nunique()
-single_doc_facs = set(docs_per_fac[docs_per_fac == 1].index)
+# [A] 施設内医師数==1 の施設に絞り込み (全医師ベース: facility_master.csv)
+fac_master_df = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
+single_staff_facs = set(fac_master_df[fac_master_df["施設内医師数"] == 1]["facility_id"])
+print(f"  [A] 施設内医師数==1: {len(single_staff_facs)} 施設 → 複数医師施設 {len(fac_master_df[fac_master_df['施設内医師数'] > 1])} 施設除外")
 
+# [B] 複数施設所属RW医師の除外 (施設フィルタ前の全所属で確認)
 facs_per_doc = doctor_master_rw.groupby("doctor_id")["facility_id"].nunique()
 single_fac_docs = set(facs_per_doc[facs_per_doc == 1].index)
 
+# クリーンな1:1ペア: 施設内1医師 かつ RW医師が1施設のみ所属
 clean_pairs = doctor_master_rw[
-    (doctor_master_rw["facility_id"].isin(single_doc_facs))
-    & (doctor_master_rw["doctor_id"].isin(single_fac_docs))
+    doctor_master_rw["facility_id"].isin(single_staff_facs)
+    & doctor_master_rw["doctor_id"].isin(single_fac_docs)
 ].copy()
 
 fac_to_doc = dict(zip(clean_pairs["facility_id"], clean_pairs["doctor_id"]))

@@ -500,6 +500,19 @@ rw_list_out = pd.DataFrame({
 rw_list_out.to_csv(
     os.path.join(OUTPUT_DIR, "rw_list.csv"), index=False, encoding="utf-8-sig")
 
+# facility_master.csv: 施設マスター + 施設内医師数
+# doctors DataFrame には複数施設所属の行も含まれるため，施設ごとに正確な医師数が集計される
+facility_doc_counts = (
+    doctors.groupby("facility_id")["doctor_id"]
+    .nunique()
+    .rename("施設内医師数")
+    .reset_index()
+)
+facilities_out = facilities.merge(facility_doc_counts, on="facility_id", how="left")
+facilities_out["施設内医師数"] = facilities_out["施設内医師数"].fillna(0).astype(int)
+facilities_out.to_csv(
+    os.path.join(OUTPUT_DIR, "facility_master.csv"), index=False, encoding="utf-8-sig")
+
 # sales.csv: 全品目 (実績を文字列に変換)
 sales_out = delivery_df.copy()
 sales_out["実績"] = sales_out["実績"].astype(str)

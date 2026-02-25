@@ -46,6 +46,7 @@ FILE_RW_LIST = "rw_list.csv"
 FILE_SALES = "sales.csv"
 FILE_DIGITAL = "デジタル視聴データ.csv"
 FILE_ACTIVITY = "活動データ.csv"
+FILE_FACILITY_MASTER = "facility_master.csv"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "data")
@@ -196,16 +197,19 @@ print(f"  did_results.json, cate_results.json, {', '.join(loaded_files) if loade
 # ================================================================
 print("\n[除外フロー再実行]")
 
-docs_per_fac = doctor_master.groupby("facility_id")["doctor_id"].nunique()
-single_doc_facs = set(docs_per_fac[docs_per_fac == 1].index)
+# [A] 施設内医師数==1 の施設に絞り込み (全医師ベース: facility_master.csv)
+fac_master_df = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
+single_staff_facs = set(fac_master_df[fac_master_df["施設内医師数"] == 1]["facility_id"])
 
+# [B] 複数施設所属RW医師の除外 (施設フィルタ前の全所属で確認)
 facs_per_doc = doctor_master.groupby("doctor_id")["facility_id"].nunique()
 single_fac_docs = set(facs_per_doc[facs_per_doc == 1].index)
 multi_fac_docs = set(facs_per_doc[facs_per_doc > 1].index)
 
+# クリーンな1:1ペア: 施設内1医師 かつ RW医師が1施設のみ所属
 clean_pairs = doctor_master[
-    (doctor_master["facility_id"].isin(single_doc_facs))
-    & (doctor_master["doctor_id"].isin(single_fac_docs))
+    doctor_master["facility_id"].isin(single_staff_facs)
+    & doctor_master["doctor_id"].isin(single_fac_docs)
 ].copy()
 fac_to_doc = dict(zip(clean_pairs["facility_id"], clean_pairs["doctor_id"]))
 doc_to_fac = dict(zip(clean_pairs["doctor_id"], clean_pairs["facility_id"]))
@@ -288,8 +292,8 @@ def create_consort_diagram(flow):
     n_view_after = flow.get("viewing_after_filter", 0)
     total_docs = flow["total_doctors"]
     total_facs = flow["total_facilities"]
-    n_single = flow["single_doc_facilities"]
-    n_multi_doc = flow["multi_doc_facilities"]
+    n_single = flow.get("single_staff_facilities", flow.get("single_doc_facilities", 0))
+    n_multi_doc = flow.get("multi_staff_facilities", flow.get("multi_doc_facilities", 0))
     n_multi_fac = flow["multi_fac_doctors"]
     n_clean = flow["clean_pairs"]
     n_washout = flow["washout_excluded"]
@@ -926,8 +930,8 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
   <tr>
     <td>[A] 複数医師施設</td>
     <td>1施設に2名以上の医師</td>
-    <td>{{ flow.multi_doc_facilities }}施設</td>
-    <td>{{ flow.single_doc_facilities }}施設</td>
+    <td>{{ flow.multi_staff_facilities if flow.multi_staff_facilities is defined else flow.get('multi_doc_facilities', 0) }}施設</td>
+    <td>{{ flow.single_staff_facilities if flow.single_staff_facilities is defined else flow.get('single_doc_facilities', 0) }}施設</td>
   </tr>
   <tr>
     <td>[B] 複数施設所属</td>
