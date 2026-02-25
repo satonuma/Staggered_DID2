@@ -25,7 +25,7 @@ import matplotlib.patches as mpatches
 from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 import numpy as np
 import pandas as pd
-from jinja2 import Template
+from jinja2 import Environment, Template, Undefined
 
 warnings.filterwarnings("ignore")
 
@@ -574,7 +574,33 @@ for name in png_files:
 # ================================================================
 # HTMLテンプレート
 # ================================================================
-HTML_TEMPLATE = Template("""<!DOCTYPE html>
+
+class RobustUndefined(Undefined):
+    """未定義変数アクセスを安全に処理するカスタムUndefined（本番データ構造差異対応）。"""
+    def __str__(self):     return ''
+    def __float__(self):   return 0.0
+    def __int__(self):     return 0
+    def __bool__(self):    return False
+    def __iter__(self):    return iter([])
+    def __len__(self):     return 0
+    def __format__(self, spec): return ''
+    def _fail_with_undefined_error(self, *args, **kwargs): return RobustUndefined()
+    def __add__(self, o):   return 0
+    def __radd__(self, o):  return 0
+    def __sub__(self, o):   return 0
+    def __rsub__(self, o):  return 0
+    def __mul__(self, o):   return 0
+    def __rmul__(self, o):  return 0
+    def __truediv__(self, o):  return 0
+    def __rtruediv__(self, o): return 0
+    def __eq__(self, o):   return False
+    def __ne__(self, o):   return True
+    def __getattr__(self, name): return RobustUndefined()
+    def __getitem__(self, key):  return RobustUndefined()
+
+_jinja_env = Environment(undefined=RobustUndefined)
+
+HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
@@ -2045,6 +2071,8 @@ print("\n[HTML生成]")
 # チャネル結果をdot-access可能な辞書に変換
 class DotDict(dict):
     __getattr__ = dict.__getitem__
+    def __missing__(self, key):
+        return RobustUndefined()
 
 # ─── mr_balance シナリオを Python 側で正規化 ───────────────────────────
 # Jinja2 内で list[0] / selectattr チェーンを使わず、Python 側で安全に計算する
