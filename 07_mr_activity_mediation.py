@@ -436,9 +436,14 @@ effects = ["Direct\n(MR→売上)", "Indirect\n(MR→視聴→売上)", "Total"]
 values = [beta_mr_direct, indirect_effect, total_effect]
 colors = ["#FF9800", "#4CAF50", "#1565C0"]
 bars = ax.bar(effects, values, color=colors, alpha=0.7, edgecolor="white")
+ymax = max(values) if values else 1.0
+ymin = min(0, min(values)) if values else 0.0
+y_span = max(abs(ymax - ymin), 1.0)
 for bar, val in zip(bars, values):
-    ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
+    ax.text(bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + y_span * 0.03,
             f"{val:.1f}", ha="center", va="bottom", fontsize=10, fontweight="bold")
+ax.set_ylim(ymin - y_span * 0.1, ymax + y_span * 0.3)
 ax.set_ylabel("効果")
 ax.set_title("(c) Mediation効果の分解")
 ax.axhline(0, color="black", lw=0.8)
