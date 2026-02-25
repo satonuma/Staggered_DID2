@@ -500,7 +500,7 @@ rw_list_out = pd.DataFrame({
 rw_list_out.to_csv(
     os.path.join(OUTPUT_DIR, "rw_list.csv"), index=False, encoding="utf-8-sig")
 
-# facility_master.csv: 施設マスター + 施設内医師数
+# facility_attribute.csv: 施設マスター + 施設内医師数 + 施設属性
 # doctors DataFrame には複数施設所属の行も含まれるため，施設ごとに正確な医師数が集計される
 facility_doc_counts = (
     doctors.groupby("facility_id")["doctor_id"]
@@ -508,10 +508,59 @@ facility_doc_counts = (
     .rename("施設内医師数")
     .reset_index()
 )
-facilities_out = facilities.merge(facility_doc_counts, on="facility_id", how="left")
-facilities_out["施設内医師数"] = facilities_out["施設内医師数"].fillna(0).astype(int)
-facilities_out.to_csv(
-    os.path.join(OUTPUT_DIR, "facility_master.csv"), index=False, encoding="utf-8-sig")
+facility_doc_counts_dict = dict(zip(facility_doc_counts["facility_id"], facility_doc_counts["施設内医師数"]))
+
+uhp_options = ["UHP-A", "UHP-B", "UHP-C", "非UHP"]
+management_orgs = [f"医療法人{chr(0x611B + i % 20)}{chr(0x548C + i % 15)}会" for i in range(N_FACILITIES)]
+fac_kubun_map = {"病院": "病院", "クリニック": "診療所"}
+
+def _gen_beds(fac_type):
+    if fac_type == "病院":
+        return int(np.random.choice([100, 200, 300, 500], p=[0.35, 0.35, 0.20, 0.10]))
+    return int(np.random.choice([0, 5, 10, 19], p=[0.35, 0.30, 0.25, 0.10]))
+
+facility_attribute_out = pd.DataFrame({
+    "dcf_fac":        [fac_map[f] for f in facility_ids],
+    "fac_honin":      facility_ids,
+    "fac_honin_name": [fac_honin_name_map[f] for f in facility_ids],
+    "施設区分名":     [fac_kubun_map[fac_type_map[f]] for f in facility_ids],
+    "UHP区分名":      np.random.choice(uhp_options, N_FACILITIES, p=[0.20, 0.25, 0.25, 0.30]),
+    "経営体名":       management_orgs,
+    "許可病床数_合計": [_gen_beds(fac_type_map[f]) for f in facility_ids],
+    "施設内医師数":   [facility_doc_counts_dict.get(f, 0) for f in facility_ids],
+})
+facility_attribute_out["施設内医師数"] = facility_attribute_out["施設内医師数"].astype(int)
+facility_attribute_out["許可病床数_合計"] = facility_attribute_out["許可病床数_合計"].astype(int)
+facility_attribute_out.to_csv(
+    os.path.join(OUTPUT_DIR, "facility_attribute.csv"), index=False, encoding="utf-8-sig")
+
+# doctor_attribute.csv: 医師属性マスター
+def _get_channel_pref(doc_id):
+    if doc_id not in doctor_info:
+        return "なし"
+    channels = list(doctor_info[doc_id]["channels"].keys())
+    if len(channels) >= 2:
+        return "マルチ"
+    return channels[0] if channels else "なし"
+
+def _get_doctor_segment(doc_id):
+    if doc_rw_flag.get(doc_id, "") == "RW":
+        return "Key Account" if doc_exp_years.get(doc_id, 0) > 20 else "Potential"
+    return "Maintenance" if doc_product.get(doc_id, "") == "ENT" else "Non-Target"
+
+_graduation_age = 24
+doctor_attribute_out = pd.DataFrame({
+    "doc":                      list(unique_doc_ids),
+    "DCF医師コード":            [f"DCF{int(d[1:]):06d}" for d in unique_doc_ids],
+    "doc_name":                 [doc_name_map[d] for d in unique_doc_ids],
+    "年齢":                     [doc_exp_years[d] + _graduation_age for d in unique_doc_ids],
+    "卒業時年齢":               [_graduation_age] * len(unique_doc_ids),
+    "医師歴":                   [doc_exp_years[d] for d in unique_doc_ids],
+    "DIGITAL_CHANNEL_PREFERENCE": [_get_channel_pref(d) for d in unique_doc_ids],
+    "DOCTOR_SEGEMNT":           [_get_doctor_segment(d) for d in unique_doc_ids],
+})
+doctor_attribute_out.to_csv(
+    os.path.join(OUTPUT_DIR, "doctor_attribute.csv"), index=False, encoding="utf-8-sig")
 
 # sales.csv: 全品目 (実績を文字列に変換)
 sales_out = delivery_df.copy()
@@ -618,12 +667,16 @@ n_diff_fac = sum(1 for fid in facility_ids if fac_map[fid] != fid)
 print(f"  {n_diff_fac} / {N_FACILITIES} 施設で fac != fac_honin")
 
 print(f"\n出力ファイル:")
-print(f"  rw_list.csv          : {len(rw_list_out):>8} 行 (ENT医師, seg=RWフラグ)")
-print(f"  sales.csv            : {len(delivery_df):>8,} 行 (日別施設別, 全品目)")
-print(f"  デジタル視聴データ.csv: {n_digital_views:>8,} 行 (Webinar + e-contents)")
-print(f"  活動データ.csv        : {n_activity_views:>8,} 行 (web講演会 + 面談 + 面談_アポ + 説明会 + その他)")
+print(f"  rw_list.csv              : {len(rw_list_out):>8} 行 (ENT医師, seg=RWフラグ)")
+print(f"  facility_attribute.csv   : {len(facility_attribute_out):>8} 行 (施設マスター+属性)")
+print(f"  doctor_attribute.csv     : {len(doctor_attribute_out):>8} 行 (医師属性マスター)")
+print(f"  sales.csv                : {len(delivery_df):>8,} 行 (日別施設別, 全品目)")
+print(f"  デジタル視聴データ.csv    : {n_digital_views:>8,} 行 (Webinar + e-contents)")
+print(f"  活動データ.csv            : {n_activity_views:>8,} 行 (web講演会 + 面談 + 面談_アポ + 説明会 + その他)")
 print(f"\nカラム名:")
-print(f"  rw_list        : doc, doc_name, fac_honin, fac_honin_name, fac, fac_name, seg")
-print(f"  sales          : 日付, 施設（本院に合算）コード, DCF施設コード, 品目コード, 実績")
-print(f"  デジタル視聴    : 活動日_dt, 品目コード, 活動種別, 活動種別コード, dcf_fac, fac_honin, fac, dcf_doc, doc, doc_name")
-print(f"  活動データ      : 活動日_dt, 品目コード, 活動種別コード, 活動種別, dcf_fac, fac_honin, fac, dcf_doc, doc")
+print(f"  rw_list            : doc, doc_name, fac_honin, fac_honin_name, fac, fac_name, seg")
+print(f"  facility_attribute : dcf_fac, fac_honin, fac_honin_name, 施設区分名, UHP区分名, 経営体名, 許可病床数_合計, 施設内医師数")
+print(f"  doctor_attribute   : doc, DCF医師コード, doc_name, 年齢, 卒業時年齢, 医師歴, DIGITAL_CHANNEL_PREFERENCE, DOCTOR_SEGEMNT")
+print(f"  sales              : 日付, 施設（本院に合算）コード, DCF施設コード, 品目コード, 実績")
+print(f"  デジタル視聴        : 活動日_dt, 品目コード, 活動種別, 活動種別コード, dcf_fac, fac_honin, fac, dcf_doc, doc, doc_name")
+print(f"  活動データ          : 活動日_dt, 品目コード, 活動種別コード, 活動種別, dcf_fac, fac_honin, fac, dcf_doc, doc")

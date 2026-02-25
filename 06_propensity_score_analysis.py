@@ -54,8 +54,8 @@ FILE_RW_LIST = "rw_list.csv"
 FILE_SALES = "sales.csv"
 FILE_DIGITAL = "デジタル視聴データ.csv"
 FILE_ACTIVITY = "活動データ.csv"
-FILE_DOCTOR_MASTER = "doctor_master.csv"
-FILE_FACILITY_MASTER = "facility_master.csv"
+FILE_DOCTOR_MASTER = "doctor_attribute.csv"
+FILE_FACILITY_MASTER = "facility_attribute.csv"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "data")
@@ -187,7 +187,7 @@ print(f"\n[データ読み込み完了]")
 # 除外フロー
 # [A] 施設内医師数==1 の施設に絞り込み (全医師ベース: facility_master.csv)
 fac_master_df = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
-single_staff_facs = set(fac_master_df[fac_master_df["施設内医師数"] == 1]["facility_id"])
+single_staff_facs = set(fac_master_df[fac_master_df["施設内医師数"] == 1]["fac_honin"])
 print(f"  [A] 施設内医師数==1: {len(single_staff_facs)} 施設 → 複数医師施設 {len(fac_master_df[fac_master_df['施設内医師数'] > 1])} 施設除外")
 
 # [B] 複数施設所属RW医師の除外 (施設フィルタ前の全所属で確認)
@@ -283,17 +283,26 @@ print("\n" + "=" * 70)
 print(" Part 2: 医師・施設属性のマージ")
 print("=" * 70)
 
-# 医師属性
+# 医師属性 (doctor_attribute.csv)
 doctor_attrs = pd.read_csv(os.path.join(DATA_DIR, FILE_DOCTOR_MASTER))
+doctor_attrs = doctor_attrs.rename(columns={"doc": "doctor_id"})
+
+def _exp_cat(y):
+    if y <= 10: return "若手"
+    elif y <= 20: return "中堅"
+    return "ベテラン"
+
+doctor_attrs["experience_cat"] = doctor_attrs["医師歴"].apply(_exp_cat)
 session_df = session_df.merge(
-    doctor_attrs[["doctor_id", "experience_cat", "specialty"]],
+    doctor_attrs[["doctor_id", "experience_cat", "DOCTOR_SEGEMNT", "DIGITAL_CHANNEL_PREFERENCE"]],
     on="doctor_id", how="left"
 )
 
-# 施設属性
+# 施設属性 (facility_attribute.csv)
 facility_attrs = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
+facility_attrs = facility_attrs.rename(columns={"fac_honin": "facility_id"})
 session_df = session_df.merge(
-    facility_attrs[["facility_id", "region", "facility_type"]],
+    facility_attrs[["facility_id", "施設区分名", "UHP区分名"]],
     on="facility_id", how="left"
 )
 
@@ -312,14 +321,15 @@ print("=" * 70)
 ps_data = session_df.dropna().copy()
 ps_data_dummies = pd.get_dummies(
     ps_data,
-    columns=["experience_cat", "specialty", "region", "facility_type"],
+    columns=["experience_cat", "DOCTOR_SEGEMNT", "DIGITAL_CHANNEL_PREFERENCE", "施設区分名", "UHP区分名"],
     drop_first=True
 )
 
 # Logitモデル
 y_ps = ps_data_dummies["has_viewed"].astype(float)
 X_ps_cols = [c for c in ps_data_dummies.columns
-             if c.startswith(("experience_cat_", "specialty_", "region_", "facility_type_"))]
+             if c.startswith(("experience_cat_", "DOCTOR_SEGEMNT_", "DIGITAL_CHANNEL_PREFERENCE_",
+                              "施設区分名_", "UHP区分名_"))]
 X_ps = ps_data_dummies[X_ps_cols].astype(float)
 X_ps = sm.add_constant(X_ps)
 

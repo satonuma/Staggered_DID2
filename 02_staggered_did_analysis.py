@@ -44,7 +44,7 @@ FILE_RW_LIST = "rw_list.csv"
 FILE_SALES = "sales.csv"
 FILE_DIGITAL = "デジタル視聴データ.csv"
 FILE_ACTIVITY = "活動データ.csv"
-FILE_FACILITY_MASTER = "facility_master.csv"
+FILE_FACILITY_MASTER = "facility_attribute.csv"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "data")
@@ -253,10 +253,10 @@ print("=" * 70)
 
 # [A] 施設内医師数==1 の施設に絞り込み (全医師ベース: facility_master.csv)
 fac_master_df = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
-single_staff_facs = set(fac_master_df[fac_master_df["施設内医師数"] == 1]["facility_id"])
-multi_staff_facs  = set(fac_master_df[fac_master_df["施設内医師数"] > 1]["facility_id"])
+single_staff_facs = set(fac_master_df[fac_master_df["施設内医師数"] == 1]["fac_honin"])
+multi_staff_facs  = set(fac_master_df[fac_master_df["施設内医師数"] > 1]["fac_honin"])
 
-print(f"\n  [A] 施設内医師数==1 の施設に絞り込み (全医師ベース: facility_master.csv)")
+print(f"\n  [A] 施設内医師数==1 の施設に絞り込み (全医師ベース: facility_attribute.csv)")
 print(f"      1医師施設    : {len(single_staff_facs)} 施設")
 print(f"      複数医師施設 : {len(multi_staff_facs)} 施設 -> 除外")
 
