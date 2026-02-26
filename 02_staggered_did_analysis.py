@@ -36,8 +36,8 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 
 # === データファイル・カラム設定 ===
 ENT_PRODUCT_CODE = "00001"              # ENT品目コード (5桁文字列、パラメータ)
-CONTENT_TYPES = ["webiner", "e_contents", "Web講演会"]  # チャネル大分類 (拡張可能)
-ACTIVITY_CHANNEL_FILTER = "Web講演会"   # 活動データから抽出する活動種別
+CONTENT_TYPES = ["Webinar", "e-contents", "web講演会"]  # チャネル大分類 (拡張可能)
+ACTIVITY_CHANNEL_FILTER = "web講演会"   # 活動データから抽出する活動種別
 
 # ファイル名
 FILE_RW_LIST = "rw_list.csv"
@@ -501,7 +501,7 @@ print(" Part 5b: ロバストネスチェック (MR活動共変量)")
 print("=" * 70)
 
 # 1. 活動データから非デジタル活動 (面談, 面談_アポ, 説明会, その他) を抽出
-#    CONTENT_TYPES (webiner, e_contents, Web講演会) は処置変数 → 除外
+#    CONTENT_TYPES (Webinar, e-contents, web講演会) は処置変数 → 除外
 mr_activity = activity_raw[
     (activity_raw["品目コード"] == ENT_PRODUCT_CODE)
     & (~activity_raw["活動種別"].isin(CONTENT_TYPES))
@@ -687,7 +687,7 @@ for ch in CONTENT_TYPES:
         print(f"  {lbl:<25} {r['overall']:>8.2f} {r['se']:>8.2f} {r['p']:>10.6f} {r['sig']:>6}")
 
 print(f"\n  DGPの真の効果:")
-print(f"    webiner: 18, e_contents: 10, Web講演会: 22")
+print(f"    Webinar: 18, e-contents: 10, web講演会: 22")
 print(f"    + 月次成長 1.0/月 (視聴継続中)")
 print(f"    + 停止後減衰 -1.5/月 (猶予2ヶ月)")
 print(f"    x 属性modifier (地域/施設タイプ/経験年数/診療科)")
@@ -738,8 +738,8 @@ ax.grid(True, alpha=0.3)
 ax = axes[1, 0]
 ax.axhline(0, color="black", lw=0.8)
 ax.axvline(-0.5, color="red", ls="--", lw=0.8, alpha=0.7)
-ch_colors = {"webiner": "#1f77b4", "e_contents": "#ff7f0e", "Web講演会": "#2ca02c"}
-ch_markers = {"webiner": "o", "e_contents": "s", "Web講演会": "^"}
+ch_colors = {"Webinar": "#1f77b4", "e-contents": "#ff7f0e", "web講演会": "#2ca02c"}
+ch_markers = {"Webinar": "o", "e-contents": "s", "web講演会": "^"}
 for ch in CONTENT_TYPES:
     if ch not in channel_results:
         continue

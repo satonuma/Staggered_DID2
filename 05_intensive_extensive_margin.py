@@ -48,8 +48,8 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 # 設定
 # ================================================================
 ENT_PRODUCT_CODE = "00001"
-CONTENT_TYPES = ["webiner", "e_contents", "Web講演会"]
-ACTIVITY_CHANNEL_FILTER = "Web講演会"
+CONTENT_TYPES = ["Webinar", "e-contents", "web講演会"]
+ACTIVITY_CHANNEL_FILTER = "web講演会"
 
 FILE_RW_LIST = "rw_list.csv"
 FILE_SALES = "sales.csv"

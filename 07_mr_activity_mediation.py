@@ -44,8 +44,8 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 
 # === パラメータ設定 ===
 ENT_PRODUCT_CODE = "00001"
-CONTENT_TYPES = ["webiner", "e_contents", "Web講演会"]
-ACTIVITY_CHANNEL_FILTER = "Web講演会"
+CONTENT_TYPES = ["Webinar", "e-contents", "web講演会"]
+ACTIVITY_CHANNEL_FILTER = "web講演会"
 
 # MR活動種別（視聴以外の活動）
 MR_ACTIVITY_TYPES = ["面談", "面談_アポ", "説明会"]
@@ -103,7 +103,7 @@ digital = digital_raw[digital_raw["品目コード"] == ENT_PRODUCT_CODE].copy()
 activity_raw = pd.read_csv(os.path.join(DATA_DIR, FILE_ACTIVITY))
 activity_raw["品目コード"] = activity_raw["品目コード"].astype(str).str.strip().str.zfill(5)
 
-# Web講演会（視聴データ）
+# web講演会（視聴データ）
 web_lecture = activity_raw[
     (activity_raw["品目コード"] == ENT_PRODUCT_CODE)
     & (activity_raw["活動種別"] == ACTIVITY_CHANNEL_FILTER)

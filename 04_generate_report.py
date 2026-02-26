@@ -39,8 +39,8 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 
 # === データファイル・カラム設定 (02/03と同一) ===
 ENT_PRODUCT_CODE = "00001"
-CONTENT_TYPES = ["webiner", "e_contents", "Web講演会"]
-ACTIVITY_CHANNEL_FILTER = "Web講演会"
+CONTENT_TYPES = ["Webinar", "e-contents", "web講演会"]
+ACTIVITY_CHANNEL_FILTER = "web講演会"
 
 FILE_RW_LIST = "rw_list.csv"
 FILE_SALES = "sales.csv"
@@ -503,7 +503,7 @@ def create_viewing_patterns_figure(viewing, doctor_master, months,
     ax = axes[1, 1]
     treated_list = sorted(list(treated_doc_ids))
     sample_docs = treated_list[:min(15, len(treated_list))]
-    ch_colors = {"webiner": "#1f77b4", "e_contents": "#ff7f0e", "Web講演会": "#2ca02c"}
+    ch_colors = {"Webinar": "#1f77b4", "e-contents": "#ff7f0e", "web講演会": "#2ca02c"}
 
     for i, doc_id in enumerate(sample_docs):
         doc_views = viewing[viewing["doctor_id"] == doc_id].copy()
