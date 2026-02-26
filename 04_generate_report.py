@@ -39,8 +39,8 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 
 # === データファイル・カラム設定 (02/03と同一) ===
 ENT_PRODUCT_CODE = "00001"
-CONTENT_TYPES = ["Webinar", "e-contents", "web講演会"]
-ACTIVITY_CHANNEL_FILTER = "web講演会"
+CONTENT_TYPES = ["webiner", "e_contents", "Web講演会"]
+ACTIVITY_CHANNEL_FILTER = "Web講演会"
 
 FILE_RW_LIST = "rw_list.csv"
 FILE_SALES = "sales.csv"
@@ -124,7 +124,7 @@ n_digital_all = len(digital)
 digital["品目コード"] = digital["品目コード"].astype(str).str.strip().str.zfill(5)
 digital = digital[digital["品目コード"] == ENT_PRODUCT_CODE].copy()
 
-# 4. 活動データ → web講演会のみ抽出
+# 4. 活動データ → Web講演会のみ抽出
 activity = pd.read_csv(os.path.join(DATA_DIR, FILE_ACTIVITY))
 n_activity_all = len(activity)
 activity["品目コード"] = activity["品目コード"].astype(str).str.strip().str.zfill(5)
@@ -133,7 +133,7 @@ web_lecture = activity[
     & (activity["活動種別"] == ACTIVITY_CHANNEL_FILTER)
 ].copy()
 
-# 5. 視聴データ結合 (デジタル + web講演会)
+# 5. 視聴データ結合 (デジタル + Web講演会)
 common_cols = ["活動日_dt", "品目コード", "活動種別", "活動種別コード", "fac_honin", "doc"]
 viewing = pd.concat([digital[common_cols], web_lecture[common_cols]], ignore_index=True)
 n_viewing_combined = len(viewing)
@@ -151,7 +151,7 @@ months = pd.date_range(start=START_DATE, periods=N_MONTHS, freq="MS")
 print(f"  売上データ: {n_sales_all:,} 行 → ENT品目: {len(daily):,} 行")
 print(f"  RW医師リスト(全体): {n_rw_all} 行")
 print(f"  デジタル視聴: {n_digital_all:,} 行, 活動データ: {n_activity_all:,} 行")
-print(f"  視聴データ結合 (ENT, web講演会抽出): {n_viewing_combined:,} 行")
+print(f"  視聴データ結合 (ENT, Web講演会抽出): {n_viewing_combined:,} 行")
 
 # JSON結果読み込み
 print("\n[JSON結果読み込み]")
@@ -349,11 +349,11 @@ def create_consort_diagram(flow):
     draw_excluded(ax, ex, y, 2.8, 0.7,
                   f"他品目\n{n_sales_all - n_ent_rows:,} 行除外")
 
-    # Step 0b: 視聴データ結合 (デジタル + web講演会)
+    # Step 0b: 視聴データ結合 (デジタル + Web講演会)
     draw_arrow(ax, cx, y - 0.45, cx, y - sp + 0.45)
     y -= sp
     draw_box(ax, cx, y, 4.2, 0.9,
-             f"視聴データ結合\n(デジタル+web講演会)\n{n_view_after:,} 行")
+             f"視聴データ結合\n(デジタル+Web講演会)\n{n_view_after:,} 行")
     draw_arrow_right(ax, cx + 2.1, y, ex - 1.5, y)
     draw_excluded(ax, ex, y, 2.8, 0.7,
                   f"他品目/その他活動\n{n_view_all - n_view_after:,} 行除外")
@@ -503,7 +503,7 @@ def create_viewing_patterns_figure(viewing, doctor_master, months,
     ax = axes[1, 1]
     treated_list = sorted(list(treated_doc_ids))
     sample_docs = treated_list[:min(15, len(treated_list))]
-    ch_colors = {"Webinar": "#1f77b4", "e-contents": "#ff7f0e", "web講演会": "#2ca02c"}
+    ch_colors = {"webiner": "#1f77b4", "e_contents": "#ff7f0e", "Web講演会": "#2ca02c"}
 
     for i, doc_id in enumerate(sample_docs):
         doc_views = viewing[viewing["doctor_id"] == doc_id].copy()
@@ -832,7 +832,7 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
 <h2>1. 分析要件定義</h2>
 
 <h3>1.1 分析目的</h3>
-<p>デジタルコンテンツ（Webinar, e-contents, web講演会）の視聴が、品目コード={{ ent_product_code }}<の納入額に与える因果効果を推定する。視聴開始時期が施設医師ごとに異なる「ずれた処置（staggered treatment）」に対応したDID推定量を使用する。</p>
+<p>デジタルコンテンツ（webiner, e_contents, Web講演会）の視聴が、品目コード={{ ent_product_code }}<の納入額に与える因果効果を推定する。視聴開始時期が施設医師ごとに異なる「ずれた処置（staggered treatment）」に対応したDID推定量を使用する。</p>
 <p style="margin-top:8px;">分析対象は <strong>品目コード={{ ent_product_code }}</strong> (ENT) の売上データに限定し、医師は <strong>RW医師</strong> のみを使用する。</p>
 
 <h3>1.2 データ構造</h3>
@@ -849,7 +849,7 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
   <div class="param-box">
     <h4>デジタル視聴データ (デジタル視聴データ.csv)</h4>
     <ul>
-      <li>Webinar / e-contents の視聴ログ</li>
+      <li>webiner / e_contents の視聴ログ</li>
       <li>カラム: 活動日_dt, 品目コード, 活動種別, 活動種別コード, fac_honin, doc 等</li>
       <li>{{ n_digital_all_rows }} 行</li>
     </ul>
@@ -857,9 +857,9 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
   <div class="param-box">
     <h4>活動データ (活動データ.csv)</h4>
     <ul>
-      <li>MR入力の活動記録 (web講演会を含む)</li>
+      <li>MR入力の活動記録 (Web講演会を含む)</li>
       <li>カラム: 活動日_dt, 品目コード, 活動種別コード, 活動種別, fac_honin, doc 等</li>
-      <li>{{ n_activity_all_rows }} 行 → web講演会抽出後に視聴データと結合</li>
+      <li>{{ n_activity_all_rows }} 行 → Web講演会抽出後に視聴データと結合</li>
     </ul>
   </div>
   <div class="param-box">
@@ -875,7 +875,7 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
 
 <div class="highlight-box">
   <strong>視聴データの結合:</strong>
-  デジタル視聴データ (Webinar + e-contents) と 活動データ (web講演会のみ抽出) を結合して分析用の視聴データとする。
+  デジタル視聴データ (webiner + e_contents) と 活動データ (Web講演会のみ抽出) を結合して分析用の視聴データとする。
   結合後: {{ n_viewing_combined_rows }} 行
 </div>
 
@@ -894,7 +894,7 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
     <ul>
       <li>売上データ: ENT品目コード ({{ ent_product_code }}) 以外を除外</li>
       <li>医師リスト: seg列が空欄の医師を除外</li>
-      <li>視聴データ: ENT品目 + 対象チャネル (Webinar, e-contents, web講演会) のみ</li>
+      <li>視聴データ: ENT品目 + 対象チャネル (webiner, e_contents, Web講演会) のみ</li>
       <li>1施設に複数医師が所属 → 施設除外</li>
       <li>1医師が複数施設に所属 → 医師除外</li>
       <li>wash-out期間に視聴あり → 除外</li>
@@ -975,7 +975,7 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
   </tr>
   <tr>
     <td>[0b] 視聴データ結合</td>
-    <td>デジタル視聴 + 活動(web講演会) ENT品目</td>
+    <td>デジタル視聴 + 活動(Web講演会) ENT品目</td>
     <td>{{ flow.total_viewing_rows - flow.viewing_after_filter }} 行</td>
     <td>{{ flow.viewing_after_filter }} 行</td>
   </tr>
@@ -1693,7 +1693,7 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
 <p style="margin-top:10px; font-size:0.95em;">
   相関係数が {{ "%.3f"|format(mr_results.mr_viewing_correlation) }} と非常に小さく、
   <strong>MR活動だけでは視聴をほとんど説明できない</strong>。
-  これは視聴が複数チャネル（ベンダーサイト、MRメール、web講演会など）から発生し、
+  これは視聴が複数チャネル（ベンダーサイト、MRメール、Web講演会など）から発生し、
   MR活動以外の要因が大きいことを示唆。
 </p>
 
@@ -1793,7 +1793,7 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
 <h5 style="margin-top:15px;">3️⃣ 制御可能な変数としてのMR活動 (7.3)</h5>
 <ul style="margin:8px 0; padding-left:20px;">
   <li>MR活動と視聴の相関は <strong>ほぼゼロ</strong>（相関係数 {{ "%.3f"|format(mr_results.mr_viewing_correlation) if mr_results else "N/A" }}）</li>
-  <li>視聴は多様なチャネル（ベンダーサイト、メール、web講演会）から発生</li>
+  <li>視聴は多様なチャネル（ベンダーサイト、メール、Web講演会）から発生</li>
   <li>MR活動単独では視聴行動を制御できない</li>
 </ul>
 </div>
@@ -1814,7 +1814,7 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
   <li><strong>チャネル横断的な接触機会の創出</strong>
     <ul style="margin:5px 0; padding-left:20px;">
       <li>ベンダーサイトでの露出強化</li>
-      <li>web講演会との連携</li>
+      <li>Web講演会との連携</li>
       <li>MR訪問時のコンテンツ紹介</li>
     </ul>
   </li>

@@ -1,7 +1,7 @@
 """
 ===================================================================
 サンプルデータ生成: Staggered DID分析用
-デジタルコンテンツ視聴（Webinar, e-contents, web講演会）の効果検証
+デジタルコンテンツ視聴（webiner, e_contents, Web講演会）の効果検証
 ===================================================================
 設計:
   - 売上データ: 日別・施設別 (doctor_idなし, 整数額)
@@ -15,8 +15,8 @@
 出力形式: 本番データに準拠
   - rw_list.csv: RW医師リスト (ENT絞込済、品目カラムなし)
   - sales.csv: 売上実績 (日付・実績が文字列)
-  - デジタル視聴データ.csv: Webinar/e-contentsの視聴ログ
-  - 活動データ.csv: web講演会+その他の活動記録
+  - デジタル視聴データ.csv: webiner/e_contentsの視聴ログ
+  - 活動データ.csv: Web講演会+その他の活動記録
 ===================================================================
 """
 
@@ -40,23 +40,23 @@ PRODUCT_CODES = {
     "CV": "00004", "その他": "00005",
 }
 
-CONTENT_TYPES = ["Webinar", "e-contents", "web講演会"]
-CHANNEL_EFFECTS = {"Webinar": 18, "e-contents": 10, "web講演会": 22}
+CONTENT_TYPES = ["webiner", "e_contents", "Web講演会"]
+CHANNEL_EFFECTS = {"webiner": 18, "e_contents": 10, "Web講演会": 22}
 CHANNEL_GROWTH = 1.0    # 視聴継続中の月次成長
 DECAY_RATE = 1.5        # 視聴停止後の月次減衰
 GRACE_MONTHS = 2        # 視聴停止後の猶予期間
 
 # 活動種別マッピング (チャネル → 活動種別コード)
 ACTIVITY_TYPE_MAP = {
-    "Webinar":    ["AT01", "AT02", "AT03"],
-    "e-contents": ["AT04", "AT05", "AT06"],
-    "web講演会":  ["AT07", "AT08", "AT09"],
+    "webiner":    ["AT01", "AT02", "AT03"],
+    "e_contents": ["AT04", "AT05", "AT06"],
+    "Web講演会":  ["AT07", "AT08", "AT09"],
     "面談":       ["AT13", "AT14"],
     "面談_アポ":  ["AT15", "AT16"],
     "説明会":     ["AT17", "AT18"],
     "その他":     ["AT10", "AT11", "AT12"],
 }
-ACTIVITY_CHANNEL_FILTER = "web講演会"  # 活動データから抽出する活動種別
+ACTIVITY_CHANNEL_FILTER = "Web講演会"  # 活動データから抽出する活動種別
 
 PRODUCTS = ["ENT", "CNS", "GI", "CV", "その他"]
 PRODUCT_BASE_RATIO = {"CNS": 0.65, "GI": 0.55, "CV": 0.45, "その他": 0.30}
@@ -568,16 +568,16 @@ sales_out["実績"] = sales_out["実績"].astype(str)
 sales_out.to_csv(
     os.path.join(OUTPUT_DIR, "sales.csv"), index=False, encoding="utf-8-sig")
 
-# デジタル視聴データ.csv: Webinar + e-contents
-digital_df = viewing_df[viewing_df["活動種別"].isin(["Webinar", "e-contents"])].copy()
+# デジタル視聴データ.csv: webiner + e_contents
+digital_df = viewing_df[viewing_df["活動種別"].isin(["webiner", "e_contents"])].copy()
 digital_cols = ["活動日_dt", "品目コード", "活動種別", "活動種別コード",
                 "dcf_fac", "fac_honin", "fac", "dcf_doc", "doc", "doc_name"]
 digital_df[digital_cols].to_csv(
     os.path.join(OUTPUT_DIR, "デジタル視聴データ.csv"), index=False, encoding="utf-8-sig")
 
-# 活動データ.csv: web講演会 + 面談 + 面談_アポ + 説明会 + その他 (活動種別コードが先)
+# 活動データ.csv: Web講演会 + 面談 + 面談_アポ + 説明会 + その他 (活動種別コードが先)
 activity_df = viewing_df[viewing_df["活動種別"].isin(
-    ["web講演会", "面談", "面談_アポ", "説明会", "その他"]
+    ["Web講演会", "面談", "面談_アポ", "説明会", "その他"]
 )].copy()
 activity_cols = ["活動日_dt", "品目コード", "活動種別コード", "活動種別",
                  "dcf_fac", "fac_honin", "fac", "dcf_doc", "doc"]
@@ -652,15 +652,15 @@ for cat, codes in ACTIVITY_TYPE_MAP.items():
 
 n_digital_views = len(digital_df)
 n_activity_views = len(activity_df)
-n_web_lecture = len(activity_df[activity_df["活動種別"] == "web講演会"])
+n_web_lecture = len(activity_df[activity_df["活動種別"] == "Web講演会"])
 n_mendan = len(activity_df[activity_df["活動種別"] == "面談"])
 n_mendan_apo = len(activity_df[activity_df["活動種別"] == "面談_アポ"])
 n_setsumeikai = len(activity_df[activity_df["活動種別"] == "説明会"])
 n_sonota_views = len(activity_df[activity_df["活動種別"] == "その他"])
 print(f"\n視聴・活動データ:")
-print(f"  デジタル視聴データ: {n_digital_views:,} 行 (Webinar + e-contents)")
+print(f"  デジタル視聴データ: {n_digital_views:,} 行 (webiner + e_contents)")
 print(f"  活動データ: {n_activity_views:,} 行")
-print(f"    web講演会: {n_web_lecture:,} / 面談: {n_mendan:,} / 面談_アポ: {n_mendan_apo:,} / 説明会: {n_setsumeikai:,} / その他: {n_sonota_views:,}")
+print(f"    Web講演会: {n_web_lecture:,} / 面談: {n_mendan:,} / 面談_アポ: {n_mendan_apo:,} / 説明会: {n_setsumeikai:,} / その他: {n_sonota_views:,}")
 
 print(f"\nfac/fac_honin 不一致:")
 n_diff_fac = sum(1 for fid in facility_ids if fac_map[fid] != fid)
@@ -671,8 +671,8 @@ print(f"  rw_list.csv              : {len(rw_list_out):>8} 行 (ENT医師, seg=R
 print(f"  facility_attribute.csv   : {len(facility_attribute_out):>8} 行 (施設マスター+属性)")
 print(f"  doctor_attribute.csv     : {len(doctor_attribute_out):>8} 行 (医師属性マスター)")
 print(f"  sales.csv                : {len(delivery_df):>8,} 行 (日別施設別, 全品目)")
-print(f"  デジタル視聴データ.csv    : {n_digital_views:>8,} 行 (Webinar + e-contents)")
-print(f"  活動データ.csv            : {n_activity_views:>8,} 行 (web講演会 + 面談 + 面談_アポ + 説明会 + その他)")
+print(f"  デジタル視聴データ.csv    : {n_digital_views:>8,} 行 (webiner + e_contents)")
+print(f"  活動データ.csv            : {n_activity_views:>8,} 行 (Web講演会 + 面談 + 面談_アポ + 説明会 + その他)")
 print(f"\nカラム名:")
 print(f"  rw_list            : doc, doc_name, fac_honin, fac_honin_name, fac, fac_name, seg")
 print(f"  facility_attribute : dcf_fac, fac_honin, fac_honin_name, 施設区分名, UHP区分名, 経営体名, 許可病床数_合計, 施設内医師数")

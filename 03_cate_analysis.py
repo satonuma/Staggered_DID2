@@ -35,8 +35,8 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 
 # === データファイル・カラム設定 (02と同一) ===
 ENT_PRODUCT_CODE = "00001"
-CONTENT_TYPES = ["Webinar", "e-contents", "web講演会"]
-ACTIVITY_CHANNEL_FILTER = "web講演会"
+CONTENT_TYPES = ["webiner", "e_contents", "Web講演会"]
+ACTIVITY_CHANNEL_FILTER = "Web講演会"
 
 FILE_RW_LIST = "rw_list.csv"
 FILE_SALES = "sales.csv"
@@ -316,7 +316,7 @@ digital_raw = pd.read_csv(os.path.join(DATA_DIR, FILE_DIGITAL))
 digital_raw["品目コード"] = digital_raw["品目コード"].astype(str).str.strip().str.zfill(5)
 digital = digital_raw[digital_raw["品目コード"] == ENT_PRODUCT_CODE].copy()
 
-# 4. 活動データ → web講演会のみ
+# 4. 活動データ → Web講演会のみ
 activity_raw = pd.read_csv(os.path.join(DATA_DIR, FILE_ACTIVITY))
 activity_raw["品目コード"] = activity_raw["品目コード"].astype(str).str.strip().str.zfill(5)
 web_lecture = activity_raw[
