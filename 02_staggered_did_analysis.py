@@ -131,6 +131,164 @@ def aggregate_overall(att_gt):
     return np.average(post["att_gt"], weights=post["n_cohort"])
 
 
+def compute_cs_attgt_dr(pdata, cov_cols):
+    """Doubly Robust CS ATT(g,t)推定 (Sant'Anna & Zhao 2020 style).
+    IPW(傾向スコア) + OR(アウトカム回帰) の組み合わせ.
+    cov_cols: pdata内の処置前共変量列名リスト (標準化済みを推奨).
+    """
+    try:
+        from sklearn.linear_model import LogisticRegression, Ridge
+    except ImportError:
+        return compute_cs_attgt(pdata)   # sklearnなければ通常CSにフォールバック
+
+    doc_info = pdata.groupby("unit_id").agg(
+        {"treated": "first", "cohort_month": "first"}
+    )
+    # 共変量行列: unit × cov (time-invariant, 1行/unit)
+    unit_cov = (
+        pdata.groupby("unit_id")[cov_cols].first()
+        if cov_cols else pd.DataFrame(index=doc_info.index)
+    )
+    pivot = pdata.pivot_table(
+        values="amount", index="unit_id", columns="month_index", aggfunc="mean",
+    )
+    ctrl_ids = doc_info[doc_info["treated"] == 0].index
+    if len(ctrl_ids) == 0:
+        return pd.DataFrame()
+
+    cohorts = sorted(
+        doc_info.loc[doc_info["cohort_month"].notna(), "cohort_month"].unique()
+    )
+    all_times = sorted(pdata["month_index"].unique())
+
+    rows = []
+    for g in cohorts:
+        g = int(g)
+        base = g - 1
+        if base not in pivot.columns:
+            continue
+        cdocs = doc_info[doc_info["cohort_month"] == g].index
+        if len(cdocs) == 0:
+            continue
+
+        sample_ids = list(cdocs) + list(ctrl_ids)
+        D = np.array([1 if uid in set(cdocs) else 0 for uid in sample_ids])
+
+        X_cov = (
+            unit_cov.reindex(sample_ids).fillna(0).values.astype(float)
+            if cov_cols else np.ones((len(sample_ids), 1))
+        )
+
+        # ---- Step 1: 傾向スコア (ロジスティック回帰) ----
+        n_t, n_c = int(D.sum()), int((1 - D).sum())
+        if n_t >= 2 and n_c >= 2 and X_cov.shape[1] > 0:
+            try:
+                ps_model = LogisticRegression(
+                    C=1.0, max_iter=500, solver="lbfgs", random_state=0
+                )
+                ps_model.fit(X_cov, D)
+                ps = ps_model.predict_proba(X_cov)[:, 1]
+            except Exception:
+                ps = np.full(len(sample_ids), n_t / len(sample_ids))
+        else:
+            ps = np.full(len(sample_ids), n_t / len(sample_ids))
+        ps = np.clip(ps, 0.025, 0.975)
+        ipw = ps / (1.0 - ps)          # 対照群の非正規化IPW重み
+
+        for t in all_times:
+            if t not in pivot.columns:
+                continue
+
+            # ΔY_t = Y_t - Y_{g-1}
+            dY = np.array([
+                (pivot.loc[uid, t] - pivot.loc[uid, base])
+                if uid in pivot.index else 0.0
+                for uid in sample_ids
+            ])
+
+            ctrl_mask  = D == 0
+            treat_mask = D == 1
+
+            # ---- Step 2: アウトカム回帰 (対照群でΔYをXに回帰) ----
+            dY_ctrl = dY[ctrl_mask]
+            try:
+                or_model = Ridge(alpha=1.0)
+                or_model.fit(X_cov[ctrl_mask], dY_ctrl)
+                m_hat = or_model.predict(X_cov)
+            except Exception:
+                m_hat = np.full(
+                    len(sample_ids),
+                    dY_ctrl.mean() if len(dY_ctrl) > 0 else 0.0
+                )
+
+            # ---- Step 3: DR-ATT ----
+            # = E_treated[ΔY - m̂(X)] - IPW_weighted_E_control[ΔY - m̂(X)]
+            resid = dY - m_hat
+            treated_part = resid[treat_mask].mean() if treat_mask.sum() > 0 else 0.0
+            w_ctrl = ipw[ctrl_mask]
+            ctrl_resid = resid[ctrl_mask]
+            control_part = (
+                np.sum(w_ctrl * ctrl_resid) / w_ctrl.sum()
+                if w_ctrl.sum() > 0 else 0.0
+            )
+            rows.append({
+                "cohort": g, "time": t, "event_time": t - g,
+                "att_gt": treated_part - control_part, "n_cohort": n_t,
+            })
+    return pd.DataFrame(rows)
+
+
+def run_cs_dr_with_bootstrap(panel, cov_cols, n_boot=200, label=""):
+    att_gt = compute_cs_attgt_dr(panel, cov_cols)
+    if len(att_gt) == 0:
+        return None, None, None, None
+
+    dynamic = aggregate_dynamic(att_gt)
+    overall = aggregate_overall(att_gt)
+
+    doc_data = {uid: grp for uid, grp in panel.groupby("unit_id")}
+    treated_ids = panel.loc[panel["treated"] == 1, "unit_id"].unique()
+    control_ids = panel.loc[panel["treated"] == 0, "unit_id"].unique()
+
+    boot_overall = []
+    boot_dynamic = {}
+
+    tag = f"[{label}] " if label else ""
+    print(f"  {tag}Bootstrap DR (n={n_boot}) ...", end="", flush=True)
+
+    for b in range(n_boot):
+        if (b + 1) % 50 == 0:
+            print(f" {b + 1}", end="", flush=True)
+        bt = np.random.choice(treated_ids, len(treated_ids), replace=True)
+        bc = np.random.choice(control_ids, len(control_ids), replace=True)
+        parts = []
+        for i, uid in enumerate(np.concatenate([bt, bc])):
+            d = doc_data[uid].copy()
+            d["unit_id"] = f"B{i:04d}"
+            parts.append(d)
+        bpanel = pd.concat(parts, ignore_index=True)
+        try:
+            bgt = compute_cs_attgt_dr(bpanel, cov_cols)
+            if len(bgt) == 0:
+                continue
+            boot_overall.append(aggregate_overall(bgt))
+            bdyn = aggregate_dynamic(bgt)
+            for _, row in bdyn.iterrows():
+                et = int(row["event_time"])
+                boot_dynamic.setdefault(et, []).append(row["att"])
+        except Exception:
+            continue
+
+    print(" done")
+
+    se_overall = np.std(boot_overall) if boot_overall else 0.0
+    se_dyn_map = {et: np.std(v) for et, v in boot_dynamic.items()}
+    dynamic["se"] = dynamic["event_time"].map(se_dyn_map).fillna(0)
+    dynamic["ci_lo"] = dynamic["att"] - 1.96 * dynamic["se"]
+    dynamic["ci_hi"] = dynamic["att"] + 1.96 * dynamic["se"]
+    return att_gt, dynamic, overall, se_overall
+
+
 def run_cs_with_bootstrap(panel, n_boot=200, label=""):
     att_gt = compute_cs_attgt(panel)
     if len(att_gt) == 0:
@@ -577,6 +735,66 @@ print(f"  MR活動の係数          : {mr_coef:.2f} (SE={mr_se:.2f}, p={mr_pval
 print(f"  → ATT変化率: {att_change_pct:.1f}%")
 
 # ================================================================
+# Part 5c: 共変量構築 (Doubly Robust推定用)
+# ================================================================
+print("\n" + "=" * 70)
+print(" Part 5c: 共変量構築 (DR推定用)")
+print("=" * 70)
+
+# analysis_fac_idsをベースに各共変量を施設単位で整理
+_cov = pd.DataFrame(index=sorted(analysis_fac_ids))
+_cov.index.name = "facility_id"
+
+# 1. 処置前平均売上 (wash-out期間 month 0,1 = 全ユニットで処置前)
+_pre_sales = (
+    panel_base[panel_base["month_index"] < WASHOUT_MONTHS]
+    .groupby("facility_id")["amount"].mean()
+)
+_cov["cov_baseline_sales"] = _pre_sales
+
+# 2. 施設属性 (facility_attribute.csv, fac_honin単位で取得)
+_fac_attr = fac_df.drop_duplicates("fac_honin").set_index("fac_honin")
+_cov["cov_is_hospital"] = _fac_attr["施設区分名"].map(
+    {"病院": 1.0, "診療所": 0.0}
+)
+_cov["cov_beds"] = _fac_attr["許可病床数_合計"]
+_uhp_dum = pd.get_dummies(
+    _fac_attr["UHP区分名"], prefix="cov_uhp", drop_first=True, dtype=float
+)
+# 列名を安全な識別子に (ハイフン除去)
+_uhp_dum.columns = [c.replace("-", "_") for c in _uhp_dum.columns]
+for _c in _uhp_dum.columns:
+    _cov[_c] = _uhp_dum[_c]
+
+# 3. 処置前MR活動量 (wash-out期間内の平均)
+_mr_pre = (
+    mr_counts[mr_counts["month_index"] < WASHOUT_MONTHS]
+    .groupby("facility_id")["mr_activity_count"].mean()
+)
+_cov["cov_mr_pre"] = _mr_pre
+
+# 4. 医師歴 (doctor_attribute → fac_to_docで施設にマッピング)
+if "医師歴" in doc_attr_df.columns:
+    _doc_exp_map = doc_attr_df.set_index("doc")["医師歴"]
+    _cov["cov_exp_years"] = pd.Series(fac_to_doc).map(_doc_exp_map)
+
+_cov = _cov.fillna(0)
+
+# 5. 標準化 (z-score)
+_cov_means = _cov.mean()
+_cov_stds  = _cov.std().replace(0, 1)
+cov_std    = (_cov - _cov_means) / _cov_stds
+COV_COLS   = list(cov_std.columns)
+
+# 6. panel_r に共変量列を追加 (施設固定値)
+for _col in COV_COLS:
+    _col_map = cov_std[_col].to_dict()
+    panel_r[_col] = panel_r["facility_id"].map(_col_map).fillna(0)
+
+print(f"  共変量 ({len(COV_COLS)}個): {COV_COLS}")
+print(f"  対象施設数: {len(cov_std)}")
+
+# ================================================================
 # Part 6: CS推定 (全体)
 # ================================================================
 print("\n" + "=" * 70)
@@ -608,6 +826,48 @@ for _, r in cs_dyn_all.iterrows():
         f"  {'e=' + str(et):>5} {r['att']:>8.2f} {r['se']:>8.2f}"
         f" [{r['ci_lo']:>7.2f}, {r['ci_hi']:>7.2f}]{marker}"
     )
+
+# ================================================================
+# Part 6b: CS-DR推定 (Doubly Robust, 共変量調整)
+# ================================================================
+print("\n" + "=" * 70)
+print(" Part 6b: CS-DR推定 (Doubly Robust, 共変量調整)")
+print("=" * 70)
+print(f"  共変量: {COV_COLS}")
+
+att_gt_dr, cs_dyn_dr, cs_overall_dr, se_dr = run_cs_dr_with_bootstrap(
+    panel_r, COV_COLS, n_boot=200, label="DR"
+)
+
+if cs_overall_dr is not None:
+    z_dr   = cs_overall_dr / se_dr if se_dr > 0 else float("inf")
+    p_dr   = 2 * (1 - stats.norm.cdf(abs(z_dr)))
+    sig_dr = (
+        "***" if p_dr < 0.001 else "**" if p_dr < 0.01
+        else "*" if p_dr < 0.05 else "n.s."
+    )
+    print(f"\n  ATT-DR(全体) : {cs_overall_dr:.2f}")
+    print(f"  SE           : {se_dr:.2f}")
+    print(f"  p値          : {p_dr:.6f} {sig_dr}")
+    print(f"\n  [比較] CS(無調整)={cs_overall:.2f}  →  CS-DR={cs_overall_dr:.2f}"
+          f"  (差: {cs_overall_dr - cs_overall:+.2f})")
+    print(f"\n  [動的効果 (DR)]")
+    print(f"  {'ET':>5} {'ATT':>8} {'SE':>8} {'95%CI':>20}")
+    print(f"  {'-' * 45}")
+    for _, r in cs_dyn_dr.iterrows():
+        et = int(r["event_time"])
+        marker = " <-" if et == 0 else ""
+        print(
+            f"  {'e=' + str(et):>5} {r['att']:>8.2f} {r['se']:>8.2f}"
+            f" [{r['ci_lo']:>7.2f}, {r['ci_hi']:>7.2f}]{marker}"
+        )
+else:
+    print("  -> DR推定不可 (フォールバック: CS無調整を使用)")
+    cs_overall_dr = cs_overall
+    se_dr         = se_overall
+    sig_dr        = sig_cs
+    p_dr          = p_cs
+    cs_dyn_dr     = cs_dyn_all.copy()
 
 # ================================================================
 # Part 7: CS推定 (チャネル別)
@@ -681,6 +941,7 @@ print(f"\n  {'手法':<25} {'ATT':>8} {'SE':>8} {'p値':>10} {'有意性':>6}")
 print(f"  {'-' * 62}")
 print(f"  {'TWFE (全体)':<25} {beta:>8.2f} {se_twfe:>8.2f} {pval_twfe:>10.6f} {sig_twfe:>6}")
 print(f"  {'CS (全体)':<25} {cs_overall:>8.2f} {se_overall:>8.2f} {p_cs:>10.6f} {sig_cs:>6}")
+print(f"  {'CS-DR (全体, 共変量調整)':<25} {cs_overall_dr:>8.2f} {se_dr:>8.2f} {p_dr:>10.6f} {sig_dr:>6}")
 for ch in CONTENT_TYPES:
     if ch in channel_results:
         r = channel_results[ch]
@@ -727,13 +988,20 @@ ax.set_xticklabels([ym_labels[i] if i < len(ym_labels) else "" for i in tick_pos
 ax = axes[0, 1]
 ax.axhline(0, color="black", lw=0.8)
 ax.axvline(-0.5, color="red", ls="--", lw=0.8, alpha=0.7, label="処置開始")
+# CS (無調整)
 ax.fill_between(cs_dyn_all["event_time"], cs_dyn_all["ci_lo"], cs_dyn_all["ci_hi"],
-                alpha=0.2, color="steelblue")
-ax.plot(cs_dyn_all["event_time"], cs_dyn_all["att"], "o-", color="steelblue", ms=4)
+                alpha=0.15, color="steelblue")
+ax.plot(cs_dyn_all["event_time"], cs_dyn_all["att"], "o-",
+        color="steelblue", ms=4, label="CS (無調整)")
+# CS-DR (共変量調整)
+ax.fill_between(cs_dyn_dr["event_time"], cs_dyn_dr["ci_lo"], cs_dyn_dr["ci_hi"],
+                alpha=0.15, color="darkorange")
+ax.plot(cs_dyn_dr["event_time"], cs_dyn_dr["att"], "s--",
+        color="darkorange", ms=4, label="CS-DR (共変量調整)")
 ax.set_xlabel("イベント時間 (月)")
 ax.set_ylabel("ATT")
-ax.set_title("(b) CS動的効果 (全体)")
-ax.legend(fontsize=9)
+ax.set_title("(b) CS動的効果 (全体): 無調整 vs DR")
+ax.legend(fontsize=8)
 ax.grid(True, alpha=0.3)
 
 ax = axes[1, 0]
@@ -794,7 +1062,9 @@ print(f"""
 
   === 全体効果 ===
   TWFE推定           : {beta:.2f} (SE={se_twfe:.2f}, p={pval_twfe:.4f}) {sig_twfe}
-  Callaway-Sant'Anna : {cs_overall:.2f} (SE={se_overall:.2f}, p={p_cs:.4f}) {sig_cs}
+  CS (無調整)        : {cs_overall:.2f} (SE={se_overall:.2f}, p={p_cs:.4f}) {sig_cs}
+  CS-DR (共変量調整) : {cs_overall_dr:.2f} (SE={se_dr:.2f}, p={p_dr:.4f}) {sig_dr}
+  DR共変量           : {COV_COLS}
 
   === チャネル別効果 (CS推定) ===""")
 for ch in CONTENT_TYPES:
@@ -885,6 +1155,18 @@ cs_result = {
     "dynamic": cs_dyn_all[["event_time", "att", "se", "ci_lo", "ci_hi"]].to_dict("records"),
 }
 
+# CS-DR全体結果
+cs_dr_result = {
+    "att": float(cs_overall_dr),
+    "se": float(se_dr),
+    "p": float(p_dr),
+    "ci_lo": float(cs_overall_dr - 1.96 * se_dr),
+    "ci_hi": float(cs_overall_dr + 1.96 * se_dr),
+    "sig": sig_dr,
+    "covariates": COV_COLS,
+    "dynamic": cs_dyn_dr[["event_time", "att", "se", "ci_lo", "ci_hi"]].to_dict("records"),
+}
+
 # チャネル別結果
 ch_results_json = {}
 for ch in CONTENT_TYPES:
@@ -927,6 +1209,7 @@ did_results_json = {
     "twfe": twfe_result,
     "twfe_robust": twfe_robust_result,
     "cs_overall": cs_result,
+    "cs_overall_dr": cs_dr_result,
     "cs_channel": ch_results_json,
     "cohort_distribution": cohort_json,
     "descriptive_stats": desc_json,
