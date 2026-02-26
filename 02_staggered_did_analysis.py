@@ -289,7 +289,7 @@ print(f"      RW医師候補 : {len(rw_doc_ids)} 名")
 # 3ステップを順序付きで適用 + 中間カウント + 1:1確認
 _doc_to_fac   = dict(zip(rw_list["doc"], rw_list["fac"]))
 _doc_to_honin = dict(zip(rw_list["doc"], rw_list["fac_honin"]))
-all_docs = set(rw_list["doc"])
+all_docs = set(doc_attr_df["doc"])  # 全医師はdoctor_attribute.csv
 # Step 1 適用: 施設内医師数==1 の施設に所属する医師
 after_step1 = {d for d in all_docs if _doc_to_fac.get(d) in single_staff_fac}
 # Step 2 適用: 所属施設数==1 の医師 (Step 1通過者から)
@@ -306,7 +306,7 @@ for d in after_step3:
 candidate_docs = {d for d in after_step3 if _honin_cnt[_doc_to_honin[d]] == 1}
 
 print(f"\n  [順序付き適用結果]")
-print(f"      全医師 (rw_list)    : {len(all_docs)} 名")
+print(f"      全医師 (doctor_attr): {len(all_docs)} 名")
 print(f"      Step 1 通過        : {len(after_step1)} 名 (施設内医師数==1の施設所属)")
 print(f"      Step 2 通過        : {len(after_step2)} 名 (所属施設数==1)")
 print(f"      Step 3 通過        : {len(after_step3)} 名 (RW医師のみ)")

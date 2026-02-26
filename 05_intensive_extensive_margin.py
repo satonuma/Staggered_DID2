@@ -160,7 +160,7 @@ print(f"  [Step 3] RW医師候補: {len(rw_doc_ids)} 名")
 # 3ステップを順序付きで適用 + 中間カウント + 1:1確認
 _doc_to_fac   = dict(zip(rw_list["doc"], rw_list["fac"]))
 _doc_to_honin = dict(zip(rw_list["doc"], rw_list["fac_honin"]))
-all_docs = set(rw_list["doc"])
+all_docs = set(doc_attr_df["doc"])  # 全医師はdoctor_attribute.csv
 after_step1 = {d for d in all_docs if _doc_to_fac.get(d) in single_staff_fac}
 after_step2 = after_step1 & single_honin_docs
 after_step3 = after_step2 & rw_doc_ids
