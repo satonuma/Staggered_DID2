@@ -224,18 +224,18 @@ if INCLUDE_NON_RW:
 else:
     rw_doc_ids = set(rw_list[rw_list["seg"].notna() & (rw_list["seg"] != "")]["doc"])
 
-# multi_fac_docs: 複数施設所属医師 (可視化用)
-multi_fac_docs = set(rw_list["doc"]) - single_honin_docs
-
-# 3ステップの交差 + fac_honin→医師の1:1確認
+# 3ステップを順序付きで適用 + 中間カウント + 1:1確認
 _doc_to_honin = dict(zip(rw_list["doc"], rw_list["fac_honin"]))
-candidate_docs = rw_doc_ids & single_honin_docs
-candidate_docs = {d for d in candidate_docs if _doc_to_honin.get(d) in single_staff_honin}
+all_docs = set(rw_list["doc"])
+after_step1 = {d for d in all_docs if _doc_to_honin.get(d) in single_staff_honin}
+after_step2 = after_step1 & single_honin_docs
+after_step3 = after_step2 & rw_doc_ids
 _honin_cnt: dict = {}
-for d in candidate_docs:
+for d in after_step3:
     h = _doc_to_honin[d]
     _honin_cnt[h] = _honin_cnt.get(h, 0) + 1
-candidate_docs = {d for d in candidate_docs if _honin_cnt[_doc_to_honin[d]] == 1}
+candidate_docs = {d for d in after_step3 if _honin_cnt[_doc_to_honin[d]] == 1}
+multi_fac_docs = all_docs - single_honin_docs  # 可視化用 (全体)
 
 clean_pairs = rw_list[rw_list["doc"].isin(candidate_docs)][["doc", "fac_honin"]].drop_duplicates()
 clean_pairs = clean_pairs.rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})
@@ -326,6 +326,7 @@ def create_consort_diagram(flow):
     n_multi_doc = flow.get("multi_staff_facilities", flow.get("multi_doc_facilities", 0))
     n_multi_fac = flow["multi_fac_doctors"]
     n_clean = flow["clean_pairs"]
+    n_after_step2 = flow.get("after_step2_doctors", n_clean)  # Step2通過医師数
     n_washout = flow["washout_excluded"]
     n_late = flow["late_excluded"]
     n_treated = flow["final_treated"]
@@ -370,22 +371,22 @@ def create_consort_diagram(flow):
     draw_arrow(ax, cx, y - 0.45, cx, y - sp + 0.45)
     y -= sp
     draw_box(ax, cx, y, 4.2, 0.9,
-             f"[Step 2] 所属施設数==1\n{n_clean}施設")
+             f"[Step 2] 所属施設数==1\n{n_after_step2}医師")
     draw_arrow_right(ax, cx + 2.1, y, ex - 1.5, y)
     draw_excluded(ax, ex, y, 2.8, 0.7,
                   f"複数施設所属\n{n_multi_fac}医師 除外")
 
-    # Step 3: rw_list → RW医師フィルタ
+    # Step 3: rw_list → RW医師フィルタ + 1:1ペア確認
     n_non_rw = flow.get("non_rw_excluded", n_rw_all - n_ent_rw)
     draw_arrow(ax, cx, y - 0.45, cx, y - sp + 0.45)
     y -= sp
     draw_box(ax, cx, y, 4.2, 0.9,
-             f"[Step 3] RW医師のみ\n{n_ent_rw} 名 / {total_facs}施設")
+             f"[Step 3] RW医師+1:1確認\n{n_clean}施設")
     draw_arrow_right(ax, cx + 2.1, y, ex - 1.5, y)
     draw_excluded(ax, ex, y, 2.8, 0.7,
-                  f"非RW医師\n{n_non_rw} 名 除外")
+                  f"非RW/非1:1\n{n_non_rw} 名 除外")
 
-    # Step 3: Wash-out除外
+    # Wash-out除外
     draw_arrow(ax, cx, y - 0.45, cx, y - sp + 0.45)
     y -= sp
     after_washout = n_clean - n_washout
@@ -973,37 +974,37 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
     <td>{{ flow.ent_delivery_rows }} 行</td>
   </tr>
   <tr>
-    <td>[0b] RW医師フィルタ</td>
-    <td>rw_list.csv の seg 非空</td>
-    <td>{{ flow.total_rw_list - flow.ent_rw_doctors }} 行</td>
-    <td>{{ flow.ent_rw_doctors }} 行 ({{ flow.total_facilities }}施設 / {{ flow.total_doctors }}医師)</td>
-  </tr>
-  <tr>
-    <td>[0c] 視聴データ結合</td>
+    <td>[0b] 視聴データ結合</td>
     <td>デジタル視聴 + 活動(web講演会) ENT品目</td>
     <td>{{ flow.total_viewing_rows - flow.viewing_after_filter }} 行</td>
     <td>{{ flow.viewing_after_filter }} 行</td>
   </tr>
   <tr>
-    <td>[A] 複数医師施設</td>
-    <td>1施設に2名以上の医師</td>
-    <td>{{ flow.multi_staff_facilities if flow.multi_staff_facilities is defined else flow.get('multi_doc_facilities', 0) }}施設</td>
-    <td>{{ flow.single_staff_facilities if flow.single_staff_facilities is defined else flow.get('single_doc_facilities', 0) }}施設</td>
+    <td>[A] 複数医師施設 (Step 1)</td>
+    <td>facility_attribute: 施設内医師数==1 のfac_honinのみ</td>
+    <td>{{ flow.excluded_step1_doctors if flow.excluded_step1_doctors is defined else flow.multi_staff_facilities }}医師</td>
+    <td>{{ flow.after_step1_doctors if flow.after_step1_doctors is defined else flow.single_staff_facilities }}医師</td>
   </tr>
   <tr>
-    <td>[B] 複数施設所属</td>
-    <td>1医師が2施設以上に所属</td>
+    <td>[B] 複数施設所属 (Step 2)</td>
+    <td>doctor_attribute: 所属施設数==1 の医師のみ</td>
     <td>{{ flow.multi_fac_doctors }}医師</td>
-    <td>{{ flow.clean_pairs }}施設</td>
+    <td>{{ flow.after_step2_doctors if flow.after_step2_doctors is defined else flow.clean_pairs }}医師</td>
   </tr>
   <tr>
-    <td>[C] Wash-out視聴</td>
+    <td>[C] RW医師+1:1確認 (Step 3)</td>
+    <td>rw_list.csv の seg 非空 + 施設医師1:1対応</td>
+    <td>{{ flow.non_rw_excluded }}医師</td>
+    <td>{{ flow.clean_pairs }}施設 / {{ flow.total_doctors }}医師</td>
+  </tr>
+  <tr>
+    <td>[D] Wash-out視聴</td>
     <td>2023/4-5に視聴あり</td>
     <td>{{ flow.washout_excluded }}医師</td>
     <td>{{ flow.clean_pairs - flow.washout_excluded }}施設</td>
   </tr>
   <tr>
-    <td>[D] 遅延視聴者</td>
+    <td>[E] 遅延視聴者</td>
     <td>初回視聴 >= 2025/10</td>
     <td>{{ flow.late_excluded }}医師</td>
     <td>{{ flow.clean_pairs - flow.washout_excluded - flow.late_excluded }}施設</td>

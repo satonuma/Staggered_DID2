@@ -152,24 +152,27 @@ if FILTER_SINGLE_FAC_DOCTOR:
         single_honin_docs = set(_fac_per_doc[_fac_per_doc == 1].index)
 else:
     single_honin_docs = set(doc_attr_df["doc"])
-print(f"  [Step 2] 所属施設数==1: {len(single_honin_docs)} 名 → {'複数施設所属除外' if FILTER_SINGLE_FAC_DOCTOR else '許容'}")
+print(f"  [Step 2] 所属施設数==1: {len(single_honin_docs)} 名 (doctor_attribute基準)")
 
-# [Step 3] rw_list.csv: RW医師フィルタ
+# [Step 3] rw_list.csv: RW医師フィルタ (候補セット構築)
 if INCLUDE_NON_RW:
     rw_doc_ids = set(rw_list["doc"])
 else:
     rw_doc_ids = set(rw_list[rw_list["seg"].notna() & (rw_list["seg"] != "")]["doc"])
-print(f"  [Step 3] RW医師フィルタ: {len(rw_doc_ids)} 名 → {'非RW除外' if not INCLUDE_NON_RW else '非RW許容'}")
+print(f"  [Step 3] RW医師候補: {len(rw_doc_ids)} 名")
 
-# 3ステップの交差 + fac_honin→医師の1:1確認
+# 3ステップを順序付きで適用 + 中間カウント + 1:1確認
 _doc_to_honin = dict(zip(rw_list["doc"], rw_list["fac_honin"]))
-candidate_docs = rw_doc_ids & single_honin_docs
-candidate_docs = {d for d in candidate_docs if _doc_to_honin.get(d) in single_staff_honin}
+all_docs = set(rw_list["doc"])
+after_step1 = {d for d in all_docs if _doc_to_honin.get(d) in single_staff_honin}
+after_step2 = after_step1 & single_honin_docs
+after_step3 = after_step2 & rw_doc_ids
 _honin_cnt: dict = {}
-for d in candidate_docs:
+for d in after_step3:
     h = _doc_to_honin[d]
     _honin_cnt[h] = _honin_cnt.get(h, 0) + 1
-candidate_docs = {d for d in candidate_docs if _honin_cnt[_doc_to_honin[d]] == 1}
+candidate_docs = {d for d in after_step3 if _honin_cnt[_doc_to_honin[d]] == 1}
+print(f"  Step1通過:{len(after_step1)} → Step2通過:{len(after_step2)} → Step3通過:{len(after_step3)} → 1:1確認後:{len(candidate_docs)}")
 
 clean_pairs = rw_list[rw_list["doc"].isin(candidate_docs)][["doc", "fac_honin"]].drop_duplicates()
 clean_pairs = clean_pairs.rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})

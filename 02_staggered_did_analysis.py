@@ -278,33 +278,42 @@ if FILTER_SINGLE_FAC_DOCTOR:
         print(f"    ({DOCTOR_HONIN_FAC_COUNT_COL}列なし → rw_list.csvから計算)")
 else:
     single_honin_docs = set(doc_attr_df["doc"])
-multi_fac_docs = set(rw_list["doc"]) - single_honin_docs
-
 print(f"\n  [Step 2] doctor_attribute.csv: 所属施設数==1 の医師")
-print(f"      1施設所属医師 : {len(single_honin_docs)} 名")
-print(f"      複数施設所属  : {len(multi_fac_docs)} 名 → {'除外' if FILTER_SINGLE_FAC_DOCTOR else '許容'}")
+print(f"      1施設所属医師 : {len(single_honin_docs)} 名 (doctor_attribute基準)")
 
-# [Step 3] rw_list.csv: RW医師フィルタ
+# [Step 3] rw_list.csv: RW医師フィルタ (候補セット構築のみ)
 if INCLUDE_NON_RW:
     rw_doc_ids = set(rw_list["doc"])
 else:
     rw_doc_ids = set(rw_list[rw_list["seg"].notna() & (rw_list["seg"] != "")]["doc"])
-non_rw_excluded = n_rw_all - len(rw_doc_ids)
 
-print(f"\n  [Step 3] rw_list.csv: RW医師フィルタ")
-print(f"      対象医師 : {len(rw_doc_ids)} 名")
-print(f"      非RW除外 : {non_rw_excluded} 名 → {'除外' if not INCLUDE_NON_RW else '許容'}")
+print(f"\n  [Step 3] rw_list.csv: RW医師フィルタ候補")
+print(f"      RW医師候補 : {len(rw_doc_ids)} 名")
 
-# 3ステップの交差 + fac_honin→医師の1:1確認
+# 3ステップを順序付きで適用 + 中間カウント + 1:1確認
 _doc_to_honin = dict(zip(rw_list["doc"], rw_list["fac_honin"]))
-candidate_docs = rw_doc_ids & single_honin_docs
-candidate_docs = {d for d in candidate_docs if _doc_to_honin.get(d) in single_staff_honin}
+all_docs = set(rw_list["doc"])
+# Step 1 適用: 施設内医師数==1 の施設に所属する医師
+after_step1 = {d for d in all_docs if _doc_to_honin.get(d) in single_staff_honin}
+# Step 2 適用: 所属施設数==1 の医師 (Step 1通過者から)
+after_step2 = after_step1 & single_honin_docs
+# Step 3 適用: RW医師のみ (Step 2通過者から)
+after_step3 = after_step2 & rw_doc_ids
+non_rw_excluded = len(after_step2) - len(after_step3)
+multi_fac_docs = all_docs - single_honin_docs  # 可視化用 (全体)
 # 同一fac_honinに複数の候補医師がいる場合は除外
 _honin_cnt: dict = {}
-for d in candidate_docs:
+for d in after_step3:
     h = _doc_to_honin[d]
     _honin_cnt[h] = _honin_cnt.get(h, 0) + 1
-candidate_docs = {d for d in candidate_docs if _honin_cnt[_doc_to_honin[d]] == 1}
+candidate_docs = {d for d in after_step3 if _honin_cnt[_doc_to_honin[d]] == 1}
+
+print(f"\n  [順序付き適用結果]")
+print(f"      全医師 (rw_list)    : {len(all_docs)} 名")
+print(f"      Step 1 通過        : {len(after_step1)} 名 (施設内医師数==1の施設所属)")
+print(f"      Step 2 通過        : {len(after_step2)} 名 (所属施設数==1)")
+print(f"      Step 3 通過        : {len(after_step3)} 名 (RW医師のみ)")
+print(f"      1:1ペア確認後      : {len(candidate_docs)} 名")
 
 clean_pairs = rw_list[rw_list["doc"].isin(candidate_docs)][["doc", "fac_honin"]].drop_duplicates()
 clean_pairs = clean_pairs.rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})
@@ -806,15 +815,21 @@ exclusion_flow = {
     "total_delivery_rows": n_sales_all,
     "ent_delivery_rows": len(daily),
     "total_rw_list": n_rw_all,
+    # Step 1: 施設内医師数==1 フィルタ
     "single_staff_facilities": len(single_staff_honin),
     "multi_staff_facilities": len(multi_staff_honin),
-    "ent_rw_doctors": len(rw_doc_ids),
+    "after_step1_doctors": len(after_step1),
+    "excluded_step1_doctors": len(all_docs) - len(after_step1),
+    # Step 2: 所属施設数==1 フィルタ
+    "after_step2_doctors": len(after_step2),
+    "multi_fac_doctors": len(after_step1) - len(after_step2),
+    # Step 3: RW医師フィルタ + 1:1確認
+    "ent_rw_doctors": len(after_step3),
     "non_rw_excluded": non_rw_excluded,
     "total_viewing_rows": n_digital_all + n_activity_all,
     "viewing_after_filter": len(viewing),
-    "total_doctors": len(rw_doc_ids),
-    "total_facilities": len(set(rw_list[rw_list["doc"].isin(rw_doc_ids)]["fac_honin"])),
-    "multi_fac_doctors": len(multi_fac_docs & rw_doc_ids),
+    "total_doctors": len(candidate_docs),
+    "total_facilities": len({_doc_to_honin[d] for d in candidate_docs}),
     "clean_pairs": len(fac_to_doc),
     "washout_excluded": len(washout_viewers),
     "late_excluded": len(late_adopters),
