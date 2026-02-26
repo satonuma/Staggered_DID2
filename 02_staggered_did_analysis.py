@@ -46,6 +46,7 @@ FILE_DIGITAL = "デジタル視聴データ.csv"
 FILE_ACTIVITY = "活動データ.csv"
 FILE_FACILITY_MASTER = "facility_attribute.csv"
 FILE_DOCTOR_ATTR = "doctor_attribute.csv"
+FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 
 # 解析集団フィルタパラメータ
 FILTER_SINGLE_FAC_DOCTOR = True   # True: 複数本院施設所属医師を除外
@@ -253,6 +254,9 @@ print("\n" + "=" * 70)
 print(" Part 2: 除外フロー")
 print("=" * 70)
 
+# 施設医師リスト: 全医師の施設対応マスター (母集団)
+fac_doc_list = pd.read_csv(os.path.join(DATA_DIR, FILE_FAC_DOCTOR_LIST))
+
 # [Step 1] facility_attribute.csv: fac(dcf_fac)単位で施設内医師数==1のfacを抽出
 fac_df = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
 single_staff_fac = set(fac_df[fac_df["施設内医師数"] == 1]["dcf_fac"])
@@ -268,8 +272,8 @@ if FILTER_SINGLE_FAC_DOCTOR:
     if DOCTOR_HONIN_FAC_COUNT_COL in doc_attr_df.columns:
         single_honin_docs = set(doc_attr_df[doc_attr_df[DOCTOR_HONIN_FAC_COUNT_COL] == 1]["doc"])
     else:
-        # フォールバック: rw_list.csvからfac_honinのユニーク数で計算
-        _fac_per_doc = rw_list.groupby("doc")["fac_honin"].nunique()
+        # フォールバック: 施設医師リスト.csvからfac_honinのユニーク数で計算
+        _fac_per_doc = fac_doc_list.groupby("doc")["fac_honin"].nunique()
         single_honin_docs = set(_fac_per_doc[_fac_per_doc == 1].index)
         print(f"    ({DOCTOR_HONIN_FAC_COUNT_COL}列なし → rw_list.csvから計算)")
 else:
@@ -287,9 +291,9 @@ print(f"\n  [Step 3] rw_list.csv: RW医師フィルタ候補")
 print(f"      RW医師候補 : {len(rw_doc_ids)} 名")
 
 # 3ステップを順序付きで適用 + 中間カウント + 1:1確認
-_doc_to_fac   = dict(zip(rw_list["doc"], rw_list["fac"]))
-_doc_to_honin = dict(zip(rw_list["doc"], rw_list["fac_honin"]))
-all_docs = set(doc_attr_df["doc"])  # 全医師はdoctor_attribute.csv
+_doc_to_fac   = dict(zip(fac_doc_list["doc"], fac_doc_list["fac"]))
+_doc_to_honin = dict(zip(fac_doc_list["doc"], fac_doc_list["fac_honin"]))
+all_docs = set(fac_doc_list["doc"])  # 全医師は施設医師リスト.csv
 # Step 1 適用: 施設内医師数==1 の施設に所属する医師
 after_step1 = {d for d in all_docs if _doc_to_fac.get(d) in single_staff_fac}
 # Step 2 適用: 所属施設数==1 の医師 (Step 1通過者から)

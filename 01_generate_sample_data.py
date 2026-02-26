@@ -562,6 +562,18 @@ doctor_attribute_out = pd.DataFrame({
 doctor_attribute_out.to_csv(
     os.path.join(OUTPUT_DIR, "doctor_attribute.csv"), index=False, encoding="utf-8-sig")
 
+# 施設医師リスト.csv: 全医師の施設対応マスター (複数施設所属医師は複数行)
+fac_doctor_list_out = pd.DataFrame({
+    "fac_honin":      doctors["facility_id"].values,
+    "fac_honin_name": [fac_honin_name_map[f] for f in doctors["facility_id"]],
+    "fac":            [fac_map[f] for f in doctors["facility_id"]],
+    "fac_name":       [fac_name_map[f] for f in doctors["facility_id"]],
+    "doc":            doctors["doctor_id"].values,
+    "doc_name":       [doc_name_map[d] for d in doctors["doctor_id"]],
+})
+fac_doctor_list_out.to_csv(
+    os.path.join(OUTPUT_DIR, "施設医師リスト.csv"), index=False, encoding="utf-8-sig")
+
 # sales.csv: 全品目 (実績を文字列に変換)
 sales_out = delivery_df.copy()
 sales_out["実績"] = sales_out["実績"].astype(str)
