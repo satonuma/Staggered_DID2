@@ -648,13 +648,13 @@ print(f"    ROI: {best_scenario['roi']:.2f}")
 
 print("\n【実務的示唆】")
 if beta_mr > beta_digital:
-    print("  ✓ MR活動の限界効果がデジタルより大きい → MR維持を優先")
+    print("  [OK] MR活動の限界効果がデジタルより大きい → MR維持を優先")
 else:
-    print("  ✓ デジタル視聴の限界効果がMRより大きい → デジタル強化を検討")
+    print("  [OK] デジタル視聴の限界効果がMRより大きい → デジタル強化を検討")
 
 if cost_per_effect_digital < cost_per_effect_mr:
-    print("  ✓ デジタルの費用対効果がMRより高い → デジタルへのシフト余地あり")
+    print("  [OK] デジタルの費用対効果がMRより高い → デジタルへのシフト余地あり")
 else:
-    print("  ✓ MRの費用対効果がデジタルより高い → MR投資を優先")
+    print("  [OK] MRの費用対効果がデジタルより高い → MR投資を優先")
 
 print("\n" + "=" * 60)

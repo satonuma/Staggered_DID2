@@ -2101,7 +2101,18 @@ print("\n[HTML生成]")
 
 # チャネル結果をdot-access可能な辞書に変換
 class DotDict(dict):
-    __getattr__ = dict.__getitem__
+    def __getitem__(self, key):
+        v = super().__getitem__(key)
+        if v is None:
+            return RobustUndefined()
+        if isinstance(v, dict) and not isinstance(v, DotDict):
+            return DotDict(v)
+        return v
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError:
+            return RobustUndefined()
     def __missing__(self, key):
         return RobustUndefined()
 
