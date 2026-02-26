@@ -878,6 +878,7 @@ print("=" * 70)
 
 control_fac_ids = {doc_to_fac[d] for d in control_doc_ids}
 channel_results = {}
+channel_dr_results = {}
 
 for ch in CONTENT_TYPES:
     print(f"\n  --- {ch} ---")
@@ -930,6 +931,27 @@ for ch in CONTENT_TYPES:
         "se": se_ch, "p": p_ch, "sig": sig_ch, "n_treated": n_ch_t,
     }
 
+    # DR推定: COV_COLSをch_panelに付与して実施
+    for _col in COV_COLS:
+        _col_map = cov_std[_col].to_dict()
+        ch_panel[_col] = ch_panel["facility_id"].map(_col_map).fillna(0)
+    dr_res = run_cs_dr_with_bootstrap(ch_panel, COV_COLS, n_boot=100, label=f"{ch}-DR")
+    att_gt_ch_dr, dyn_ch_dr, overall_ch_dr, se_ch_dr = dr_res
+    if overall_ch_dr is not None:
+        z_ch_dr  = overall_ch_dr / se_ch_dr if se_ch_dr > 0 else float("inf")
+        p_ch_dr  = 2 * (1 - stats.norm.cdf(abs(z_ch_dr)))
+        sig_ch_dr = (
+            "***" if p_ch_dr < 0.001 else "**" if p_ch_dr < 0.01
+            else "*" if p_ch_dr < 0.05 else "n.s."
+        )
+        print(f"  ATT-DR={overall_ch_dr:.2f}, SE={se_ch_dr:.2f}, p={p_ch_dr:.4f} {sig_ch_dr}")
+        channel_dr_results[ch] = {
+            "dynamic": dyn_ch_dr, "overall": overall_ch_dr,
+            "se": se_ch_dr, "p": p_ch_dr, "sig": sig_ch_dr, "n_treated": n_ch_t,
+        }
+    else:
+        print(f"  -> DR推定不可 ({ch})")
+
 # ================================================================
 # Part 8: 推定結果比較
 # ================================================================
@@ -946,6 +968,11 @@ for ch in CONTENT_TYPES:
     if ch in channel_results:
         r = channel_results[ch]
         lbl = f"CS ({ch})"
+        print(f"  {lbl:<25} {r['overall']:>8.2f} {r['se']:>8.2f} {r['p']:>10.6f} {r['sig']:>6}")
+for ch in CONTENT_TYPES:
+    if ch in channel_dr_results:
+        r = channel_dr_results[ch]
+        lbl = f"CS-DR ({ch})"
         print(f"  {lbl:<25} {r['overall']:>8.2f} {r['se']:>8.2f} {r['p']:>10.6f} {r['sig']:>6}")
 
 print(f"\n  DGPの真の効果:")
@@ -1183,6 +1210,22 @@ for ch in CONTENT_TYPES:
             "dynamic": r["dynamic"][["event_time", "att", "se", "ci_lo", "ci_hi"]].to_dict("records"),
         }
 
+# チャネル別DR結果
+ch_dr_results_json = {}
+for ch in CONTENT_TYPES:
+    if ch in channel_dr_results:
+        r = channel_dr_results[ch]
+        ch_dr_results_json[ch] = {
+            "att": float(r["overall"]),
+            "se": float(r["se"]),
+            "p": float(r["p"]),
+            "ci_lo": float(r["overall"] - 1.96 * r["se"]),
+            "ci_hi": float(r["overall"] + 1.96 * r["se"]),
+            "sig": r["sig"],
+            "n_treated": r["n_treated"],
+            "dynamic": r["dynamic"][["event_time", "att", "se", "ci_lo", "ci_hi"]].to_dict("records"),
+        }
+
 # コホート分布
 cohort_json = {
     months[int(m)].strftime("%Y-%m"): int(cnt)
@@ -1211,6 +1254,7 @@ did_results_json = {
     "cs_overall": cs_result,
     "cs_overall_dr": cs_dr_result,
     "cs_channel": ch_results_json,
+    "cs_channel_dr": ch_dr_results_json,
     "cohort_distribution": cohort_json,
     "descriptive_stats": desc_json,
     "n_treated": n_treated,

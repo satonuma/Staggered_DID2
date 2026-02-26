@@ -1158,6 +1158,16 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
     <td class="{{ 'sig' if ch.sig != 'n.s.' else 'ns' }}">{{ ch.sig }}</td>
   </tr>
   {% endfor %}
+  {% for ch_name, ch in channels_dr.items() %}
+  <tr style="background:#F3F9FF;">
+    <td>CS-DR ({{ ch_name }})</td>
+    <td>{{ "%.2f"|format(ch.att) }}</td>
+    <td>{{ "%.2f"|format(ch.se) }}</td>
+    <td>{{ "%.6f"|format(ch.p) }}</td>
+    <td>[{{ "%.2f"|format(ch.ci_lo) }}, {{ "%.2f"|format(ch.ci_hi) }}]</td>
+    <td class="{{ 'sig' if ch.sig != 'n.s.' else 'ns' }}">{{ ch.sig }}</td>
+  </tr>
+  {% endfor %}
 </table>
 
 <h3>5.2 CS動的効果 (全体)</h3>
@@ -1313,6 +1323,32 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
   CS-DRとCS(無調整)の差が小さい場合、共変量による交絡の影響は限定的であり、
   無調整CS推定の信頼性が支持される。差が大きい場合は、共変量調整後の推定を優先する。
 </div>
+
+{% if channels_dr %}
+<h4 style="margin-top:18px;">チャネル別 CS vs CS-DR 比較</h4>
+<table>
+  <tr>
+    <th>チャネル</th>
+    <th>CS ATT (無調整)</th>
+    <th>CS-DR ATT (調整後)</th>
+    <th>差 (DR - CS)</th>
+    <th>CS sig</th>
+    <th>CS-DR sig</th>
+  </tr>
+  {% for ch_name in channels.keys() %}
+  {% if ch_name in channels_dr %}
+  <tr>
+    <td>{{ ch_name }}</td>
+    <td>{{ "%.2f"|format(channels[ch_name].att) }}</td>
+    <td>{{ "%.2f"|format(channels_dr[ch_name].att) }}</td>
+    <td>{{ "%+.2f"|format(channels_dr[ch_name].att - channels[ch_name].att) }}</td>
+    <td class="{{ 'sig' if channels[ch_name].sig != 'n.s.' else 'ns' }}">{{ channels[ch_name].sig }}</td>
+    <td class="{{ 'sig' if channels_dr[ch_name].sig != 'n.s.' else 'ns' }}">{{ channels_dr[ch_name].sig }}</td>
+  </tr>
+  {% endif %}
+  {% endfor %}
+</table>
+{% endif %}
 {% endif %}
 </section>
 
@@ -2220,6 +2256,10 @@ channels = {}
 for ch_name, ch_data in did_results.get("cs_channel", {}).items():
     channels[ch_name] = DotDict(ch_data)
 
+channels_dr = {}
+for ch_name, ch_data in did_results.get("cs_channel_dr", {}).items():
+    channels_dr[ch_name] = DotDict(ch_data)
+
 # CATE結果をdot-access可能に
 cate_data = {}
 for dim_name, dim_data in cate_results.get("cate", {}).items():
@@ -2272,6 +2312,7 @@ template_data = {
 
     # チャネル別
     "channels": channels,
+    "channels_dr": channels_dr,
 
     # CATE
     "cate_dims": cate_results.get("dimensions", []),
