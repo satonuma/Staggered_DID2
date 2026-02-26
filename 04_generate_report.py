@@ -46,7 +46,7 @@ FILE_RW_LIST = "rw_list.csv"
 FILE_SALES = "sales.csv"
 FILE_DIGITAL = "デジタル視聴データ.csv"
 FILE_ACTIVITY = "活動データ.csv"
-FILE_FACILITY_MASTER = "facility_attribute.csv"
+FILE_FACILITY_MASTER = "facility_attribute_修正.csv"
 FILE_DOCTOR_ATTR = "doctor_attribute.csv"
 FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 
@@ -204,7 +204,7 @@ print("\n[除外フロー再実行]")
 # 施設医師リスト: 全医師の施設対応マスター (母集団)
 fac_doc_list = pd.read_csv(os.path.join(DATA_DIR, FILE_FAC_DOCTOR_LIST))
 
-# [Step 1] facility_attribute.csv: fac単位で施設内医師数==1のfacを抽出
+# [Step 1] facility_attribute_修正.csv: fac単位で施設内医師数==1のfacを抽出
 fac_df = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
 single_staff_fac = set(fac_df[fac_df["施設内医師数"] == 1]["fac"])
 multi_staff_fac  = set(fac_df[fac_df["施設内医師数"] > 1]["fac"])
@@ -1138,6 +1138,16 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
     <td>[{{ "%.2f"|format(cs.ci_lo) }}, {{ "%.2f"|format(cs.ci_hi) }}]</td>
     <td class="{{ 'sig' if cs.sig != 'n.s.' else 'ns' }}">{{ cs.sig }}</td>
   </tr>
+  {% if cs_dr %}
+  <tr>
+    <td>CS-DR (全体, 共変量調整)</td>
+    <td>{{ "%.2f"|format(cs_dr.att) }}</td>
+    <td>{{ "%.2f"|format(cs_dr.se) }}</td>
+    <td>{{ "%.6f"|format(cs_dr.p) }}</td>
+    <td>[{{ "%.2f"|format(cs_dr.ci_lo) }}, {{ "%.2f"|format(cs_dr.ci_hi) }}]</td>
+    <td class="{{ 'sig' if cs_dr.sig != 'n.s.' else 'ns' }}">{{ cs_dr.sig }}</td>
+  </tr>
+  {% endif %}
   {% for ch_name, ch in channels.items() %}
   <tr>
     <td>CS ({{ ch_name }})</td>
@@ -1234,6 +1244,74 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
   <strong>解釈:</strong>
   MR活動（面談等）を共変量として追加してもATTの変化が小さい場合（目安: 変化率10%未満）、
   MR活動による時変交絡の影響は限定的であり、メインTWFE推定の信頼性が支持される。
+</div>
+{% endif %}
+
+{% if cs_dr %}
+<h3>5.5 CS-DR推定 (Doubly Robust, 共変量調整)</h3>
+<p>Callaway-Sant'Anna (CS) 推定にDoubly Robust (DR) 補正を加え、共変量の差異による交絡を除去した推定結果。
+IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ridge）を組み合わせており、
+どちらか一方が正しければ一致性を持つ（二重頑健性）。</p>
+
+<p><strong>使用共変量 (z-score標準化済み):</strong></p>
+<ul style="margin:4px 0; padding-left:20px;">
+  {% for cov in cs_dr.covariates %}
+  <li>{{ cov }}</li>
+  {% endfor %}
+</ul>
+
+<h4 style="margin-top:14px;">CS vs CS-DR 比較</h4>
+<table>
+  <tr>
+    <th>手法</th>
+    <th>ATT</th>
+    <th>SE</th>
+    <th>p値</th>
+    <th>95% CI</th>
+    <th>有意性</th>
+  </tr>
+  <tr>
+    <td>CS (無調整)</td>
+    <td>{{ "%.2f"|format(cs.att) }}</td>
+    <td>{{ "%.2f"|format(cs.se) }}</td>
+    <td>{{ "%.6f"|format(cs.p) }}</td>
+    <td>[{{ "%.2f"|format(cs.ci_lo) }}, {{ "%.2f"|format(cs.ci_hi) }}]</td>
+    <td class="{{ 'sig' if cs.sig != 'n.s.' else 'ns' }}">{{ cs.sig }}</td>
+  </tr>
+  <tr>
+    <td>CS-DR (共変量調整)</td>
+    <td>{{ "%.2f"|format(cs_dr.att) }}</td>
+    <td>{{ "%.2f"|format(cs_dr.se) }}</td>
+    <td>{{ "%.6f"|format(cs_dr.p) }}</td>
+    <td>[{{ "%.2f"|format(cs_dr.ci_lo) }}, {{ "%.2f"|format(cs_dr.ci_hi) }}]</td>
+    <td class="{{ 'sig' if cs_dr.sig != 'n.s.' else 'ns' }}">{{ cs_dr.sig }}</td>
+  </tr>
+</table>
+
+<h4 style="margin-top:14px;">CS-DR 動的効果</h4>
+<table>
+  <tr>
+    <th>イベント時間</th>
+    <th>ATT</th>
+    <th>SE</th>
+    <th>95% CI下限</th>
+    <th>95% CI上限</th>
+  </tr>
+  {% for row in cs_dr.dynamic %}
+  <tr{% if row.event_time == 0 %} style="background:#FFF3E0; font-weight:bold;"{% endif %}>
+    <td>e={{ row.event_time }}</td>
+    <td>{{ "%.2f"|format(row.att) }}</td>
+    <td>{{ "%.2f"|format(row.se) }}</td>
+    <td>{{ "%.2f"|format(row.ci_lo) }}</td>
+    <td>{{ "%.2f"|format(row.ci_hi) }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<div class="highlight-box">
+  <strong>解釈:</strong>
+  CS-DRとCS(無調整)の差が小さい場合、共変量による交絡の影響は限定的であり、
+  無調整CS推定の信頼性が支持される。差が大きい場合は、共変量調整後の推定を優先する。
 </div>
 {% endif %}
 </section>
@@ -2049,6 +2127,7 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
 <ul style="margin:10px 0; padding-left:20px;">
   <li>TWFE推定 <small>(双方向固定効果)</small>: ATT <small>(処置群の平均処置効果)</small> = {{ "%.2f"|format(twfe.att) }} (SE={{ "%.2f"|format(twfe.se) }}, {{ twfe.sig }})</li>
   <li>CS推定 <small>(Callaway-Sant'Anna)</small>: ATT = {{ "%.2f"|format(cs.att) }} (SE={{ "%.2f"|format(cs.se) }}, {{ cs.sig }})</li>
+  {% if cs_dr %}<li>CS-DR推定 <small>(Doubly Robust, 共変量調整)</small>: ATT = {{ "%.2f"|format(cs_dr.att) }} (SE={{ "%.2f"|format(cs_dr.se) }}, {{ cs_dr.sig }})</li>{% endif %}
 </ul>
 
 <h3>チャネル別効果 (CS推定)</h3>
@@ -2189,6 +2268,7 @@ template_data = {
     "twfe": DotDict(did_results["twfe"]),
     "twfe_robust": DotDict(did_results["twfe_robust"]) if "twfe_robust" in did_results else None,
     "cs": DotDict(did_results["cs_overall"]),
+    "cs_dr": DotDict(did_results["cs_overall_dr"]) if "cs_overall_dr" in did_results else None,
 
     # チャネル別
     "channels": channels,

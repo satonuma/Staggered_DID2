@@ -528,7 +528,7 @@ facility_attribute_out = pd.DataFrame({
 facility_attribute_out["施設内医師数"] = facility_attribute_out["施設内医師数"].astype(int)
 facility_attribute_out["許可病床数_合計"] = facility_attribute_out["許可病床数_合計"].astype(int)
 facility_attribute_out.to_csv(
-    os.path.join(OUTPUT_DIR, "facility_attribute.csv"), index=False, encoding="utf-8-sig")
+    os.path.join(OUTPUT_DIR, "facility_attribute_修正.csv"), index=False, encoding="utf-8-sig")
 
 # doctor_attribute.csv: 医師属性マスター
 def _get_channel_pref(doc_id):
@@ -676,7 +676,7 @@ print(f"  {n_diff_fac} / {N_FACILITIES} 施設で fac != fac_honin")
 
 print(f"\n出力ファイル:")
 print(f"  rw_list.csv              : {len(rw_list_out):>8} 行 (ENT医師, seg=RWフラグ)")
-print(f"  facility_attribute.csv   : {len(facility_attribute_out):>8} 行 (施設マスター+属性)")
+print(f"  facility_attribute_修正.csv   : {len(facility_attribute_out):>8} 行 (施設マスター+属性)")
 print(f"  doctor_attribute.csv     : {len(doctor_attribute_out):>8} 行 (医師属性マスター)")
 print(f"  sales.csv                : {len(delivery_df):>8,} 行 (日別施設別, 全品目)")
 print(f"  デジタル視聴データ.csv    : {n_digital_views:>8,} 行 (webiner + e_contents)")

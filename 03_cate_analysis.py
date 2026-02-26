@@ -42,7 +42,7 @@ FILE_RW_LIST = "rw_list.csv"
 FILE_SALES = "sales.csv"
 FILE_DIGITAL = "デジタル視聴データ.csv"
 FILE_ACTIVITY = "活動データ.csv"
-FILE_FACILITY_MASTER = "facility_attribute.csv"
+FILE_FACILITY_MASTER = "facility_attribute_修正.csv"
 FILE_DOCTOR_ATTR = "doctor_attribute.csv"
 FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 
@@ -93,10 +93,10 @@ DOCTOR_ATTR_SELECTED: list = [      # ← 分析したいカラム名をここ�
     # "experience_years",
 ]
 
-# --- 施設属性 (facility_attribute.csv) ---
+# --- 施設属性 (facility_attribute_修正.csv) ---
 #   IDカラム  : fac_honin
 #   名前カラム: fac_honin_name  (自動除外)
-FILE_FACILITY_ATTR = "facility_attribute.csv"
+FILE_FACILITY_ATTR = "facility_attribute_修正.csv"
 FACILITY_ATTR_ID_COL = "fac_honin"
 FACILITY_ATTR_SELECTED: list = [    # ← 分析したいカラム名をここに列挙
     # "region",
@@ -348,7 +348,7 @@ print("\n[除外フロー]")
 # 施設医師リスト: 全医師の施設対応マスター (母集団)
 fac_doc_list = pd.read_csv(os.path.join(DATA_DIR, FILE_FAC_DOCTOR_LIST))
 
-# [Step 1] facility_attribute.csv: fac単位で施設内医師数==1のfacを抽出
+# [Step 1] facility_attribute_修正.csv: fac単位で施設内医師数==1のfacを抽出
 fac_df = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
 single_staff_fac = set(fac_df[fac_df["施設内医師数"] == 1]["fac"])
 multi_staff_fac  = set(fac_df[fac_df["施設内医師数"] > 1]["fac"])
