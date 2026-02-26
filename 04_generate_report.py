@@ -1130,6 +1130,16 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
     <td>[{{ "%.2f"|format(twfe.ci_lo) }}, {{ "%.2f"|format(twfe.ci_hi) }}]</td>
     <td class="{{ 'sig' if twfe.sig != 'n.s.' else 'ns' }}">{{ twfe.sig }}</td>
   </tr>
+  {% if twfe_dr %}
+  <tr>
+    <td>TWFE-DR (全体, 共変量調整)</td>
+    <td>{{ "%.2f"|format(twfe_dr.att) }}</td>
+    <td>{{ "%.2f"|format(twfe_dr.se) }}</td>
+    <td>{{ "%.6f"|format(twfe_dr.p) }}</td>
+    <td>[{{ "%.2f"|format(twfe_dr.ci_lo) }}, {{ "%.2f"|format(twfe_dr.ci_hi) }}]</td>
+    <td class="{{ 'sig' if twfe_dr.sig != 'n.s.' else 'ns' }}">{{ twfe_dr.sig }}</td>
+  </tr>
+  {% endif %}
   <tr>
     <td>CS (全体)</td>
     <td>{{ "%.2f"|format(cs.att) }}</td>
@@ -2162,6 +2172,7 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 <h3>全体効果</h3>
 <ul style="margin:10px 0; padding-left:20px;">
   <li>TWFE推定 <small>(双方向固定効果)</small>: ATT <small>(処置群の平均処置効果)</small> = {{ "%.2f"|format(twfe.att) }} (SE={{ "%.2f"|format(twfe.se) }}, {{ twfe.sig }})</li>
+  {% if twfe_dr %}<li>TWFE-DR推定 <small>(IPW重み付き+共変量調整)</small>: ATT = {{ "%.2f"|format(twfe_dr.att) }} (SE={{ "%.2f"|format(twfe_dr.se) }}, {{ twfe_dr.sig }})</li>{% endif %}
   <li>CS推定 <small>(Callaway-Sant'Anna)</small>: ATT = {{ "%.2f"|format(cs.att) }} (SE={{ "%.2f"|format(cs.se) }}, {{ cs.sig }})</li>
   {% if cs_dr %}<li>CS-DR推定 <small>(Doubly Robust, 共変量調整)</small>: ATT = {{ "%.2f"|format(cs_dr.att) }} (SE={{ "%.2f"|format(cs_dr.se) }}, {{ cs_dr.sig }})</li>{% endif %}
 </ul>
@@ -2306,6 +2317,7 @@ template_data = {
 
     # TWFE/CS結果
     "twfe": DotDict(did_results["twfe"]),
+    "twfe_dr": DotDict(did_results["twfe_dr"]) if "twfe_dr" in did_results else None,
     "twfe_robust": DotDict(did_results["twfe_robust"]) if "twfe_robust" in did_results else None,
     "cs": DotDict(did_results["cs_overall"]),
     "cs_dr": DotDict(did_results["cs_overall_dr"]) if "cs_overall_dr" in did_results else None,

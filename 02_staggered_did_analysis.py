@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 from scipy import stats
+from sklearn.linear_model import LogisticRegression
 
 warnings.filterwarnings("ignore")
 
@@ -795,6 +796,60 @@ print(f"  共変量 ({len(COV_COLS)}個): {COV_COLS}")
 print(f"  対象施設数: {len(cov_std)}")
 
 # ================================================================
+# Part 5d: TWFE-DR推定 (Doubly Robust: IPW重み付きWLS + 共変量制御)
+# ================================================================
+print("\n" + "=" * 70)
+print(" Part 5d: TWFE-DR推定 (IPW重み付きWLS + 共変量制御)")
+print("=" * 70)
+
+# 1. 施設クロスセクション: 処置インジケータと共変量
+_cs_df = panel_r.drop_duplicates("facility_id").set_index("facility_id")
+_cs_D  = _cs_df["treated"].values.astype(float)
+_cs_X  = cov_std.reindex(_cs_df.index).fillna(0).values
+_cs_fac_ids = _cs_df.index.tolist()
+
+# 2. 傾向スコア推定 P(treated=1 | COV_COLS)
+_lr_ps = LogisticRegression(C=1.0, max_iter=1000, random_state=42)
+try:
+    _lr_ps.fit(_cs_X, _cs_D)
+    _ps_hat = np.clip(_lr_ps.predict_proba(_cs_X)[:, 1], 0.01, 0.99)
+except Exception as _e:
+    print(f"  傾向スコア推定失敗: {_e} → 等重みを使用")
+    _ps_hat = np.full(len(_cs_D), _cs_D.mean())
+
+# 3. ATT型IPW重み: 処置群=1, 対照群=p̂/(1-p̂)
+_ipw_raw = np.where(_cs_D == 1, 1.0, _ps_hat / (1.0 - _ps_hat))
+_ipw_map = dict(zip(_cs_fac_ids, _ipw_raw))
+panel_r["ipw_weight"] = panel_r["facility_id"].map(_ipw_map).fillna(1.0)
+
+# 4. 加重WLS TWFE + 共変量制御 (Doubly Robust)
+X_twfe_dr = pd.concat(
+    [pd.DataFrame({"const": 1.0, "did": panel_r["did"].values}),
+     panel_r[COV_COLS],
+     unit_dum, time_dum],
+    axis=1,
+)
+model_twfe_dr = sm.WLS(y, X_twfe_dr, weights=panel_r["ipw_weight"].values).fit(
+    cov_type="cluster", cov_kwds={"groups": panel_r["unit_id"].values}
+)
+
+beta_dr_twfe  = model_twfe_dr.params["did"]
+se_twfe_dr    = model_twfe_dr.bse["did"]
+pval_twfe_dr  = model_twfe_dr.pvalues["did"]
+ci_twfe_dr    = model_twfe_dr.conf_int().loc["did"]
+sig_twfe_dr   = (
+    "***" if pval_twfe_dr < 0.001 else "**" if pval_twfe_dr < 0.01
+    else "*" if pval_twfe_dr < 0.05 else "n.s."
+)
+
+print(f"\n  DID推定量(DR) : {beta_dr_twfe:.2f}")
+print(f"  SE           : {se_twfe_dr:.2f}")
+print(f"  p値          : {pval_twfe_dr:.6f} {sig_twfe_dr}")
+print(f"  95%CI        : [{ci_twfe_dr[0]:.2f}, {ci_twfe_dr[1]:.2f}]")
+print(f"\n  [比較] TWFE(無調整)={beta:.2f}  →  TWFE-DR={beta_dr_twfe:.2f}"
+      f"  (差: {beta_dr_twfe - beta:+.2f})")
+
+# ================================================================
 # Part 6: CS推定 (全体)
 # ================================================================
 print("\n" + "=" * 70)
@@ -962,6 +1017,7 @@ print("=" * 70)
 print(f"\n  {'手法':<25} {'ATT':>8} {'SE':>8} {'p値':>10} {'有意性':>6}")
 print(f"  {'-' * 62}")
 print(f"  {'TWFE (全体)':<25} {beta:>8.2f} {se_twfe:>8.2f} {pval_twfe:>10.6f} {sig_twfe:>6}")
+print(f"  {'TWFE-DR (全体, 共変量調整)':<25} {beta_dr_twfe:>8.2f} {se_twfe_dr:>8.2f} {pval_twfe_dr:>10.6f} {sig_twfe_dr:>6}")
 print(f"  {'CS (全体)':<25} {cs_overall:>8.2f} {se_overall:>8.2f} {p_cs:>10.6f} {sig_cs:>6}")
 print(f"  {'CS-DR (全体, 共変量調整)':<25} {cs_overall_dr:>8.2f} {se_dr:>8.2f} {p_dr:>10.6f} {sig_dr:>6}")
 for ch in CONTENT_TYPES:
@@ -988,7 +1044,7 @@ print("\n" + "=" * 70)
 print(" Part 9: 可視化")
 print("=" * 70)
 
-fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+fig, axes = plt.subplots(3, 2, figsize=(14, 18))
 fig.suptitle(
     "Staggered DID: デジタルコンテンツ視聴の効果\n"
     "(1施設1医師 AND 1医師1施設, wash-out/遅延視聴者除外)",
@@ -1031,11 +1087,13 @@ ax.set_title("(b) CS動的効果 (全体): 無調整 vs DR")
 ax.legend(fontsize=8)
 ax.grid(True, alpha=0.3)
 
+ch_colors  = {"webiner": "#1f77b4", "e_contents": "#ff7f0e", "Web講演会": "#2ca02c"}
+ch_markers = {"webiner": "o", "e_contents": "s", "Web講演会": "^"}
+
+# (c) CS動的効果 チャネル別 (無調整)
 ax = axes[1, 0]
 ax.axhline(0, color="black", lw=0.8)
 ax.axvline(-0.5, color="red", ls="--", lw=0.8, alpha=0.7)
-ch_colors = {"webiner": "#1f77b4", "e_contents": "#ff7f0e", "Web講演会": "#2ca02c"}
-ch_markers = {"webiner": "o", "e_contents": "s", "Web講演会": "^"}
 for ch in CONTENT_TYPES:
     if ch not in channel_results:
         continue
@@ -1045,30 +1103,88 @@ for ch in CONTENT_TYPES:
     ax.plot(dyn["event_time"], dyn["att"], f"{m}-", color=c, ms=4, label=ch)
 ax.set_xlabel("イベント時間 (月)")
 ax.set_ylabel("ATT")
-ax.set_title("(c) CS動的効果 (チャネル別)")
+ax.set_title("(c) CS動的効果 (チャネル別, 無調整)")
 ax.legend(fontsize=9)
 ax.grid(True, alpha=0.3)
 
+# (d) CS-DR動的効果 チャネル別
 ax = axes[1, 1]
-ch_names = [ch for ch in CONTENT_TYPES if ch in channel_results]
-ch_atts = [channel_results[ch]["overall"] for ch in ch_names]
-ch_ses = [channel_results[ch]["se"] for ch in ch_names]
-ch_cols = [ch_colors[ch] for ch in ch_names]
-x_pos = range(len(ch_names))
-ax.bar(x_pos, ch_atts, color=ch_cols, alpha=0.8, edgecolor="gray")
-ax.errorbar(x_pos, ch_atts, yerr=[1.96 * s for s in ch_ses],
-            fmt="none", color="black", capsize=5)
-ax.set_xticks(list(x_pos))
-ax.set_xticklabels(ch_names)
+ax.axhline(0, color="black", lw=0.8)
+ax.axvline(-0.5, color="red", ls="--", lw=0.8, alpha=0.7)
+for ch in CONTENT_TYPES:
+    if ch not in channel_dr_results:
+        continue
+    dyn = channel_dr_results[ch]["dynamic"]
+    c, m = ch_colors[ch], ch_markers[ch]
+    ax.fill_between(dyn["event_time"], dyn["ci_lo"], dyn["ci_hi"], alpha=0.1, color=c)
+    ax.plot(dyn["event_time"], dyn["att"], f"{m}--", color=c, ms=4, label=ch)
+ax.set_xlabel("イベント時間 (月)")
 ax.set_ylabel("ATT")
-ax.set_title("(d) チャネル別ATT比較 (95%CI)")
-ax.axhline(cs_overall, color="red", ls="--", lw=0.8, label=f"全体ATT={cs_overall:.1f}")
+ax.set_title("(d) CS-DR動的効果 (チャネル別, 共変量調整)")
 ax.legend(fontsize=9)
+ax.grid(True, alpha=0.3)
+
+# (e) チャネル別ATT比較: CS vs CS-DR グループ棒グラフ
+ax = axes[2, 0]
+ch_names = [ch for ch in CONTENT_TYPES if ch in channel_results]
+n_ch = len(ch_names)
+x_pos = np.arange(n_ch)
+bar_w = 0.35
+ch_atts_cs = [channel_results[ch]["overall"] for ch in ch_names]
+ch_ses_cs  = [channel_results[ch]["se"] for ch in ch_names]
+ch_atts_dr = [channel_dr_results[ch]["overall"] if ch in channel_dr_results else 0 for ch in ch_names]
+ch_ses_dr  = [channel_dr_results[ch]["se"] if ch in channel_dr_results else 0 for ch in ch_names]
+bars_cs = ax.bar(x_pos - bar_w / 2, ch_atts_cs, bar_w,
+                 color=[ch_colors[ch] for ch in ch_names], alpha=0.8,
+                 edgecolor="gray", label="CS (無調整)")
+bars_dr = ax.bar(x_pos + bar_w / 2, ch_atts_dr, bar_w,
+                 color=[ch_colors[ch] for ch in ch_names], alpha=0.4,
+                 edgecolor="gray", hatch="//", label="CS-DR (調整後)")
+ax.errorbar(x_pos - bar_w / 2, ch_atts_cs,
+            yerr=[1.96 * s for s in ch_ses_cs], fmt="none", color="black", capsize=4)
+ax.errorbar(x_pos + bar_w / 2, ch_atts_dr,
+            yerr=[1.96 * s for s in ch_ses_dr], fmt="none", color="black", capsize=4)
+ax.set_xticks(list(x_pos))
+ax.set_xticklabels(ch_names, fontsize=9)
+ax.set_ylabel("ATT")
+ax.set_title("(e) チャネル別ATT比較: CS vs CS-DR")
+ax.axhline(cs_overall, color="steelblue", ls="--", lw=0.8,
+           label=f"CS全体={cs_overall:.1f}")
+ax.axhline(cs_overall_dr, color="darkorange", ls="--", lw=0.8,
+           label=f"CS-DR全体={cs_overall_dr:.1f}")
+ax.legend(fontsize=8)
 ax.grid(True, alpha=0.3, axis="y")
 for i, ch in enumerate(ch_names):
-    sig = channel_results[ch]["sig"]
-    y_offset = ch_atts[i] + 1.96 * ch_ses[i] + 0.5
-    ax.text(i, y_offset, sig, ha="center", fontsize=10)
+    for xoff, atts, ses, results in [
+        (-bar_w / 2, ch_atts_cs, ch_ses_cs, channel_results),
+        (+bar_w / 2, ch_atts_dr, ch_ses_dr, channel_dr_results),
+    ]:
+        if ch in results:
+            sig = results[ch]["sig"]
+            yoff = atts[i] + 1.96 * ses[i] + 0.3
+            ax.text(i + xoff, yoff, sig, ha="center", fontsize=8)
+
+# (f) TWFE vs TWFE-DR 全体比較
+ax = axes[2, 1]
+methods = ["TWFE\n(無調整)", "TWFE-DR\n(共変量調整)", "CS\n(無調整)", "CS-DR\n(共変量調整)"]
+atts    = [beta, beta_dr_twfe, cs_overall, cs_overall_dr]
+ses     = [se_twfe, se_twfe_dr, se_overall, se_dr]
+sigs    = [sig_twfe, sig_twfe_dr, sig_cs, sig_dr]
+colors  = ["#4472C4", "#4472C4", "#ED7D31", "#ED7D31"]
+alphas  = [0.9, 0.45, 0.9, 0.45]
+hatches = ["", "//", "", "//"]
+x_f = np.arange(len(methods))
+for i, (att, se, sig, col, alp, hat) in enumerate(
+        zip(atts, ses, sigs, colors, alphas, hatches)):
+    ax.bar(i, att, color=col, alpha=alp, edgecolor="gray", hatch=hat)
+    ax.errorbar(i, att, yerr=1.96 * se, fmt="none", color="black", capsize=5)
+    ax.text(i, att + 1.96 * se + 0.3, sig, ha="center", fontsize=9)
+ax.set_xticks(list(x_f))
+ax.set_xticklabels(methods, fontsize=8)
+ax.set_ylabel("ATT")
+ax.set_title("(f) 全体ATT比較: TWFE vs TWFE-DR vs CS vs CS-DR")
+ax.axhline(0, color="black", lw=0.5)
+ax.grid(True, alpha=0.3, axis="y")
 
 plt.tight_layout()
 out_path = os.path.join(SCRIPT_DIR, "staggered_did_results.png")
@@ -1089,6 +1205,7 @@ print(f"""
 
   === 全体効果 ===
   TWFE推定           : {beta:.2f} (SE={se_twfe:.2f}, p={pval_twfe:.4f}) {sig_twfe}
+  TWFE-DR (共変量調整): {beta_dr_twfe:.2f} (SE={se_twfe_dr:.2f}, p={pval_twfe_dr:.4f}) {sig_twfe_dr}
   CS (無調整)        : {cs_overall:.2f} (SE={se_overall:.2f}, p={p_cs:.4f}) {sig_cs}
   CS-DR (共変量調整) : {cs_overall_dr:.2f} (SE={se_dr:.2f}, p={p_dr:.4f}) {sig_dr}
   DR共変量           : {COV_COLS}
@@ -1171,6 +1288,17 @@ twfe_robust_result = {
     "covariates": ["mr_activity_count"],
 }
 
+# TWFE-DR結果
+twfe_dr_result = {
+    "att": float(beta_dr_twfe),
+    "se": float(se_twfe_dr),
+    "p": float(pval_twfe_dr),
+    "ci_lo": float(ci_twfe_dr[0]),
+    "ci_hi": float(ci_twfe_dr[1]),
+    "sig": sig_twfe_dr,
+    "covariates": COV_COLS,
+}
+
 # CS全体結果
 cs_result = {
     "att": float(cs_overall),
@@ -1250,6 +1378,7 @@ did_results_json = {
     "exclusion_flow": exclusion_flow,
     "excluded_ids": excluded_ids,
     "twfe": twfe_result,
+    "twfe_dr": twfe_dr_result,
     "twfe_robust": twfe_robust_result,
     "cs_overall": cs_result,
     "cs_overall_dr": cs_dr_result,
