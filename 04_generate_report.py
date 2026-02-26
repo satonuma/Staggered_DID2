@@ -202,10 +202,8 @@ print("\n[除外フロー再実行]")
 
 # [Step 1] facility_attribute.csv: dcf_fac粒度で施設内医師数==1のfac_honinを抽出
 fac_df = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
-fac_honin_max_docs = fac_df.groupby("fac_honin")["施設内医師数"].max()
-single_staff_honin = set(fac_honin_max_docs[fac_honin_max_docs == 1].index)
-multi_staff_honin  = set(fac_honin_max_docs[fac_honin_max_docs > 1].index)
-single_staff_facs = single_staff_honin
+single_staff_fac = set(fac_df[fac_df["施設内医師数"] == 1]["dcf_fac"])
+multi_staff_fac  = set(fac_df[fac_df["施設内医師数"] > 1]["dcf_fac"])
 
 # [Step 2] doctor_attribute.csv: 所属施設数==1 の医師
 doc_attr_df = pd.read_csv(os.path.join(DATA_DIR, FILE_DOCTOR_ATTR))
@@ -225,9 +223,10 @@ else:
     rw_doc_ids = set(rw_list[rw_list["seg"].notna() & (rw_list["seg"] != "")]["doc"])
 
 # 3ステップを順序付きで適用 + 中間カウント + 1:1確認
+_doc_to_fac   = dict(zip(rw_list["doc"], rw_list["fac"]))
 _doc_to_honin = dict(zip(rw_list["doc"], rw_list["fac_honin"]))
 all_docs = set(rw_list["doc"])
-after_step1 = {d for d in all_docs if _doc_to_honin.get(d) in single_staff_honin}
+after_step1 = {d for d in all_docs if _doc_to_fac.get(d) in single_staff_fac}
 after_step2 = after_step1 & single_honin_docs
 after_step3 = after_step2 & rw_doc_ids
 _honin_cnt: dict = {}

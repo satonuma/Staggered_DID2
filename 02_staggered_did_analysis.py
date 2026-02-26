@@ -253,18 +253,14 @@ print("\n" + "=" * 70)
 print(" Part 2: 除外フロー")
 print("=" * 70)
 
-# [Step 1] facility_attribute.csv: dcf_fac粒度で施設内医師数==1のfac_honinを抽出
+# [Step 1] facility_attribute.csv: fac(dcf_fac)単位で施設内医師数==1のfacを抽出
 fac_df = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
-fac_honin_max_docs = fac_df.groupby("fac_honin")["施設内医師数"].max()
-single_staff_honin = set(fac_honin_max_docs[fac_honin_max_docs == 1].index)
-multi_staff_honin  = set(fac_honin_max_docs[fac_honin_max_docs > 1].index)
-# 後方互換性のため旧変数名もセット
-single_staff_facs = single_staff_honin
-multi_staff_facs  = multi_staff_honin
+single_staff_fac = set(fac_df[fac_df["施設内医師数"] == 1]["dcf_fac"])
+multi_staff_fac  = set(fac_df[fac_df["施設内医師数"] > 1]["dcf_fac"])
 
-print(f"\n  [Step 1] facility_attribute.csv: 施設内医師数==1 の施設 (dcf_fac粒度 → fac_honin単位)")
-print(f"      1医師施設 (fac_honin) : {len(single_staff_honin)} 施設")
-print(f"      複数医師施設          : {len(multi_staff_honin)} 施設 → 除外")
+print(f"\n  [Step 1] facility_attribute.csv: 施設内医師数==1 の施設 (fac/dcf_fac単位)")
+print(f"      1医師fac (dcf_fac)   : {len(single_staff_fac)} 件")
+print(f"      複数医師fac           : {len(multi_staff_fac)} 件 → 除外")
 
 # [Step 2] doctor_attribute.csv: 所属施設数==1 の医師 (honin粒度)
 doc_attr_df = pd.read_csv(os.path.join(DATA_DIR, FILE_DOCTOR_ATTR))
@@ -291,10 +287,11 @@ print(f"\n  [Step 3] rw_list.csv: RW医師フィルタ候補")
 print(f"      RW医師候補 : {len(rw_doc_ids)} 名")
 
 # 3ステップを順序付きで適用 + 中間カウント + 1:1確認
+_doc_to_fac   = dict(zip(rw_list["doc"], rw_list["fac"]))
 _doc_to_honin = dict(zip(rw_list["doc"], rw_list["fac_honin"]))
 all_docs = set(rw_list["doc"])
 # Step 1 適用: 施設内医師数==1 の施設に所属する医師
-after_step1 = {d for d in all_docs if _doc_to_honin.get(d) in single_staff_honin}
+after_step1 = {d for d in all_docs if _doc_to_fac.get(d) in single_staff_fac}
 # Step 2 適用: 所属施設数==1 の医師 (Step 1通過者から)
 after_step2 = after_step1 & single_honin_docs
 # Step 3 適用: RW医師のみ (Step 2通過者から)
@@ -816,8 +813,8 @@ exclusion_flow = {
     "ent_delivery_rows": len(daily),
     "total_rw_list": n_rw_all,
     # Step 1: 施設内医師数==1 フィルタ
-    "single_staff_facilities": len(single_staff_honin),
-    "multi_staff_facilities": len(multi_staff_honin),
+    "single_staff_facilities": len(single_staff_fac),
+    "multi_staff_facilities": len(multi_staff_fac),
     "after_step1_doctors": len(after_step1),
     "excluded_step1_doctors": len(all_docs) - len(after_step1),
     # Step 2: 所属施設数==1 フィルタ
