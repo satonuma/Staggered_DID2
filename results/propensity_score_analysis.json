@@ -10,35 +10,35 @@
     }
   },
   "propensity_score_model": {
-    "pseudo_r2": 0.9999772044491327,
-    "treated_mean": 0.9999773443072429,
-    "control_mean": 2.0792654289149562e-10
+    "pseudo_r2": null,
+    "treated_mean": 0.5,
+    "control_mean": 0.5
   },
   "ipw_adjusted_means": [
     {
       "pattern": "定期視聴型",
-      "mean_ipw": 150.56684494443766,
+      "mean_ipw": 150.5668449197861,
       "n": 17.0
     },
     {
       "pattern": "未視聴",
-      "mean_ipw": 123.39669421515457,
+      "mean_ipw": 123.39669421487604,
       "n": 22.0
     },
     {
+      "pattern": "短期集中型",
+      "mean_ipw": 123.75757575757575,
+      "n": 1.0
+    },
+    {
       "pattern": "断続視聴型",
-      "mean_ipw": 134.18413135819034,
+      "mean_ipw": 134.18470418470417,
       "n": 21.0
     },
     {
       "pattern": "単発視聴",
-      "mean_ipw": 148.62121212121144,
+      "mean_ipw": 148.62121212121212,
       "n": 2.0
-    },
-    {
-      "pattern": "短期集中型",
-      "mean_ipw": 123.75757575757578,
-      "n": 1.0
     }
   ],
   "interpretation": {
