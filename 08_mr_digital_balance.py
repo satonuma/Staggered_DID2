@@ -43,6 +43,13 @@ plt.rcParams['axes.unicode_minus'] = False
 # 設定
 # ================================================================
 ENT_PRODUCT_CODE = "00001"
+
+import os as _os
+_script_dir = _os.path.dirname(_os.path.abspath(__file__))
+_data_dir_primary = _os.path.join(_script_dir, "本番データ")
+DATA_DIR = _data_dir_primary if _os.path.isdir(_data_dir_primary) else _os.path.join(_script_dir, "data")
+del _os, _script_dir, _data_dir_primary
+
 RESULTS_DIR = "results"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
@@ -77,7 +84,7 @@ print(f"  総コスト: {BASELINE['mr_fte'] * COST_ASSUMPTIONS['mr_fte_annual'] 
 print("\n[データ読み込み]")
 
 # 売上データ
-sales_raw = pd.read_csv("data/sales.csv", encoding="utf-8", dtype=str)
+sales_raw = pd.read_csv(os.path.join(DATA_DIR, "sales.csv"), encoding="utf-8", dtype=str)
 sales_raw["実績"] = pd.to_numeric(sales_raw["実績"], errors="coerce").fillna(0)
 sales_raw["日付"] = pd.to_datetime(sales_raw["日付"], format="mixed")
 sales = sales_raw[sales_raw["品目コード"].str.strip() == ENT_PRODUCT_CODE].copy()
@@ -90,7 +97,7 @@ sales = sales.rename(columns={
 print(f"  売上データ: {len(sales):,}行（ENT製品）")
 
 # デジタル視聴データ
-digital_raw = pd.read_csv("data/デジタル視聴データ.csv", encoding="utf-8")
+digital_raw = pd.read_csv(os.path.join(DATA_DIR, "デジタル視聴データ.csv"), encoding="utf-8")
 digital_raw["品目コード"] = digital_raw["品目コード"].astype(str).str.strip().str.zfill(5)
 digital = digital_raw[digital_raw["品目コード"] == ENT_PRODUCT_CODE].copy()
 digital = digital.rename(columns={
@@ -103,7 +110,7 @@ digital["viewing_date"] = pd.to_datetime(digital["viewing_date"], format="mixed"
 print(f"  デジタル視聴: {len(digital):,}行")
 
 # MR活動データ
-activity_raw = pd.read_csv("data/活動データ.csv", encoding="utf-8")
+activity_raw = pd.read_csv(os.path.join(DATA_DIR, "活動データ.csv"), encoding="utf-8")
 activity_raw["品目コード"] = activity_raw["品目コード"].astype(str).str.strip().str.zfill(5)
 activity = activity_raw[activity_raw["品目コード"] == ENT_PRODUCT_CODE].copy()
 activity = activity.rename(columns={
@@ -114,7 +121,7 @@ activity["activity_date"] = pd.to_datetime(activity["activity_date"], format="mi
 print(f"  MR活動: {len(activity):,}行")
 
 # 処置データ（RW医師リスト）- date_startはないため処置フラグは使用しない
-rw_list = pd.read_csv("data/rw_list.csv", encoding="utf-8")
+rw_list = pd.read_csv(os.path.join(DATA_DIR, "rw_list.csv"), encoding="utf-8")
 print(f"  RW医師リスト: {len(rw_list)}行")
 
 # 施設マスタ（簡易版: デフォルト値を使用）

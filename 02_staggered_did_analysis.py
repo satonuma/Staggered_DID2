@@ -36,8 +36,8 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 
 # === データファイル・カラム設定 ===
 ENT_PRODUCT_CODE = "00001"              # ENT品目コード (5桁文字列、パラメータ)
-CONTENT_TYPES = ["Webinar", "e-contents", "web講演会"]  # チャネル大分類 (拡張可能)
-ACTIVITY_CHANNEL_FILTER = "web講演会"   # 活動データから抽出する活動種別
+CONTENT_TYPES = ["webiner", "e_contents", "Web講演会"]  # チャネル大分類 (拡張可能)
+ACTIVITY_CHANNEL_FILTER = "Web講演会"   # 活動データから抽出する活動種別
 
 # ファイル名
 FILE_RW_LIST = "rw_list.csv"
@@ -45,14 +45,19 @@ FILE_SALES = "sales.csv"
 FILE_DIGITAL = "デジタル視聴データ.csv"
 FILE_ACTIVITY = "活動データ.csv"
 FILE_FACILITY_MASTER = "facility_attribute.csv"
+FILE_DOCTOR_ATTR = "doctor_attribute.csv"
+
+# 解析集団フィルタパラメータ
+FILTER_SINGLE_FAC_DOCTOR = True   # True: 複数本院施設所属医師を除外
+INCLUDE_NON_RW = False            # False: RW医師のみ / True: 非RW医師も含む
+DOCTOR_HONIN_FAC_COUNT_COL = "所属施設数"  # doctor_attribute.csv の本院施設数カラム名
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(SCRIPT_DIR, "data")
-# data/ の整合性チェック → data2/ にフォールバック
+DATA_DIR = os.path.join(SCRIPT_DIR, "本番データ")
+# 本番データ/ が存在しなければ data/ にフォールバック
 _required = [FILE_SALES, FILE_DIGITAL, FILE_ACTIVITY, FILE_RW_LIST]
-_data_ok = all(os.path.exists(os.path.join(DATA_DIR, f)) for f in _required)
-if not _data_ok:
-    _alt = os.path.join(SCRIPT_DIR, "data2")
+if not all(os.path.exists(os.path.join(DATA_DIR, f)) for f in _required):
+    _alt = os.path.join(SCRIPT_DIR, "data")
     if all(os.path.exists(os.path.join(_alt, f)) for f in _required):
         DATA_DIR = _alt
 
@@ -188,11 +193,9 @@ print("=" * 70)
 print(" Staggered DID分析: デジタルコンテンツ視聴の効果検証")
 print("=" * 70)
 
-# 1. RW医師リスト
+# 1. RW医師リスト (除外フローで使用; 絞り込みはPart 2で実施)
 rw_list = pd.read_csv(os.path.join(DATA_DIR, FILE_RW_LIST))
 n_rw_all = len(rw_list)
-doctor_master = rw_list[rw_list["seg"].notna() & (rw_list["seg"] != "")].copy()
-doctor_master = doctor_master.rename(columns={"fac_honin": "facility_id", "doc": "doctor_id"})
 
 # 2. 売上データ (日付・実績・品目コードが文字列)
 sales_raw = pd.read_csv(os.path.join(DATA_DIR, FILE_SALES), dtype=str)
@@ -238,7 +241,6 @@ print(f"\n[元データ]")
 print(f"  売上データ(全品目)      : {n_sales_all:,} 行")
 print(f"  売上データ(ENT品目)     : {len(daily):,} 行  (他品目 {n_sales_all - len(daily):,} 行除外)")
 print(f"  RW医師リスト(全体)      : {n_rw_all} 行")
-print(f"  RW医師リスト(seg非空)   : {len(doctor_master)} 行  (非RW {n_rw_all - len(doctor_master)} 行除外)")
 print(f"  デジタル視聴データ      : {n_digital_all:,} 行 → ENT品目: {len(digital):,} 行")
 print(f"  活動データ              : {n_activity_all:,} 行 → web講演会+ENT: {len(web_lecture):,} 行")
 print(f"  視聴データ結合          : {len(viewing):,} 行")
@@ -251,41 +253,70 @@ print("\n" + "=" * 70)
 print(" Part 2: 除外フロー")
 print("=" * 70)
 
-# [A] 施設内医師数==1 の施設に絞り込み (全医師ベース: facility_master.csv)
-fac_master_df = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
-single_staff_facs = set(fac_master_df[fac_master_df["施設内医師数"] == 1]["fac_honin"])
-multi_staff_facs  = set(fac_master_df[fac_master_df["施設内医師数"] > 1]["fac_honin"])
+# [Step 1] facility_attribute.csv: dcf_fac粒度で施設内医師数==1のfac_honinを抽出
+fac_df = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
+fac_honin_max_docs = fac_df.groupby("fac_honin")["施設内医師数"].max()
+single_staff_honin = set(fac_honin_max_docs[fac_honin_max_docs == 1].index)
+multi_staff_honin  = set(fac_honin_max_docs[fac_honin_max_docs > 1].index)
+# 後方互換性のため旧変数名もセット
+single_staff_facs = single_staff_honin
+multi_staff_facs  = multi_staff_honin
 
-print(f"\n  [A] 施設内医師数==1 の施設に絞り込み (全医師ベース: facility_attribute.csv)")
-print(f"      1医師施設    : {len(single_staff_facs)} 施設")
-print(f"      複数医師施設 : {len(multi_staff_facs)} 施設 -> 除外")
+print(f"\n  [Step 1] facility_attribute.csv: 施設内医師数==1 の施設 (dcf_fac粒度 → fac_honin単位)")
+print(f"      1医師施設 (fac_honin) : {len(single_staff_honin)} 施設")
+print(f"      複数医師施設          : {len(multi_staff_honin)} 施設 → 除外")
 
-# [B] 複数施設所属RW医師の除外 (施設フィルタ前の全所属で確認)
-facs_per_doc = doctor_master.groupby("doctor_id")["facility_id"].nunique()
-multi_fac_docs  = set(facs_per_doc[facs_per_doc > 1].index)
-single_fac_docs = set(facs_per_doc[facs_per_doc == 1].index)
+# [Step 2] doctor_attribute.csv: 所属施設数==1 の医師 (honin粒度)
+doc_attr_df = pd.read_csv(os.path.join(DATA_DIR, FILE_DOCTOR_ATTR))
+if FILTER_SINGLE_FAC_DOCTOR:
+    if DOCTOR_HONIN_FAC_COUNT_COL in doc_attr_df.columns:
+        single_honin_docs = set(doc_attr_df[doc_attr_df[DOCTOR_HONIN_FAC_COUNT_COL] == 1]["doc"])
+    else:
+        # フォールバック: rw_list.csvからfac_honinのユニーク数で計算
+        _fac_per_doc = rw_list.groupby("doc")["fac_honin"].nunique()
+        single_honin_docs = set(_fac_per_doc[_fac_per_doc == 1].index)
+        print(f"    ({DOCTOR_HONIN_FAC_COUNT_COL}列なし → rw_list.csvから計算)")
+else:
+    single_honin_docs = set(doc_attr_df["doc"])
+multi_fac_docs = set(rw_list["doc"]) - single_honin_docs
 
-excluded_multi_fac = doctor_master[
-    doctor_master["facility_id"].isin(single_staff_facs)
-    & doctor_master["doctor_id"].isin(multi_fac_docs)
-]
+print(f"\n  [Step 2] doctor_attribute.csv: 所属施設数==1 の医師")
+print(f"      1施設所属医師 : {len(single_honin_docs)} 名")
+print(f"      複数施設所属  : {len(multi_fac_docs)} 名 → {'除外' if FILTER_SINGLE_FAC_DOCTOR else '許容'}")
 
-print(f"\n  [B] 複数施設所属RW医師の除外")
-print(f"      複数施設所属RW医師      : {len(multi_fac_docs)} 名")
-print(f"      うち1医師施設に属する   : {len(excluded_multi_fac)} 名 -> 除外")
+# [Step 3] rw_list.csv: RW医師フィルタ
+if INCLUDE_NON_RW:
+    rw_doc_ids = set(rw_list["doc"])
+else:
+    rw_doc_ids = set(rw_list[rw_list["seg"].notna() & (rw_list["seg"] != "")]["doc"])
+non_rw_excluded = n_rw_all - len(rw_doc_ids)
 
-# クリーンな1:1ペア: 施設内1医師 かつ RW医師が1施設のみ所属
-clean_pairs = doctor_master[
-    doctor_master["facility_id"].isin(single_staff_facs)
-    & doctor_master["doctor_id"].isin(single_fac_docs)
-].copy()
+print(f"\n  [Step 3] rw_list.csv: RW医師フィルタ")
+print(f"      対象医師 : {len(rw_doc_ids)} 名")
+print(f"      非RW除外 : {non_rw_excluded} 名 → {'除外' if not INCLUDE_NON_RW else '許容'}")
 
-print(f"      クリーンな1:1ペア: {len(clean_pairs)} 施設")
+# 3ステップの交差 + fac_honin→医師の1:1確認
+_doc_to_honin = dict(zip(rw_list["doc"], rw_list["fac_honin"]))
+candidate_docs = rw_doc_ids & single_honin_docs
+candidate_docs = {d for d in candidate_docs if _doc_to_honin.get(d) in single_staff_honin}
+# 同一fac_honinに複数の候補医師がいる場合は除外
+_honin_cnt: dict = {}
+for d in candidate_docs:
+    h = _doc_to_honin[d]
+    _honin_cnt[h] = _honin_cnt.get(h, 0) + 1
+candidate_docs = {d for d in candidate_docs if _honin_cnt[_doc_to_honin[d]] == 1}
+
+clean_pairs = rw_list[rw_list["doc"].isin(candidate_docs)][["doc", "fac_honin"]].drop_duplicates()
+clean_pairs = clean_pairs.rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})
 
 fac_to_doc = dict(zip(clean_pairs["facility_id"], clean_pairs["doctor_id"]))
 doc_to_fac = dict(zip(clean_pairs["doctor_id"], clean_pairs["facility_id"]))
 clean_fac_ids = set(clean_pairs["facility_id"])
 clean_doc_ids = set(clean_pairs["doctor_id"])
+# 後方互換性: doctor_masterとして参照できるよう保持
+doctor_master = rw_list.rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})
+
+print(f"\n  [クリーン1:1ペア] {len(clean_doc_ids)} 施設 / {len(clean_doc_ids)} 医師")
 
 washout_end = months[WASHOUT_MONTHS - 1] + pd.offsets.MonthEnd(0)
 viewing_clean = viewing[viewing["doctor_id"].isin(clean_doc_ids)].copy()
@@ -461,7 +492,7 @@ print(" Part 5b: ロバストネスチェック (MR活動共変量)")
 print("=" * 70)
 
 # 1. 活動データから非デジタル活動 (面談, 面談_アポ, 説明会, その他) を抽出
-#    CONTENT_TYPES (Webinar, e-contents, web講演会) は処置変数 → 除外
+#    CONTENT_TYPES (webiner, e_contents, Web講演会) は処置変数 → 除外
 mr_activity = activity_raw[
     (activity_raw["品目コード"] == ENT_PRODUCT_CODE)
     & (~activity_raw["活動種別"].isin(CONTENT_TYPES))
@@ -647,7 +678,7 @@ for ch in CONTENT_TYPES:
         print(f"  {lbl:<25} {r['overall']:>8.2f} {r['se']:>8.2f} {r['p']:>10.6f} {r['sig']:>6}")
 
 print(f"\n  DGPの真の効果:")
-print(f"    Webinar: 18, e-contents: 10, web講演会: 22")
+print(f"    webiner: 18, e_contents: 10, Web講演会: 22")
 print(f"    + 月次成長 1.0/月 (視聴継続中)")
 print(f"    + 停止後減衰 -1.5/月 (猶予2ヶ月)")
 print(f"    x 属性modifier (地域/施設タイプ/経験年数/診療科)")
@@ -698,8 +729,8 @@ ax.grid(True, alpha=0.3)
 ax = axes[1, 0]
 ax.axhline(0, color="black", lw=0.8)
 ax.axvline(-0.5, color="red", ls="--", lw=0.8, alpha=0.7)
-ch_colors = {"Webinar": "#1f77b4", "e-contents": "#ff7f0e", "web講演会": "#2ca02c"}
-ch_markers = {"Webinar": "o", "e-contents": "s", "web講演会": "^"}
+ch_colors = {"webiner": "#1f77b4", "e_contents": "#ff7f0e", "Web講演会": "#2ca02c"}
+ch_markers = {"webiner": "o", "e_contents": "s", "Web講演会": "^"}
 for ch in CONTENT_TYPES:
     if ch not in channel_results:
         continue
@@ -775,20 +806,23 @@ exclusion_flow = {
     "total_delivery_rows": n_sales_all,
     "ent_delivery_rows": len(daily),
     "total_rw_list": n_rw_all,
-    "single_staff_facilities": len(single_staff_facs),
-    "ent_rw_doctors": len(doctor_master),
+    "single_staff_facilities": len(single_staff_honin),
+    "multi_staff_facilities": len(multi_staff_honin),
+    "ent_rw_doctors": len(rw_doc_ids),
+    "non_rw_excluded": non_rw_excluded,
     "total_viewing_rows": n_digital_all + n_activity_all,
     "viewing_after_filter": len(viewing),
-    "total_doctors": len(doctor_master["doctor_id"].unique()),
-    "total_facilities": len(doctor_master["facility_id"].unique()),
-    "multi_staff_facilities": len(multi_staff_facs),
-    "multi_fac_doctors": len(multi_fac_docs),
+    "total_doctors": len(rw_doc_ids),
+    "total_facilities": len(set(rw_list[rw_list["doc"].isin(rw_doc_ids)]["fac_honin"])),
+    "multi_fac_doctors": len(multi_fac_docs & rw_doc_ids),
     "clean_pairs": len(fac_to_doc),
     "washout_excluded": len(washout_viewers),
     "late_excluded": len(late_adopters),
     "final_treated": len(treated_doc_ids),
     "final_control": len(control_doc_ids),
     "final_total": len(analysis_fac_ids),
+    "filter_single_fac_doctor": FILTER_SINGLE_FAC_DOCTOR,
+    "include_non_rw": INCLUDE_NON_RW,
 }
 
 # 除外された医師ID一覧
