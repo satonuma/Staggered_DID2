@@ -443,7 +443,7 @@ def create_viewing_patterns_figure(viewing, doctor_master, months,
                                    treated_doc_ids, doc_to_fac):
     """除外例と解析対象の視聴パターンを可視化"""
     fig, axes = plt.subplots(2, 2, figsize=(16, 10))
-    fig.suptitle("視聴パターンの可視化: 除外例と解析対象", fontsize=13, fontweight="bold")
+    fig.suptitle("視聴パターンの可視化: 除外例と解析対象", fontsize=13, fontweight="bold", y=0.98)
 
     # --- (a) Wash-out除外例 ---
     ax = axes[0, 0]
@@ -533,7 +533,7 @@ def create_viewing_patterns_figure(viewing, doctor_master, months,
                       for ch, c in ch_colors.items()]
     ax.legend(handles=legend_patches, fontsize=8, loc="upper left")
 
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
     return fig
 
 
