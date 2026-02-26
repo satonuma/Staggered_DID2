@@ -415,13 +415,13 @@ print("=" * 70)
 # 施設医師リスト: 全医師の施設対応マスター (母集団)
 fac_doc_list = pd.read_csv(os.path.join(DATA_DIR, FILE_FAC_DOCTOR_LIST))
 
-# [Step 1] facility_attribute.csv: fac(dcf_fac)単位で施設内医師数==1のfacを抽出
+# [Step 1] facility_attribute.csv: fac単位で施設内医師数==1のfacを抽出
 fac_df = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
-single_staff_fac = set(fac_df[fac_df["施設内医師数"] == 1]["dcf_fac"])
-multi_staff_fac  = set(fac_df[fac_df["施設内医師数"] > 1]["dcf_fac"])
+single_staff_fac = set(fac_df[fac_df["施設内医師数"] == 1]["fac"])
+multi_staff_fac  = set(fac_df[fac_df["施設内医師数"] > 1]["fac"])
 
-print(f"\n  [Step 1] facility_attribute.csv: 施設内医師数==1 の施設 (fac/dcf_fac単位)")
-print(f"      1医師fac (dcf_fac)   : {len(single_staff_fac)} 件")
+print(f"\n  [Step 1] facility_attribute.csv: 施設内医師数==1 の施設 (fac単位)")
+print(f"      1医師fac             : {len(single_staff_fac)} 件")
 print(f"      複数医師fac           : {len(multi_staff_fac)} 件 → 除外")
 
 # [Step 2] doctor_attribute.csv: 所属施設数==1 の医師 (honin粒度)

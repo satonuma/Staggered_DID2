@@ -204,10 +204,10 @@ print("\n[除外フロー再実行]")
 # 施設医師リスト: 全医師の施設対応マスター (母集団)
 fac_doc_list = pd.read_csv(os.path.join(DATA_DIR, FILE_FAC_DOCTOR_LIST))
 
-# [Step 1] facility_attribute.csv: dcf_fac粒度で施設内医師数==1のfac_honinを抽出
+# [Step 1] facility_attribute.csv: fac単位で施設内医師数==1のfacを抽出
 fac_df = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
-single_staff_fac = set(fac_df[fac_df["施設内医師数"] == 1]["dcf_fac"])
-multi_staff_fac  = set(fac_df[fac_df["施設内医師数"] > 1]["dcf_fac"])
+single_staff_fac = set(fac_df[fac_df["施設内医師数"] == 1]["fac"])
+multi_staff_fac  = set(fac_df[fac_df["施設内医師数"] > 1]["fac"])
 
 # [Step 2] doctor_attribute.csv: 所属施設数==1 の医師
 doc_attr_df = pd.read_csv(os.path.join(DATA_DIR, FILE_DOCTOR_ATTR))
@@ -361,7 +361,7 @@ def create_consort_diagram(flow):
     draw_excluded(ax, ex, y, 2.8, 0.7,
                   f"他品目/その他活動\n{n_view_all - n_view_after:,} 行除外")
 
-    # Step 1: facility_attribute → 施設内医師数==1 (dcf_fac粒度)
+    # Step 1: facility_attribute → 施設内医師数==1 (fac単位)
     draw_arrow(ax, cx, y - 0.45, cx, y - sp + 0.45)
     y -= sp
     draw_box(ax, cx, y, 4.2, 0.9,

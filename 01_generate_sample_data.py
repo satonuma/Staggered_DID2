@@ -282,10 +282,8 @@ for doc_id, info in doctor_info.items():
             "品目コード": prod_code,
             "活動種別": ch,
             "活動種別コード": np.random.choice(ACTIVITY_TYPE_MAP[ch]),
-            "dcf_fac": primary_fac,
             "fac_honin": primary_fac,
             "fac": fac_map[primary_fac],
-            "dcf_doc": doc_id,
             "doc": doc_id,
             "doc_name": doc_name_map[doc_id],
         })
@@ -342,10 +340,8 @@ for doc_id in sonota_viewer_ids:
             "品目コード": prod_code,
             "活動種別": "その他",
             "活動種別コード": np.random.choice(ACTIVITY_TYPE_MAP["その他"]),
-            "dcf_fac": primary_fac,
             "fac_honin": primary_fac,
             "fac": fac_map[primary_fac],
-            "dcf_doc": doc_id,
             "doc": doc_id,
             "doc_name": doc_name_map[doc_id],
         })
@@ -520,7 +516,7 @@ def _gen_beds(fac_type):
     return int(np.random.choice([0, 5, 10, 19], p=[0.35, 0.30, 0.25, 0.10]))
 
 facility_attribute_out = pd.DataFrame({
-    "dcf_fac":        [fac_map[f] for f in facility_ids],
+    "fac":            [fac_map[f] for f in facility_ids],
     "fac_honin":      facility_ids,
     "fac_honin_name": [fac_honin_name_map[f] for f in facility_ids],
     "施設区分名":     [fac_kubun_map[fac_type_map[f]] for f in facility_ids],
@@ -583,7 +579,7 @@ sales_out.to_csv(
 # デジタル視聴データ.csv: webiner + e_contents
 digital_df = viewing_df[viewing_df["活動種別"].isin(["webiner", "e_contents"])].copy()
 digital_cols = ["活動日_dt", "品目コード", "活動種別", "活動種別コード",
-                "dcf_fac", "fac_honin", "fac", "dcf_doc", "doc", "doc_name"]
+                "fac_honin", "fac", "doc", "doc_name"]
 digital_df[digital_cols].to_csv(
     os.path.join(OUTPUT_DIR, "デジタル視聴データ.csv"), index=False, encoding="utf-8-sig")
 
@@ -592,7 +588,7 @@ activity_df = viewing_df[viewing_df["活動種別"].isin(
     ["Web講演会", "面談", "面談_アポ", "説明会", "その他"]
 )].copy()
 activity_cols = ["活動日_dt", "品目コード", "活動種別コード", "活動種別",
-                 "dcf_fac", "fac_honin", "fac", "dcf_doc", "doc"]
+                 "fac_honin", "fac", "doc"]
 activity_df[activity_cols].to_csv(
     os.path.join(OUTPUT_DIR, "活動データ.csv"), index=False, encoding="utf-8-sig")
 
@@ -687,8 +683,8 @@ print(f"  デジタル視聴データ.csv    : {n_digital_views:>8,} 行 (webine
 print(f"  活動データ.csv            : {n_activity_views:>8,} 行 (Web講演会 + 面談 + 面談_アポ + 説明会 + その他)")
 print(f"\nカラム名:")
 print(f"  rw_list            : doc, doc_name, fac_honin, fac_honin_name, fac, fac_name, seg")
-print(f"  facility_attribute : dcf_fac, fac_honin, fac_honin_name, 施設区分名, UHP区分名, 経営体名, 許可病床数_合計, 施設内医師数")
+print(f"  facility_attribute : fac, fac_honin, fac_honin_name, 施設区分名, UHP区分名, 経営体名, 許可病床数_合計, 施設内医師数")
 print(f"  doctor_attribute   : doc, DCF医師コード, doc_name, 年齢, 卒業時年齢, 医師歴, DIGITAL_CHANNEL_PREFERENCE, DOCTOR_SEGEMNT")
 print(f"  sales              : 日付, 施設（本院に合算）コード, DCF施設コード, 品目コード, 実績")
-print(f"  デジタル視聴        : 活動日_dt, 品目コード, 活動種別, 活動種別コード, dcf_fac, fac_honin, fac, dcf_doc, doc, doc_name")
-print(f"  活動データ          : 活動日_dt, 品目コード, 活動種別コード, 活動種別, dcf_fac, fac_honin, fac, dcf_doc, doc")
+print(f"  デジタル視聴        : 活動日_dt, 品目コード, 活動種別, 活動種別コード, fac_honin, fac, doc, doc_name")
+print(f"  活動データ          : 活動日_dt, 品目コード, 活動種別コード, 活動種別, fac_honin, fac, doc")
