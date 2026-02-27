@@ -1,22 +1,22 @@
 {
-  "mr_viewing_correlation": -0.014441610818399899,
+  "mr_viewing_correlation": 0.09553902967629882,
   "stage1_mr_to_viewing": {
-    "coefficient": -0.008737705600133535,
-    "se": 0.018110977713493626,
-    "p": 0.6295370332312928,
+    "coefficient": 0.004677849707619803,
+    "se": 0.015224018250787138,
+    "p": 0.758661327528402,
     "sig": "n.s."
   },
   "stage2_viewing_to_sales": {
-    "coefficient": 6.00439560440001,
-    "se": 64.1875687599684,
-    "p": 0.9254804292319401,
+    "coefficient": 59.620271612922934,
+    "se": 112.79794813983997,
+    "p": 0.5971518735566983,
     "sig": "n.s."
   },
   "mediation_effects": {
-    "direct_effect": 0.016732339820653433,
-    "indirect_effect": -0.05246464109798315,
-    "total_effect": -0.035732301277329716,
-    "indirect_percentage": 146.82693031940047
+    "direct_effect": 0.24263355790073485,
+    "indirect_effect": 0.2788946701327248,
+    "total_effect": 0.5215282280334597,
+    "indirect_percentage": 53.47642853088899
   },
   "interpretation": {
     "warning": "MR活動自体も内生的（売上が良い施設にMRが多く訪問）な可能性あり",

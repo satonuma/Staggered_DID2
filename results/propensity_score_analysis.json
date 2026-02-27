@@ -2,42 +2,42 @@
   "session_classification": {
     "gap_threshold_days": 30,
     "pattern_distribution": {
-      "未視聴": 22,
-      "断続視聴型": 21,
-      "定期視聴型": 17,
+      "未視聴": 45,
+      "断続視聴型": 23,
+      "定期視聴型": 22,
       "単発視聴": 2,
       "短期集中型": 1
     }
   },
   "propensity_score_model": {
-    "pseudo_r2": null,
-    "treated_mean": 0.5,
-    "control_mean": 0.5
+    "pseudo_r2": 0.9999999913696171,
+    "treated_mean": 0.9999999999663062,
+    "control_mean": 1.2317834498763873e-08
   },
   "ipw_adjusted_means": [
     {
       "pattern": "未視聴",
-      "mean_ipw": 123.39669421487604,
-      "n": 22.0
+      "mean_ipw": 130.52390560702665,
+      "n": 45.0
     },
     {
       "pattern": "定期視聴型",
-      "mean_ipw": 150.5668449197861,
-      "n": 17.0
+      "mean_ipw": 156.47107437992247,
+      "n": 22.0
     },
     {
       "pattern": "断続視聴型",
-      "mean_ipw": 134.18470418470417,
-      "n": 21.0
+      "mean_ipw": 134.39130434739897,
+      "n": 23.0
     },
     {
       "pattern": "単発視聴",
-      "mean_ipw": 148.62121212121212,
+      "mean_ipw": 148.6212121212178,
       "n": 2.0
     },
     {
       "pattern": "短期集中型",
-      "mean_ipw": 123.75757575757575,
+      "mean_ipw": 123.75757575757578,
       "n": 1.0
     }
   ],

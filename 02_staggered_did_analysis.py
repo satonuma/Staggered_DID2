@@ -52,7 +52,7 @@ FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 # 解析集団フィルタパラメータ
 FILTER_SINGLE_FAC_DOCTOR = True   # True: 複数本院施設所属医師を除外
 DOCTOR_HONIN_FAC_COUNT_COL = "所属施設数"  # doctor_attribute.csv の本院施設数カラム名
-INCLUDE_ONLY_RW = True            # True: RW医師のみ (Step 3適用), False: 全医師 (Step 3スキップ)
+INCLUDE_ONLY_RW = False           # True: RW医師のみ (Step 3適用), False: 全医師 (Step 3スキップ)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "本番データ")
