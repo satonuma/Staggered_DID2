@@ -52,7 +52,6 @@ FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 
 # 解析集団フィルタパラメータ (02と合わせること)
 FILTER_SINGLE_FAC_DOCTOR = True
-INCLUDE_NON_RW = False
 DOCTOR_HONIN_FAC_COUNT_COL = "所属施設数"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -221,10 +220,8 @@ else:
     single_honin_docs = set(doc_attr_df["doc"])
 
 # [Step 3] rw_list.csv: RW医師フィルタ
-if INCLUDE_NON_RW:
-    rw_doc_ids = set(rw_list["doc"])
-else:
-    rw_doc_ids = set(rw_list[rw_list["seg"].notna() & (rw_list["seg"] != "")]["doc"])
+# rw_list.csvはRW医師のみ格納 → seg絞り不要
+rw_doc_ids = set(rw_list["doc"])
 
 # 3ステップを順序付きで適用 + 中間カウント + 1:1確認
 _doc_to_fac   = dict(zip(fac_doc_list["doc"], fac_doc_list["fac"]))

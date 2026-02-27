@@ -48,7 +48,6 @@ FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 
 # 解析集団フィルタパラメータ
 FILTER_SINGLE_FAC_DOCTOR = True   # True: 複数本院施設所属医師を除外
-INCLUDE_NON_RW = False            # False: RW医師のみ / True: 非RW医師も含む
 DOCTOR_HONIN_FAC_COUNT_COL = "所属施設数"  # doctor_attribute.csv の本院施設数カラム名
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -367,10 +366,8 @@ else:
 print(f"  [Step 2] 所属施設数==1: {len(single_honin_docs)} 名 (doctor_attribute基準)")
 
 # [Step 3] rw_list.csv: RW医師フィルタ (候補セット構築)
-if INCLUDE_NON_RW:
-    rw_doc_ids = set(rw_list["doc"])
-else:
-    rw_doc_ids = set(rw_list[rw_list["seg"].notna() & (rw_list["seg"] != "")]["doc"])
+# rw_list.csvはRW医師のみ格納 → seg絞り不要
+rw_doc_ids = set(rw_list["doc"])
 print(f"  [Step 3] RW医師候補: {len(rw_doc_ids)} 名")
 
 # 3ステップを順序付きで適用 + 中間カウント + 1:1確認
