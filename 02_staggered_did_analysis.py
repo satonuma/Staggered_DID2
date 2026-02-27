@@ -630,14 +630,21 @@ panel_r.loc[mask_t, "post"] = (
 ).astype(int)
 panel_r["did"] = panel_r["treated"] * panel_r["post"]
 
-unit_dum = pd.get_dummies(panel_r["unit_id"], prefix="u", drop_first=True, dtype=float)
-time_dum = pd.get_dummies(panel_r["month_index"], prefix="t", drop_first=True, dtype=float)
+# Two-way within transformation (FWL): avoids large dense dummy matrices
+# Equivalent to including unit + time fixed effects as explicit dummies
+def _twoway_demean(df, cols, unit_col="unit_id", time_col="month_index"):
+    out = {}
+    for col in cols:
+        s = df[col].astype(float)
+        grand_m = s.mean()
+        unit_m = s.groupby(df[unit_col]).transform("mean")
+        time_m = s.groupby(df[time_col]).transform("mean")
+        out[col] = (s - unit_m - time_m + grand_m).values
+    return pd.DataFrame(out, index=df.index)
 
-X_twfe = pd.concat(
-    [pd.DataFrame({"const": 1.0, "did": panel_r["did"].values}), unit_dum, time_dum],
-    axis=1,
-)
-model_twfe = sm.OLS(y, X_twfe).fit(
+_dm = _twoway_demean(panel_r, ["amount", "did"])
+X_twfe = pd.DataFrame({"did": _dm["did"]})
+model_twfe = sm.OLS(_dm["amount"], X_twfe).fit(
     cov_type="cluster", cov_kwds={"groups": panel_r["unit_id"].values}
 )
 
@@ -698,15 +705,9 @@ print(f"    MR活動 平均: {panel_robust['mr_activity_count'].mean():.2f}, "
       f"最大: {panel_robust['mr_activity_count'].max():.0f}")
 
 # 4. TWFE with MR活動共変量
-X_robust = pd.concat(
-    [pd.DataFrame({
-        "const": 1.0,
-        "did": panel_robust["did"].values,
-        "mr_activity": panel_robust["mr_activity_count"].values,
-    }), unit_dum, time_dum],
-    axis=1,
-)
-y_robust = panel_robust["amount"].values
+_dm_r = _twoway_demean(panel_robust, ["amount", "did", "mr_activity_count"])
+X_robust = pd.DataFrame({"did": _dm_r["did"], "mr_activity": _dm_r["mr_activity_count"]})
+y_robust = _dm_r["amount"].values
 
 model_robust = sm.OLS(y_robust, X_robust).fit(
     cov_type="cluster", cov_kwds={"groups": panel_robust["unit_id"].values}
@@ -825,13 +826,12 @@ _ipw_map = dict(zip(_cs_fac_ids, _ipw_raw))
 panel_r["ipw_weight"] = panel_r["facility_id"].map(_ipw_map).fillna(1.0)
 
 # 4. 加重WLS TWFE + 共変量制御 (Doubly Robust)
-X_twfe_dr = pd.concat(
-    [pd.DataFrame({"const": 1.0, "did": panel_r["did"].values}),
-     panel_r[COV_COLS],
-     unit_dum, time_dum],
-    axis=1,
-)
-model_twfe_dr = sm.WLS(y, X_twfe_dr, weights=panel_r["ipw_weight"].values).fit(
+# within変換後にIPW重みを適用 (IPW重みは施設固定のためunit FEは一致)
+_dm_dr = _twoway_demean(panel_r, ["amount", "did"] + COV_COLS)
+X_twfe_dr = pd.DataFrame({"did": _dm_dr["did"]})
+for _c in COV_COLS:
+    X_twfe_dr[_c] = _dm_dr[_c].values
+model_twfe_dr = sm.WLS(_dm_dr["amount"], X_twfe_dr, weights=panel_r["ipw_weight"].values).fit(
     cov_type="cluster", cov_kwds={"groups": panel_r["unit_id"].values}
 )
 
