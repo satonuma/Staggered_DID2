@@ -52,6 +52,7 @@ FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 # 解析集団フィルタパラメータ
 FILTER_SINGLE_FAC_DOCTOR = True   # True: 複数本院施設所属医師を除外
 DOCTOR_HONIN_FAC_COUNT_COL = "所属施設数"  # doctor_attribute.csv の本院施設数カラム名
+INCLUDE_ONLY_RW = True            # True: RW医師のみ (Step 3適用), False: 全医師 (Step 3スキップ)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "本番データ")
@@ -439,12 +440,8 @@ else:
 print(f"\n  [Step 2] doctor_attribute.csv: 所属施設数==1 の医師")
 print(f"      1施設所属医師 : {len(single_honin_docs)} 名 (doctor_attribute基準)")
 
-# [Step 3] rw_list.csv: RW医師フィルタ (候補セット構築のみ)
-# rw_list.csvはRW医師のみ格納 → seg絞り不要
+# [Step 3] RW医師フィルタ (INCLUDE_ONLY_RW=True の場合のみ適用)
 rw_doc_ids = set(rw_list["doc"])
-
-print(f"\n  [Step 3] rw_list.csv: RW医師フィルタ候補")
-print(f"      RW医師候補 : {len(rw_doc_ids)} 名")
 
 # 3ステップを順序付きで適用 + 中間カウント + 1:1確認
 _doc_to_fac   = dict(zip(fac_doc_list["doc"], fac_doc_list["fac"]))
@@ -454,8 +451,11 @@ all_docs = set(fac_doc_list["doc"])  # 全医師は施設医師リスト.csv
 after_step1 = {d for d in all_docs if _doc_to_fac.get(d) in single_staff_fac}
 # Step 2 適用: 所属施設数==1 の医師 (Step 1通過者から)
 after_step2 = after_step1 & single_honin_docs
-# Step 3 適用: RW医師のみ (Step 2通過者から)
-after_step3 = after_step2 & rw_doc_ids
+# Step 3 適用: INCLUDE_ONLY_RW=True の場合のみ RW医師に絞る
+if INCLUDE_ONLY_RW:
+    after_step3 = after_step2 & rw_doc_ids
+else:
+    after_step3 = after_step2  # Step 3スキップ (全医師対象)
 non_rw_excluded = len(after_step2) - len(after_step3)
 multi_fac_docs = all_docs - single_honin_docs  # 可視化用 (全体)
 # 同一fac_honinに複数の候補医師がいる場合は除外
@@ -469,18 +469,20 @@ print(f"\n  [順序付き適用結果]")
 print(f"      全医師 (doctor_attr): {len(all_docs)} 名")
 print(f"      Step 1 通過        : {len(after_step1)} 名 (施設内医師数==1の施設所属)")
 print(f"      Step 2 通過        : {len(after_step2)} 名 (所属施設数==1)")
-print(f"      Step 3 通過        : {len(after_step3)} 名 (RW医師のみ)")
+print(f"      Step 3 通過        : {len(after_step3)} 名 ({'RW医師のみ' if INCLUDE_ONLY_RW else '全医師 (Step 3スキップ)'})")
 print(f"      1:1ペア確認後      : {len(candidate_docs)} 名")
 
-clean_pairs = rw_list[rw_list["doc"].isin(candidate_docs)][["doc", "fac_honin"]].drop_duplicates()
+_pair_src = rw_list if INCLUDE_ONLY_RW else fac_doc_list
+clean_pairs = _pair_src[_pair_src["doc"].isin(candidate_docs)][["doc", "fac_honin"]].drop_duplicates()
 clean_pairs = clean_pairs.rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})
 
 fac_to_doc = dict(zip(clean_pairs["facility_id"], clean_pairs["doctor_id"]))
 doc_to_fac = dict(zip(clean_pairs["doctor_id"], clean_pairs["facility_id"]))
 clean_fac_ids = set(clean_pairs["facility_id"])
 clean_doc_ids = set(clean_pairs["doctor_id"])
-# 後方互換性: doctor_masterとして参照できるよう保持
-doctor_master = rw_list.rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})
+# doctor_master: 解析対象に応じてソース変更
+_dm_src = rw_list if INCLUDE_ONLY_RW else fac_doc_list
+doctor_master = _dm_src.rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})
 
 print(f"\n  [クリーン1:1ペア] {len(clean_doc_ids)} 施設 / {len(clean_doc_ids)} 医師")
 
@@ -1215,183 +1217,10 @@ for ch in CONTENT_TYPES:
 print()
 
 # ================================================================
-# Part 10: 感度分析 — 非RW医師含む (Step 3スキップ)
-# ================================================================
-print("\n" + "=" * 70)
-print(" Part 10: 感度分析 - 非RW医師含む (Step 3スキップ)")
-print("=" * 70)
-
-# Step 3をスキップ: after_step2をそのまま使用
-_sa_after_step3 = after_step2
-
-# 同一fac_honinに複数の候補医師がいる場合は除外 (1:1確認)
-_sa_honin_cnt: dict = {}
-for _d in _sa_after_step3:
-    _h = _doc_to_honin[_d]
-    _sa_honin_cnt[_h] = _sa_honin_cnt.get(_h, 0) + 1
-_sa_candidate_docs = {_d for _d in _sa_after_step3 if _sa_honin_cnt[_doc_to_honin[_d]] == 1}
-_sa_n_non_rw = len(_sa_candidate_docs - rw_doc_ids)
-
-print(f"\n  Step 3スキップ後 : {len(_sa_after_step3)} 名")
-print(f"  1:1ペア確認後   : {len(_sa_candidate_docs)} 名")
-print(f"    うち非RW医師  : {_sa_n_non_rw} 名 (追加)")
-
-# clean_pairs: fac_doc_listを使用 (非RW医師もカバー)
-_sa_clean_pairs = fac_doc_list[
-    fac_doc_list["doc"].isin(_sa_candidate_docs)
-][["doc", "fac_honin"]].drop_duplicates()
-_sa_clean_pairs = _sa_clean_pairs.rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})
-_sa_fac_to_doc = dict(zip(_sa_clean_pairs["facility_id"], _sa_clean_pairs["doctor_id"]))
-_sa_doc_to_fac = dict(zip(_sa_clean_pairs["doctor_id"], _sa_clean_pairs["facility_id"]))
-_sa_clean_doc_ids = set(_sa_clean_pairs["doctor_id"])
-_sa_clean_fac_ids = set(_sa_clean_pairs["facility_id"])
-
-# wash-out除外
-_sa_viewing_clean = viewing[viewing["doctor_id"].isin(_sa_clean_doc_ids)].copy()
-_sa_washout_viewers = set(
-    _sa_viewing_clean[_sa_viewing_clean["view_date"] <= washout_end]["doctor_id"].unique()
-)
-_sa_excluded_washout_facs = {_sa_doc_to_fac[_d] for _d in _sa_washout_viewers if _d in _sa_doc_to_fac}
-_sa_clean_fac_ids -= _sa_excluded_washout_facs
-_sa_clean_doc_ids -= _sa_washout_viewers
-
-# 遅延視聴者除外
-_sa_viewing_after_washout = _sa_viewing_clean[
-    (_sa_viewing_clean["doctor_id"].isin(_sa_clean_doc_ids))
-    & (_sa_viewing_clean["view_date"] > washout_end)
-]
-_sa_first_view = _sa_viewing_after_washout.groupby("doctor_id")["view_date"].min().reset_index()
-_sa_first_view.columns = ["doctor_id", "first_view_date"]
-_sa_first_view["first_view_month"] = (
-    (_sa_first_view["first_view_date"].dt.year - 2023) * 12
-    + _sa_first_view["first_view_date"].dt.month - 4
-)
-_sa_late = set(_sa_first_view[_sa_first_view["first_view_month"] > LAST_ELIGIBLE_MONTH]["doctor_id"])
-_sa_excluded_late_facs = {_sa_doc_to_fac[_d] for _d in _sa_late if _d in _sa_doc_to_fac}
-_sa_clean_fac_ids -= _sa_excluded_late_facs
-_sa_clean_doc_ids -= _sa_late
-
-# 処置群・対照群
-_sa_treated_doc_ids = set(_sa_first_view[
-    _sa_first_view["first_view_month"] <= LAST_ELIGIBLE_MONTH
-]["doctor_id"]) & _sa_clean_doc_ids
-_sa_all_viewing_doc_ids = set(viewing["doctor_id"].unique())
-_sa_control_doc_ids = _sa_clean_doc_ids - _sa_all_viewing_doc_ids
-_sa_analysis_fac_ids = {_sa_doc_to_fac[_d] for _d in (_sa_treated_doc_ids | _sa_control_doc_ids)}
-_sa_n_treated = len(_sa_treated_doc_ids)
-_sa_n_control = len(_sa_control_doc_ids)
-
-print(f"\n  処置群 : {_sa_n_treated} 施設")
-print(f"  対照群 : {_sa_n_control} 施設")
-print(f"  合計   : {len(_sa_analysis_fac_ids)} 施設")
-
-# パネル構築
-_sa_daily_target = daily[daily["facility_id"].isin(_sa_analysis_fac_ids)].copy()
-_sa_daily_target["month_index"] = (
-    (_sa_daily_target["delivery_date"].dt.year - 2023) * 12
-    + _sa_daily_target["delivery_date"].dt.month - 4
-)
-_sa_monthly = (
-    _sa_daily_target.groupby(["facility_id", "month_index"])["amount"]
-    .sum().reset_index()
-)
-_sa_full_idx = pd.MultiIndex.from_product(
-    [sorted(_sa_analysis_fac_ids), list(range(N_MONTHS))],
-    names=["facility_id", "month_index"]
-)
-_sa_panel_base = (
-    _sa_monthly.set_index(["facility_id", "month_index"])
-    .reindex(_sa_full_idx, fill_value=0).reset_index()
-)
-_sa_panel_base["unit_id"] = _sa_panel_base["facility_id"]
-
-_sa_first_view_eligible = _sa_first_view[
-    _sa_first_view["doctor_id"].isin(_sa_treated_doc_ids)
-][["doctor_id", "first_view_month"]].copy()
-_sa_first_view_eligible["facility_id"] = _sa_first_view_eligible["doctor_id"].map(_sa_doc_to_fac)
-_sa_first_view_eligible = _sa_first_view_eligible.rename(columns={"first_view_month": "cohort_month"})
-
-_sa_panel = _sa_panel_base.merge(
-    _sa_first_view_eligible[["facility_id", "cohort_month"]],
-    on="facility_id", how="left",
-)
-_sa_panel["treated"] = _sa_panel["cohort_month"].notna().astype(int)
-
-# TWFE推定
-_sa_panel_r = _sa_panel.reset_index(drop=True)
-_sa_y = _sa_panel_r["amount"].values
-
-_sa_mask_t = _sa_panel_r["cohort_month"].notna()
-_sa_panel_r["post"] = 0
-_sa_panel_r.loc[_sa_mask_t, "post"] = (
-    _sa_panel_r.loc[_sa_mask_t, "month_index"] >= _sa_panel_r.loc[_sa_mask_t, "cohort_month"]
-).astype(int)
-_sa_panel_r["did"] = _sa_panel_r["treated"] * _sa_panel_r["post"]
-
-_sa_unit_dum = pd.get_dummies(_sa_panel_r["unit_id"], prefix="u", drop_first=True, dtype=float)
-_sa_time_dum = pd.get_dummies(_sa_panel_r["month_index"], prefix="t", drop_first=True, dtype=float)
-
-_sa_X_twfe = pd.concat(
-    [pd.DataFrame({"const": 1.0, "did": _sa_panel_r["did"].values}),
-     _sa_unit_dum, _sa_time_dum],
-    axis=1,
-)
-_sa_model_twfe = sm.OLS(_sa_y, _sa_X_twfe).fit(
-    cov_type="cluster", cov_kwds={"groups": _sa_panel_r["unit_id"].values}
-)
-_sa_beta = _sa_model_twfe.params["did"]
-_sa_se   = _sa_model_twfe.bse["did"]
-_sa_p    = _sa_model_twfe.pvalues["did"]
-_sa_ci   = _sa_model_twfe.conf_int().loc["did"]
-_sa_sig  = (
-    "***" if _sa_p < 0.001 else "**" if _sa_p < 0.01
-    else "*" if _sa_p < 0.05 else "n.s."
-)
-print(f"\n  [SA-TWFE] ATT={_sa_beta:.2f}, SE={_sa_se:.2f}, p={_sa_p:.6f} {_sa_sig}")
-
-# CS推定
-_sa_att_gt, _sa_dyn, _sa_overall_cs, _sa_se_cs = run_cs_with_bootstrap(
-    _sa_panel_r, n_boot=100, label="SA-全体"
-)
-_sa_z_cs  = _sa_overall_cs / _sa_se_cs if _sa_se_cs > 0 else float("inf")
-_sa_p_cs  = 2 * (1 - stats.norm.cdf(abs(_sa_z_cs)))
-_sa_sig_cs = (
-    "***" if _sa_p_cs < 0.001 else "**" if _sa_p_cs < 0.01
-    else "*" if _sa_p_cs < 0.05 else "n.s."
-)
-print(f"  [SA-CS]   ATT={_sa_overall_cs:.2f}, SE={_sa_se_cs:.2f}, p={_sa_p_cs:.6f} {_sa_sig_cs}")
-
-# 比較
-print(f"\n  [RW医師のみ vs 全医師 比較]")
-print(f"  {'手法':<10} {'RW医師のみ':>12} {'全医師(SA)':>12} {'差':>8}")
-print(f"  {'-' * 46}")
-print(f"  {'TWFE':<10} {beta:>12.2f} {_sa_beta:>12.2f} {_sa_beta - beta:>+8.2f}")
-print(f"  {'CS':<10} {cs_overall:>12.2f} {_sa_overall_cs:>12.2f} {_sa_overall_cs - cs_overall:>+8.2f}")
-
-# 結果格納
-sa_result = {
-    "n_non_rw_added": _sa_n_non_rw,
-    "n_treated": _sa_n_treated,
-    "n_control": _sa_n_control,
-    "twfe": {
-        "att": float(_sa_beta), "se": float(_sa_se),
-        "p": float(_sa_p), "ci_lo": float(_sa_ci[0]), "ci_hi": float(_sa_ci[1]),
-        "sig": _sa_sig,
-    },
-    "cs": {
-        "att": float(_sa_overall_cs), "se": float(_sa_se_cs),
-        "p": float(_sa_p_cs),
-        "ci_lo": float(_sa_overall_cs - 1.96 * _sa_se_cs),
-        "ci_hi": float(_sa_overall_cs + 1.96 * _sa_se_cs),
-        "sig": _sa_sig_cs,
-        "dynamic": _sa_dyn[["event_time", "att", "se", "ci_lo", "ci_hi"]].to_dict("records"),
-    },
-}
-
-# ================================================================
 # JSON結果保存
 # ================================================================
-import json
+import json  # noqa: E402
+
 
 results_dir = os.path.join(SCRIPT_DIR, "results")
 os.makedirs(results_dir, exist_ok=True)
@@ -1559,7 +1388,7 @@ did_results_json = {
     "n_treated": n_treated,
     "n_control": n_control,
     "n_total": n_total,
-    "sensitivity_all_docs": sa_result,
+    "include_only_rw": INCLUDE_ONLY_RW,
 }
 
 json_path = os.path.join(results_dir, "did_results.json")

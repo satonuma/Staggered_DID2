@@ -53,6 +53,7 @@ FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 # 解析集団フィルタパラメータ (02と合わせること)
 FILTER_SINGLE_FAC_DOCTOR = True
 DOCTOR_HONIN_FAC_COUNT_COL = "所属施設数"
+INCLUDE_ONLY_RW = True            # True: RW医師のみ (Step 3適用), False: 全医師 (Step 3スキップ)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "本番データ")
@@ -219,8 +220,7 @@ if FILTER_SINGLE_FAC_DOCTOR:
 else:
     single_honin_docs = set(doc_attr_df["doc"])
 
-# [Step 3] rw_list.csv: RW医師フィルタ
-# rw_list.csvはRW医師のみ格納 → seg絞り不要
+# [Step 3] RW医師フィルタ (INCLUDE_ONLY_RW=True の場合のみ適用)
 rw_doc_ids = set(rw_list["doc"])
 
 # 3ステップを順序付きで適用 + 中間カウント + 1:1確認
@@ -229,7 +229,10 @@ _doc_to_honin = dict(zip(fac_doc_list["doc"], fac_doc_list["fac_honin"]))
 all_docs = set(fac_doc_list["doc"])  # 全医師は施設医師リスト.csv
 after_step1 = {d for d in all_docs if _doc_to_fac.get(d) in single_staff_fac}
 after_step2 = after_step1 & single_honin_docs
-after_step3 = after_step2 & rw_doc_ids
+if INCLUDE_ONLY_RW:
+    after_step3 = after_step2 & rw_doc_ids
+else:
+    after_step3 = after_step2  # Step 3スキップ (全医師対象)
 _honin_cnt: dict = {}
 for d in after_step3:
     h = _doc_to_honin[d]
@@ -237,13 +240,15 @@ for d in after_step3:
 candidate_docs = {d for d in after_step3 if _honin_cnt[_doc_to_honin[d]] == 1}
 multi_fac_docs = all_docs - single_honin_docs  # 可視化用 (全体)
 
-clean_pairs = rw_list[rw_list["doc"].isin(candidate_docs)][["doc", "fac_honin"]].drop_duplicates()
+_pair_src = rw_list if INCLUDE_ONLY_RW else fac_doc_list
+clean_pairs = _pair_src[_pair_src["doc"].isin(candidate_docs)][["doc", "fac_honin"]].drop_duplicates()
 clean_pairs = clean_pairs.rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})
 fac_to_doc = dict(zip(clean_pairs["facility_id"], clean_pairs["doctor_id"]))
 doc_to_fac = dict(zip(clean_pairs["doctor_id"], clean_pairs["facility_id"]))
 clean_doc_ids = set(clean_pairs["doctor_id"])
 # 後方互換性: 可視化関数用
-doctor_master = rw_list.rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})
+_dm_src = rw_list if INCLUDE_ONLY_RW else fac_doc_list
+doctor_master = _dm_src.rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})
 
 washout_end = months[WASHOUT_MONTHS - 1] + pd.offsets.MonthEnd(0)
 viewing_clean = viewing[viewing["doctor_id"].isin(clean_doc_ids)].copy()
@@ -833,7 +838,8 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
 
 <h3>1.1 分析目的</h3>
 <p>デジタルコンテンツ（webiner, e_contents, Web講演会）の視聴が、品目コード={{ ent_product_code }}<の納入額に与える因果効果を推定する。視聴開始時期が施設医師ごとに異なる「ずれた処置（staggered treatment）」に対応したDID推定量を使用する。</p>
-<p style="margin-top:8px;">分析対象は <strong>品目コード={{ ent_product_code }}</strong> (ENT) の売上データに限定し、医師は <strong>RW医師</strong> のみを使用する。</p>
+<p style="margin-top:8px;">分析対象は <strong>品目コード={{ ent_product_code }}</strong> (ENT) の売上データに限定し、医師は
+<strong>{% if include_only_rw %}RW医師のみ (Step 3適用){% else %}全医師 — RW + 非RW (Step 3スキップ){% endif %}</strong> を使用する。</p>
 
 <h3>1.2 データ構造</h3>
 <div class="param-grid">
@@ -1358,65 +1364,6 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 {% endif %}
 {% endif %}
 
-{% if sensitivity %}
-<h3>5.6 感度分析: 非RW医師含む解析</h3>
-<p>RW医師フィルタ（Step 3）をスキップし、Step 1・Step 2通過後の全医師（RW医師 + 非RW医師）を分析対象とした場合の結果。
-非RW医師 {{ sensitivity.n_non_rw_added }} 名を追加しても推定値・有意性が大きく変わらなければ、
-RW医師限定の主要推定の外的安定性が支持される。</p>
-
-<table>
-  <tr>
-    <th>解析対象</th>
-    <th>処置群 N</th>
-    <th>対照群 N</th>
-    <th>TWFE ATT</th>
-    <th>TWFE SE</th>
-    <th>TWFE sig</th>
-    <th>CS ATT</th>
-    <th>CS SE</th>
-    <th>CS sig</th>
-  </tr>
-  <tr>
-    <td><strong>RW医師のみ</strong> (メイン解析)</td>
-    <td>{{ flow.final_treated }}</td>
-    <td>{{ flow.final_control }}</td>
-    <td>{{ "%.2f"|format(twfe.att) }}</td>
-    <td>{{ "%.2f"|format(twfe.se) }}</td>
-    <td class="{{ 'sig' if twfe.sig != 'n.s.' else 'ns' }}">{{ twfe.sig }}</td>
-    <td>{{ "%.2f"|format(cs.att) }}</td>
-    <td>{{ "%.2f"|format(cs.se) }}</td>
-    <td class="{{ 'sig' if cs.sig != 'n.s.' else 'ns' }}">{{ cs.sig }}</td>
-  </tr>
-  <tr style="background:#F3F9FF;">
-    <td><strong>全医師</strong> (RW + 非RW)</td>
-    <td>{{ sensitivity.n_treated }}</td>
-    <td>{{ sensitivity.n_control }}</td>
-    <td>{{ "%.2f"|format(sensitivity.twfe.att) }}</td>
-    <td>{{ "%.2f"|format(sensitivity.twfe.se) }}</td>
-    <td class="{{ 'sig' if sensitivity.twfe.sig != 'n.s.' else 'ns' }}">{{ sensitivity.twfe.sig }}</td>
-    <td>{{ "%.2f"|format(sensitivity.cs.att) }}</td>
-    <td>{{ "%.2f"|format(sensitivity.cs.se) }}</td>
-    <td class="{{ 'sig' if sensitivity.cs.sig != 'n.s.' else 'ns' }}">{{ sensitivity.cs.sig }}</td>
-  </tr>
-  <tr style="background:#F5F5F5; font-style:italic;">
-    <td>差 (全医師 − RW医師のみ)</td>
-    <td>{{ sensitivity.n_treated - flow.final_treated }}</td>
-    <td>{{ sensitivity.n_control - flow.final_control }}</td>
-    <td>{{ "%+.2f"|format(sensitivity.twfe.att - twfe.att) }}</td>
-    <td>—</td>
-    <td>—</td>
-    <td>{{ "%+.2f"|format(sensitivity.cs.att - cs.att) }}</td>
-    <td>—</td>
-    <td>—</td>
-  </tr>
-</table>
-
-<div class="highlight-box">
-  <strong>解釈:</strong>
-  TWFE差: {{ "%+.2f"|format(sensitivity.twfe.att - twfe.att) }}、CS差: {{ "%+.2f"|format(sensitivity.cs.att - cs.att) }}。
-  推定値の変動が小さく有意性が維持される場合、RW医師限定の推定は母集団への外的妥当性を持つ。
-</div>
-{% endif %}
 </section>
 
 <!-- ============================================================ -->
@@ -2232,7 +2179,6 @@ RW医師限定の主要推定の外的安定性が支持される。</p>
   {% if twfe_dr %}<li>TWFE-DR推定 <small>(IPW重み付き+共変量調整)</small>: ATT = {{ "%.2f"|format(twfe_dr.att) }} (SE={{ "%.2f"|format(twfe_dr.se) }}, {{ twfe_dr.sig }})</li>{% endif %}
   <li>CS推定 <small>(Callaway-Sant'Anna)</small>: ATT = {{ "%.2f"|format(cs.att) }} (SE={{ "%.2f"|format(cs.se) }}, {{ cs.sig }})</li>
   {% if cs_dr %}<li>CS-DR推定 <small>(Doubly Robust, 共変量調整)</small>: ATT = {{ "%.2f"|format(cs_dr.att) }} (SE={{ "%.2f"|format(cs_dr.se) }}, {{ cs_dr.sig }})</li>{% endif %}
-  {% if sensitivity %}<li>感度分析 <small>(RW+非RW全医師)</small>: TWFE={{ "%.2f"|format(sensitivity.twfe.att) }} {{ sensitivity.twfe.sig }}, CS={{ "%.2f"|format(sensitivity.cs.att) }} {{ sensitivity.cs.sig }} (非RW追加 {{ sensitivity.n_non_rw_added }} 名)</li>{% endif %}
 </ul>
 
 <h3>チャネル別効果 (CS推定)</h3>
@@ -2343,17 +2289,6 @@ for dim_name, diffs in cate_results.get("diff_tests", {}).items():
     for key, d in diffs.items():
         diff_tests[dim_name][key] = DotDict(d)
 
-# 感度分析 (非RW医師含む)
-_sa_raw = did_results.get("sensitivity_all_docs")
-_sensitivity = None
-if _sa_raw:
-    _sensitivity = DotDict({
-        "n_non_rw_added": _sa_raw.get("n_non_rw_added", 0),
-        "n_treated": _sa_raw.get("n_treated", 0),
-        "n_control": _sa_raw.get("n_control", 0),
-        "twfe": DotDict(_sa_raw["twfe"]),
-        "cs": DotDict(_sa_raw["cs"]),
-    })
 
 template_data = {
     # 基本情報
@@ -2431,8 +2366,8 @@ template_data = {
     "mr_balance_current":   _mr_balance_current,
     "mr_balance_best":      _mr_balance_best,
 
-    # 感度分析 (非RW医師含む)
-    "sensitivity": _sensitivity,
+    # 解析集団パラメータ
+    "include_only_rw": INCLUDE_ONLY_RW,
 }
 
 try:
