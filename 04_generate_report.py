@@ -1357,6 +1357,66 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 </table>
 {% endif %}
 {% endif %}
+
+{% if sensitivity %}
+<h3>5.6 感度分析: 非RW医師含む解析</h3>
+<p>RW医師フィルタ（Step 3）をスキップし、Step 1・Step 2通過後の全医師（RW医師 + 非RW医師）を分析対象とした場合の結果。
+非RW医師 {{ sensitivity.n_non_rw_added }} 名を追加しても推定値・有意性が大きく変わらなければ、
+RW医師限定の主要推定の外的安定性が支持される。</p>
+
+<table>
+  <tr>
+    <th>解析対象</th>
+    <th>処置群 N</th>
+    <th>対照群 N</th>
+    <th>TWFE ATT</th>
+    <th>TWFE SE</th>
+    <th>TWFE sig</th>
+    <th>CS ATT</th>
+    <th>CS SE</th>
+    <th>CS sig</th>
+  </tr>
+  <tr>
+    <td><strong>RW医師のみ</strong> (メイン解析)</td>
+    <td>{{ flow.final_treated }}</td>
+    <td>{{ flow.final_control }}</td>
+    <td>{{ "%.2f"|format(twfe.att) }}</td>
+    <td>{{ "%.2f"|format(twfe.se) }}</td>
+    <td class="{{ 'sig' if twfe.sig != 'n.s.' else 'ns' }}">{{ twfe.sig }}</td>
+    <td>{{ "%.2f"|format(cs.att) }}</td>
+    <td>{{ "%.2f"|format(cs.se) }}</td>
+    <td class="{{ 'sig' if cs.sig != 'n.s.' else 'ns' }}">{{ cs.sig }}</td>
+  </tr>
+  <tr style="background:#F3F9FF;">
+    <td><strong>全医師</strong> (RW + 非RW)</td>
+    <td>{{ sensitivity.n_treated }}</td>
+    <td>{{ sensitivity.n_control }}</td>
+    <td>{{ "%.2f"|format(sensitivity.twfe.att) }}</td>
+    <td>{{ "%.2f"|format(sensitivity.twfe.se) }}</td>
+    <td class="{{ 'sig' if sensitivity.twfe.sig != 'n.s.' else 'ns' }}">{{ sensitivity.twfe.sig }}</td>
+    <td>{{ "%.2f"|format(sensitivity.cs.att) }}</td>
+    <td>{{ "%.2f"|format(sensitivity.cs.se) }}</td>
+    <td class="{{ 'sig' if sensitivity.cs.sig != 'n.s.' else 'ns' }}">{{ sensitivity.cs.sig }}</td>
+  </tr>
+  <tr style="background:#F5F5F5; font-style:italic;">
+    <td>差 (全医師 − RW医師のみ)</td>
+    <td>{{ sensitivity.n_treated - flow.final_treated }}</td>
+    <td>{{ sensitivity.n_control - flow.final_control }}</td>
+    <td>{{ "%+.2f"|format(sensitivity.twfe.att - twfe.att) }}</td>
+    <td>—</td>
+    <td>—</td>
+    <td>{{ "%+.2f"|format(sensitivity.cs.att - cs.att) }}</td>
+    <td>—</td>
+    <td>—</td>
+  </tr>
+</table>
+
+<div class="highlight-box">
+  <strong>解釈:</strong>
+  TWFE差: {{ "%+.2f"|format(sensitivity.twfe.att - twfe.att) }}、CS差: {{ "%+.2f"|format(sensitivity.cs.att - cs.att) }}。
+  推定値の変動が小さく有意性が維持される場合、RW医師限定の推定は母集団への外的妥当性を持つ。
+</div>
+{% endif %}
 </section>
 
 <!-- ============================================================ -->
@@ -2172,6 +2232,7 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
   {% if twfe_dr %}<li>TWFE-DR推定 <small>(IPW重み付き+共変量調整)</small>: ATT = {{ "%.2f"|format(twfe_dr.att) }} (SE={{ "%.2f"|format(twfe_dr.se) }}, {{ twfe_dr.sig }})</li>{% endif %}
   <li>CS推定 <small>(Callaway-Sant'Anna)</small>: ATT = {{ "%.2f"|format(cs.att) }} (SE={{ "%.2f"|format(cs.se) }}, {{ cs.sig }})</li>
   {% if cs_dr %}<li>CS-DR推定 <small>(Doubly Robust, 共変量調整)</small>: ATT = {{ "%.2f"|format(cs_dr.att) }} (SE={{ "%.2f"|format(cs_dr.se) }}, {{ cs_dr.sig }})</li>{% endif %}
+  {% if sensitivity %}<li>感度分析 <small>(RW+非RW全医師)</small>: TWFE={{ "%.2f"|format(sensitivity.twfe.att) }} {{ sensitivity.twfe.sig }}, CS={{ "%.2f"|format(sensitivity.cs.att) }} {{ sensitivity.cs.sig }} (非RW追加 {{ sensitivity.n_non_rw_added }} 名)</li>{% endif %}
 </ul>
 
 <h3>チャネル別効果 (CS推定)</h3>
@@ -2282,6 +2343,18 @@ for dim_name, diffs in cate_results.get("diff_tests", {}).items():
     for key, d in diffs.items():
         diff_tests[dim_name][key] = DotDict(d)
 
+# 感度分析 (非RW医師含む)
+_sa_raw = did_results.get("sensitivity_all_docs")
+_sensitivity = None
+if _sa_raw:
+    _sensitivity = DotDict({
+        "n_non_rw_added": _sa_raw.get("n_non_rw_added", 0),
+        "n_treated": _sa_raw.get("n_treated", 0),
+        "n_control": _sa_raw.get("n_control", 0),
+        "twfe": DotDict(_sa_raw["twfe"]),
+        "cs": DotDict(_sa_raw["cs"]),
+    })
+
 template_data = {
     # 基本情報
     "ent_product_code": ENT_PRODUCT_CODE,
@@ -2357,6 +2430,9 @@ template_data = {
     "mr_balance_scenarios": _mr_balance_scenarios,
     "mr_balance_current":   _mr_balance_current,
     "mr_balance_best":      _mr_balance_best,
+
+    # 感度分析 (非RW医師含む)
+    "sensitivity": _sensitivity,
 }
 
 try:
