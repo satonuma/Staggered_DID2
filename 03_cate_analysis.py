@@ -316,6 +316,7 @@ daily = daily.rename(columns={
 digital_raw = pd.read_csv(os.path.join(DATA_DIR, FILE_DIGITAL))
 digital_raw["品目コード"] = digital_raw["品目コード"].astype(str).str.strip().str.zfill(5)
 digital = digital_raw[digital_raw["品目コード"] == ENT_PRODUCT_CODE].copy()
+digital = digital[digital["fac_honin"].notna() & (digital["fac_honin"].astype(str).str.strip() != "")].copy()
 
 # 4. 活動データ → Web講演会のみ
 activity_raw = pd.read_csv(os.path.join(DATA_DIR, FILE_ACTIVITY))
@@ -324,6 +325,7 @@ web_lecture = activity_raw[
     (activity_raw["品目コード"] == ENT_PRODUCT_CODE)
     & (activity_raw["活動種別"] == ACTIVITY_CHANNEL_FILTER)
 ].copy()
+web_lecture = web_lecture[web_lecture["fac_honin"].notna() & (web_lecture["fac_honin"].astype(str).str.strip() != "")].copy()
 
 # 5. 視聴データ結合
 common_cols = ["活動日_dt", "品目コード", "活動種別", "活動種別コード", "fac_honin", "doc"]

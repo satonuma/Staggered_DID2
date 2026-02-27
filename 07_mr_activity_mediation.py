@@ -100,6 +100,7 @@ daily = daily.rename(columns={
 digital_raw = pd.read_csv(os.path.join(DATA_DIR, FILE_DIGITAL))
 digital_raw["品目コード"] = digital_raw["品目コード"].astype(str).str.strip().str.zfill(5)
 digital = digital_raw[digital_raw["品目コード"] == ENT_PRODUCT_CODE].copy()
+digital = digital[digital["fac_honin"].notna() & (digital["fac_honin"].astype(str).str.strip() != "")].copy()
 
 activity_raw = pd.read_csv(os.path.join(DATA_DIR, FILE_ACTIVITY))
 activity_raw["品目コード"] = activity_raw["品目コード"].astype(str).str.strip().str.zfill(5)
@@ -109,12 +110,14 @@ web_lecture = activity_raw[
     (activity_raw["品目コード"] == ENT_PRODUCT_CODE)
     & (activity_raw["活動種別"] == ACTIVITY_CHANNEL_FILTER)
 ].copy()
+web_lecture = web_lecture[web_lecture["fac_honin"].notna() & (web_lecture["fac_honin"].astype(str).str.strip() != "")].copy()
 
 # MR活動データ（面談、説明会など）
 mr_activity = activity_raw[
     (activity_raw["品目コード"] == ENT_PRODUCT_CODE)
     & (activity_raw["活動種別"].isin(MR_ACTIVITY_TYPES))
 ].copy()
+mr_activity = mr_activity[mr_activity["fac_honin"].notna() & (mr_activity["fac_honin"].astype(str).str.strip() != "")].copy()
 
 print(f"\n[データ読み込み]")
 print(f"  MR活動データ: {len(mr_activity):,} 行")
