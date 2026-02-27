@@ -240,6 +240,7 @@ print(f"  Step1通過:{len(after_step1)} → Step2通過:{len(after_step2)} → 
 
 _pair_src = rw_list if INCLUDE_ONLY_RW else fac_doc_list
 clean_pairs = _pair_src[_pair_src["doc"].isin(candidate_docs)][["doc", "fac_honin"]].drop_duplicates()
+clean_pairs = clean_pairs[clean_pairs["fac_honin"].notna() & (clean_pairs["fac_honin"].astype(str).str.strip().isin(["", "nan"]) == False)].copy()
 clean_pairs = clean_pairs.rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})
 fac_to_doc = dict(zip(clean_pairs["facility_id"], clean_pairs["doctor_id"]))
 doc_to_fac = dict(zip(clean_pairs["doctor_id"], clean_pairs["facility_id"]))
