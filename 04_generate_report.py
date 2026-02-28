@@ -2026,75 +2026,91 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
   <strong>約{{ "%.1f"|format(mr_balance_results.marginal_effects.digital.coefficient / mr_balance_results.marginal_effects.mr.coefficient) }}倍</strong>。
 </div>
 
-<h3>8.2 コスト効率性の比較</h3>
-<p>コスト仮定を用いて、各チャネルの費用対効果を計算。</p>
+<h3>8.2 コスト効率性：損益分岐点コストアプローチ</h3>
+<p>デジタル視聴単価のデータが存在しないため、「デジタルがMRより費用対効果が高くなる最大視聴単価（損益分岐点コスト C*）」を回帰結果から導出する。</p>
 
 <div class="highlight-box">
   <strong>コスト仮定（万円）:</strong><br>
   - MR 1名あたり年間コスト: {{ "{:,.0f}".format(mr_balance_results.cost_assumptions.mr_fte_annual) }}万円<br>
   - MR活動1回あたりコスト: {{ "%.1f"|format(mr_balance_results.cost_assumptions.mr_per_visit) }}万円<br>
-  - デジタル配信1回あたりコスト: {{ "%.1f"|format(mr_balance_results.cost_assumptions.digital_per_view) }}万円
+  - デジタル視聴単価: データなし（損益分岐点コストで評価）
 </div>
 
+{% if mr_balance_breakeven %}
 <table>
   <tr>
     <th>指標</th>
-    <th>MR活動</th>
-    <th>デジタル視聴</th>
+    <th>値</th>
+    <th>解釈</th>
   </tr>
   <tr>
-    <td>1回あたりコスト（万円）</td>
-    <td>{{ "%.1f"|format(mr_balance_results.cost_assumptions.mr_per_visit) }}</td>
-    <td>{{ "%.1f"|format(mr_balance_results.cost_assumptions.digital_per_view) }}</td>
+    <td>MRの費用対効果</td>
+    <td>{{ "%.3f"|format(mr_balance_breakeven.mr_cost_efficiency) }}万円売上/万円コスト</td>
+    <td>MR活動1回あたりのコスト効率</td>
   </tr>
   <tr>
-    <td>1回あたり売上貢献（万円）</td>
-    <td>{{ "%.2f"|format(mr_balance_results.marginal_effects.mr.coefficient) }}</td>
-    <td>{{ "%.2f"|format(mr_balance_results.marginal_effects.digital.coefficient) }}</td>
+    <td><strong>損益分岐点コスト C*</strong></td>
+    <td><strong>{{ "%.3f"|format(mr_balance_breakeven.breakeven_digital_cost) }}万円/視聴</strong></td>
+    <td>この単価以下ならデジタルはMRより費用対効果が高い</td>
   </tr>
   <tr>
-    <td>費用対効果（売上/コスト）</td>
-    <td>{{ "%.2f"|format(mr_balance_results.marginal_effects.mr.coefficient / mr_balance_results.cost_assumptions.mr_per_visit) }}</td>
-    <td>{{ "%.2f"|format(mr_balance_results.marginal_effects.digital.coefficient / mr_balance_results.cost_assumptions.digital_per_view) }}</td>
+    <td>等価交換レート</td>
+    <td>MR活動1回 = デジタル{{ "%.1f"|format(mr_balance_breakeven.equivalence_ratio_mr_to_digital) }}回分</td>
+    <td>売上インパクトの換算率</td>
   </tr>
 </table>
 
 <div class="conclusion-box" style="background-color:#e8f5e9; border-left:4px solid #4caf50;">
-  <strong>コスト効率性:</strong><br>
-  デジタルの費用対効果は、MRの
-  <strong>約{{ "%.0f"|format((mr_balance_results.marginal_effects.digital.coefficient / mr_balance_results.cost_assumptions.digital_per_view) / (mr_balance_results.marginal_effects.mr.coefficient / mr_balance_results.cost_assumptions.mr_per_visit)) }}倍</strong>。
+  <strong>損益分岐点コスト解釈:</strong><br>
+  {{ mr_balance_breakeven.interpretation }}
 </div>
+{% endif %}
 
-<h3>8.3 リソース配分シナリオ</h3>
-<p>複数のシナリオで、コストと売上のトレードオフを検証。</p>
+<h3>8.3 MR削減 × デジタル転換シミュレーション（コストニュートラル前提）</h3>
+<p>MR削減節約額を全てデジタル投資に転換した場合の売上中立コスト。デジタル視聴単価がこの値以下であれば、売上を維持しながらコスト削減が可能。</p>
 
+{% if mr_balance_revenue_neutral %}
 <table>
   <tr>
-    <th>シナリオ</th>
-    <th>MR FTE</th>
-    <th>デジタル予算<br>（万円）</th>
-    <th>総コスト<br>（万円）</th>
-    <th>コスト変化</th>
-    <th>売上変化</th>
-    <th>ROI</th>
+    <th>MR削減率</th>
+    <th>年間節約額（万円）</th>
+    <th>売上中立コスト C<sub>neutral</sub>（万円/視聴）</th>
+    <th>解釈</th>
   </tr>
-  {% for scenario in mr_balance_scenarios %}
-  <tr style="{{ 'background-color:#fff9c4;' if loop.index == 1 else '' }}">
-    <td><strong>{{ scenario.scenario_name }}</strong></td>
-    <td>{{ "%.0f"|format(scenario.mr_fte) }}名</td>
-    <td>{{ "{:,.0f}".format(scenario.digital_budget) }}</td>
-    <td>{{ "{:,.0f}".format(scenario.total_cost) }}</td>
-    <td class="{{ 'sig' if scenario.cost_change < 0 else '' }}">
-      {{ "{:+,.0f}".format(scenario.cost_change) }}<br>
-      <small>({{ "{:+.1f}".format(scenario.cost_change_pct) }}%)</small>
-    </td>
+  {% for row in mr_balance_revenue_neutral %}
+  <tr>
+    <td>{{ "%.0f"|format(row.mr_reduction_pct) }}%削減</td>
+    <td>{{ "{:,.0f}".format(row.mr_savings_annual) }}</td>
     <td>
-      {{ "{:+.1f}".format(scenario.sales_change_pct) }}%
+      {% if row.max_digital_cost > 100 %}
+        <span class="sig">{{ "%.1f"|format(row.max_digital_cost) }}</span>（実質上限なし）
+      {% else %}
+        {{ "%.3f"|format(row.max_digital_cost) }}
+      {% endif %}
     </td>
-    <td>{{ "%.2f"|format(scenario.roi) }}</td>
+    <td><small>{{ row.note }}</small></td>
   </tr>
   {% endfor %}
 </table>
+
+{% if mr_balance_sensitivity_30 %}
+<div class="highlight-box" style="margin-top:16px;">
+  <strong>MR 30%削減 × デジタル転換 感度分析（視聴単価別売上変化率）:</strong>
+  <table style="margin:8px 0 0 0; font-size:0.9em;">
+    <tr>
+      <th>視聴単価（万円）</th>
+      {% for row in mr_balance_sensitivity_30 %}<td>{{ row.digital_cost_per_view }}</td>{% endfor %}
+    </tr>
+    <tr>
+      <th>売上変化率（%）</th>
+      {% for row in mr_balance_sensitivity_30 %}
+        <td class="{{ 'sig' if row.delta_sales_pct > 0 else '' }}">{{ "{:+.1f}".format(row.delta_sales_pct) }}%</td>
+      {% endfor %}
+    </tr>
+  </table>
+</div>
+{% endif %}
+{% endif %}
 
 <h3>8.4 可視化</h3>
 {% if png_mr_balance %}
@@ -2102,8 +2118,8 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
   <img src="data:image/png;base64,{{ png_mr_balance }}" alt="MR vs Digital Balance Analysis">
 </div>
 <p style="font-size:0.9em; color:#616161; margin-top:8px;">
-  (a) シナリオ別コスト / (b) 売上変化率 / (c) ROI /
-  (d) 効率的フロンティア / (e) 配分マップ / (f) 限界効果 / (g) コスト効率性
+  (a) 限界効果（TWFE推定）/ (b) 損益分岐点コスト /
+  (c) 等価交換レート / (d) 感度分析ヒートマップ / (e) 売上中立コスト / (f) 施設属性別限界効果
 </p>
 {% else %}
 <p>mr_digital_balance.png が見つかりません。</p>
@@ -2112,48 +2128,38 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 <h3>8.5 実務的推奨アクション</h3>
 
 <div class="conclusion-box" style="background-color:#e8f5e9; border-left:4px solid #4caf50;">
-<h4>💡 最適シナリオの提案</h4>
+<h4>主要な知見</h4>
+{% if mr_balance_breakeven %}
+<ul style="margin-top:10px; padding-left:20px;">
+  <li>デジタルの限界効果（{{ "%.2f"|format(mr_balance_results.marginal_effects.digital.coefficient) }}万円/視聴）は
+      MR（{{ "%.2f"|format(mr_balance_results.marginal_effects.mr.coefficient) }}万円/活動）の
+      <strong>{{ "%.1f"|format(mr_balance_results.marginal_effects.digital.coefficient / mr_balance_results.marginal_effects.mr.coefficient) }}倍</strong></li>
+  <li>損益分岐点コスト C* = <strong>{{ "%.3f"|format(mr_balance_breakeven.breakeven_digital_cost) }}万円/視聴</strong>
+      （視聴単価がこれ以下ならデジタルはMRより費用対効果が高い）</li>
+  <li>MR削減節約額をデジタルへ転換した場合、現実的な視聴単価の範囲ではほぼ全ての削減シナリオで売上増加が見込まれる</li>
+</ul>
 
-{% if mr_balance_best and mr_balance_current %}
-
-<p style="font-size:1.1em; font-weight:bold; margin-top:10px;">
-  推奨: {{ mr_balance_best.scenario_name }}
-</p>
-
-<table style="margin-top:10px;">
+<table style="margin-top:12px;">
   <tr>
     <td style="width:50%; padding:10px; vertical-align:top;">
-      <strong>📋 現状</strong><br>
-      MR FTE: {{ "%.0f"|format(mr_balance_results.baseline.mr_fte) }}名<br>
-      デジタル予算: {{ "{:,.0f}".format(mr_balance_results.baseline.digital_budget) }}万円<br>
-      総コスト: {{ "{:,.0f}".format(mr_balance_results.current_status.total_cost) }}万円<br>
-      ROI: {{ "%.2f"|format(mr_balance_current.roi) }}
+      <strong>現状（MR）</strong><br>
+      MR FTE: {{ "%.0f"|format(mr_balance_results.baseline.mr_fte) }}名（仮定）<br>
+      年間MRコスト: {{ "{:,.0f}".format(mr_balance_results.current_status.mr_cost_annual) }}万円<br>
+      MR費用対効果: {{ "%.3f"|format(mr_balance_breakeven.mr_cost_efficiency) }}万円売上/万円コスト
     </td>
     <td style="width:50%; padding:10px; vertical-align:top; background-color:#e8f5e9;">
-      <strong>✅ 推奨配分</strong><br>
-      MR FTE: {{ "%.0f"|format(mr_balance_best.mr_fte) }}名<br>
-      デジタル予算: {{ "{:,.0f}".format(mr_balance_best.digital_budget) }}万円<br>
-      総コスト: {{ "{:,.0f}".format(mr_balance_best.total_cost) }}万円<br>
-      ROI: {{ "%.2f"|format(mr_balance_best.roi) }}
+      <strong>デジタル（試算）</strong><br>
+      損益分岐点: C* = {{ "%.3f"|format(mr_balance_breakeven.breakeven_digital_cost) }}万円/視聴<br>
+      等価レート: MR1回 = デジタル{{ "%.1f"|format(mr_balance_breakeven.equivalence_ratio_mr_to_digital) }}回<br>
+      → 視聴単価 C* 以下で MR より費用対効果が高い
     </td>
   </tr>
 </table>
-
-<ul style="margin-top:15px; padding-left:20px;">
-  <li><strong>コスト削減額</strong>: {{ "{:,.0f}".format(-mr_balance_best.cost_change) }}万円
-      ({{ "%.0f"|format(-mr_balance_best.cost_change_pct) }}%削減)</li>
-  <li><strong>売上への影響</strong>: {{ "{:+.1f}".format(mr_balance_best.sales_change_pct) }}%</li>
-  <li><strong>ROI改善</strong>: {{ "%.2f"|format(mr_balance_current.roi) }} →
-      {{ "%.2f"|format(mr_balance_best.roi) }}
-      {% if mr_balance_current.roi != 0 %}
-      ({{ "%.1f"|format((mr_balance_best.roi / mr_balance_current.roi - 1) * 100) }}%向上)
-      {% endif %}</li>
-</ul>
 {% endif %}
 </div>
 
 <div class="highlight-box" style="background-color:#fff3cd; border-left:4px solid #ffc107;">
-<h4>⚠️ 重要な注意事項</h4>
+<h4>重要な注意事項</h4>
 <ul style="margin:8px 0; padding-left:20px;">
   <li>{{ mr_balance_results.interpretation.warning }}</li>
   <li>{{ mr_balance_results.interpretation.recommendation }}</li>
@@ -2251,22 +2257,35 @@ class DotDict(dict):
     def __missing__(self, key):
         return RobustUndefined()
 
-# ─── mr_balance シナリオを Python 側で正規化 ───────────────────────────
-# Jinja2 内で list[0] / selectattr チェーンを使わず、Python 側で安全に計算する
-_mr_balance_scenarios: list = []
-_mr_balance_current = None   # scenario_id=0 (現状維持)
-_mr_balance_best    = None   # ROI最大シナリオ
+# ─── mr_balance 損益分岐点・感度分析データを Python 側で正規化 ──────────────
+_mr_balance_breakeven = None
+_mr_balance_revenue_neutral: list = []
+_mr_balance_sensitivity_30: list = []
 if mr_digital_balance_results:
-    _raw_sc = mr_digital_balance_results.get("scenarios", [])
-    if isinstance(_raw_sc, dict):          # dict 形式の場合もリストに変換
-        _raw_sc = list(_raw_sc.values())
-    _mr_balance_scenarios = [DotDict(s) for s in _raw_sc if isinstance(s, dict)]
-    _mr_balance_current = next(
-        (s for s in _mr_balance_scenarios if s.get("scenario_id", -1) == 0),
-        _mr_balance_scenarios[0] if _mr_balance_scenarios else None,
-    )
-    if _mr_balance_scenarios:
-        _mr_balance_best = max(_mr_balance_scenarios, key=lambda s: s.get("roi", 0))
+    ba = mr_digital_balance_results.get("breakeven_analysis", {})
+    _mr_balance_breakeven = DotDict(ba) if ba else None
+
+    rnc = mr_digital_balance_results.get("revenue_neutral_costs", {})
+    for key in sorted(rnc.keys()):
+        data = rnc[key]
+        if not isinstance(data, dict):
+            continue
+        pct_str = key.replace("mr_reduction_", "").replace("pct", "")
+        pct = int(pct_str) if pct_str.isdigit() else 0
+        nc = data.get("max_digital_cost_for_neutral", 0)
+        note = "どの単価でも売上増（実質上限なし）" if nc > 100 else f"{nc:.2f}万円以下で売上維持"
+        _mr_balance_revenue_neutral.append(DotDict({
+            "mr_reduction_pct": pct,
+            "mr_savings_annual": data.get("mr_savings_annual", 0),
+            "max_digital_cost": nc,
+            "note": note,
+        }))
+
+    sg = mr_digital_balance_results.get("sensitivity_grid", [])
+    _mr_balance_sensitivity_30 = [
+        DotDict(row) for row in sg
+        if isinstance(row, dict) and abs(row.get("mr_reduction_pct", 0) - 30.0) < 0.1
+    ]
 
 channels = {}
 for ch_name, ch_data in did_results.get("cs_channel", {}).items():
@@ -2362,10 +2381,10 @@ template_data = {
     "mr_results": DotDict(mr_mediation_results) if mr_mediation_results else None,
 
     # MR vs デジタルバランス分析
-    "mr_balance_results": DotDict(mr_digital_balance_results) if mr_digital_balance_results else None,
-    "mr_balance_scenarios": _mr_balance_scenarios,
-    "mr_balance_current":   _mr_balance_current,
-    "mr_balance_best":      _mr_balance_best,
+    "mr_balance_results":         DotDict(mr_digital_balance_results) if mr_digital_balance_results else None,
+    "mr_balance_breakeven":       _mr_balance_breakeven,
+    "mr_balance_revenue_neutral": _mr_balance_revenue_neutral,
+    "mr_balance_sensitivity_30":  _mr_balance_sensitivity_30,
 
     # 解析集団パラメータ
     "include_only_rw": INCLUDE_ONLY_RW,
