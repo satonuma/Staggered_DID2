@@ -186,6 +186,13 @@ def _show_and_bin(df, col, continuous_bins):
         df[new_col] = result
         print(f"      → 自動3分位でカテゴリ化: {levels}")
 
+    # NaN（元の欠損値 + bins範囲外）を"不明"カテゴリとして扱う
+    n_null = df[new_col].isna().sum()
+    if n_null > 0:
+        df[new_col] = df[new_col].cat.add_categories("不明").fillna("不明")
+        levels = list(levels) + ["不明"]
+        print(f"      欠損/範囲外 {n_null} 件 → '不明' カテゴリに追加")
+
     return new_col, levels
 
 
@@ -236,8 +243,13 @@ def load_attr_file(filepath, id_col, id_rename, selected_cols, continuous_bins):
             new_col, levels = _show_and_bin(df_out, col, continuous_bins)
             cate_dims.append((new_col, levels))
         else:
-            # カテゴリ値: そのまま使用
-            levels = sorted(series.dropna().unique().tolist(), key=str)
+            # カテゴリ値: NaNを"不明"として扱う
+            n_null = series.isna().sum()
+            if n_null > 0:
+                df_out[col] = series.astype(object).fillna("不明")
+                series = df_out[col]
+                print(f"      欠損値 {n_null} 件 → '不明' カテゴリに追加")
+            levels = sorted(series.unique().tolist(), key=str)
             print(f"    [{col}] カテゴリ値: {levels}")
             cate_dims.append((col, levels))
 
