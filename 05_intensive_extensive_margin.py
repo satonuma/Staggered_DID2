@@ -204,41 +204,43 @@ daily_clean["year_month"] = daily_clean["delivery_date"].dt.to_period("M")
 monthly_sales = daily_clean.groupby(["facility_id", "year_month"]).agg({"amount": "sum"}).reset_index()
 monthly_sales["date"] = monthly_sales["year_month"].dt.to_timestamp()
 
-# 医師×月次パネル構築
-doctor_panel_list = []
-for doc_id in clean_doc_ids:
-    fac_id = doc_to_fac[doc_id]
+# 医師×月次パネル構築（ベクトル化: 二重ループを排除）
+month_to_id = {m: i for i, m in enumerate(months)}
 
-    for i, month in enumerate(months):
-        # 当月視聴回数
-        current_views = doctor_viewing_monthly[
-            (doctor_viewing_monthly["doctor_id"] == doc_id) &
-            (doctor_viewing_monthly["date"] == month)
-        ]["view_count"].sum()
+# 視聴データに month_id を付与
+dvm = doctor_viewing_monthly.copy()
+dvm["month_id"] = dvm["date"].map(month_to_id)
+dvm = dvm[dvm["month_id"].notna() & dvm["doctor_id"].isin(clean_doc_ids)]
+dvm["month_id"] = dvm["month_id"].astype(int)
 
-        # 累積視聴回数（当月含まず）
-        cumulative_views = doctor_viewing_monthly[
-            (doctor_viewing_monthly["doctor_id"] == doc_id) &
-            (doctor_viewing_monthly["date"] < month)
-        ]["view_count"].sum()
+# 全 (doctor, month) の完全インデックスを作成し current_views を reindex
+doc_list = sorted(clean_doc_ids)
+full_idx = pd.MultiIndex.from_product([doc_list, range(len(months))],
+                                       names=["doctor_id", "month_id"])
+current_s = (dvm.groupby(["doctor_id", "month_id"])["view_count"].sum()
+             .reindex(full_idx, fill_value=0))
 
-        # 売上（施設レベル）
-        amount = monthly_sales[
-            (monthly_sales["facility_id"] == fac_id) &
-            (monthly_sales["date"] == month)
-        ]["amount"].sum()
+doctor_panel = current_s.reset_index().rename(columns={"view_count": "current_views"})
 
-        doctor_panel_list.append({
-            "doctor_id": doc_id,
-            "facility_id": fac_id,
-            "month_id": i,
-            "date": month,
-            "current_views": int(current_views),
-            "cumulative_views": int(cumulative_views),
-            "amount": float(amount) if not pd.isna(amount) else 0.0,
-        })
+# 累積視聴回数 = 当月含まず → shift(1) + cumsum
+doctor_panel = doctor_panel.sort_values(["doctor_id", "month_id"])
+doctor_panel["cumulative_views"] = (
+    doctor_panel.groupby("doctor_id")["current_views"]
+    .transform(lambda x: x.shift(1).fillna(0).cumsum().astype(int))
+)
 
-doctor_panel = pd.DataFrame(doctor_panel_list)
+# 施設ID・売上をマージ
+doctor_panel["facility_id"] = doctor_panel["doctor_id"].map(doc_to_fac)
+monthly_sales["month_id"] = monthly_sales["date"].map(month_to_id)
+ms_clean = monthly_sales.dropna(subset=["month_id"]).copy()
+ms_clean["month_id"] = ms_clean["month_id"].astype(int)
+doctor_panel = doctor_panel.merge(
+    ms_clean[["facility_id", "month_id", "amount"]],
+    on=["facility_id", "month_id"], how="left"
+)
+doctor_panel["amount"] = doctor_panel["amount"].fillna(0.0)
+doctor_panel["date"] = doctor_panel["month_id"].map(dict(enumerate(months)))
+doctor_panel["current_views"] = doctor_panel["current_views"].astype(int)
 print(f"  医師×月パネル: {len(doctor_panel):,} 行")
 print(f"  医師数: {doctor_panel['doctor_id'].nunique()}")
 print(f"  期間: {len(months)} ヶ月")
@@ -318,42 +320,16 @@ except Exception as e:
 print("\n[視聴確率（継続率）の推定]")
 
 # N回累積視聴した医師が、次月に視聴する確率を計算
+# shift(-1) で次月視聴を一括付与（iterrows ループを排除）
+dp_sorted = doctor_panel.sort_values(["doctor_id", "month_id"]).copy()
+dp_sorted["next_views"] = dp_sorted.groupby("doctor_id")["current_views"].shift(-1)
+
 continuation_rates = {}
-
 for n in range(0, 15):
-    # n回累積視聴時点のレコード
-    cohort = doctor_panel[doctor_panel["cumulative_views"] == n].copy()
-
-    if len(cohort) == 0:
-        continuation_rates[n] = 0.0
-        continue
-
-    # その医師の次月データを取得
-    cohort_with_next = cohort.merge(
-        doctor_panel[["doctor_id", "month_id", "current_views"]],
-        left_on=["doctor_id", "month_id"],
-        right_on=["doctor_id", "month_id"],
-        how="left",
-        suffixes=("", "_current")
-    )
-
-    # 次月データを取得
-    next_month_data = []
-    for _, row in cohort.iterrows():
-        next_data = doctor_panel[
-            (doctor_panel["doctor_id"] == row["doctor_id"]) &
-            (doctor_panel["month_id"] == row["month_id"] + 1)
-        ]
-        if len(next_data) > 0:
-            next_month_data.append(next_data.iloc[0]["current_views"] > 0)
-
-    if len(next_month_data) > 0:
-        continuation_rate = np.mean(next_month_data)
-    else:
-        continuation_rate = 0.0
-
-    continuation_rates[n] = float(continuation_rate)
-
+    cohort = dp_sorted[dp_sorted["cumulative_views"] == n]
+    valid = cohort["next_views"].dropna()
+    continuation_rate = float((valid > 0).mean()) if len(valid) > 0 else 0.0
+    continuation_rates[n] = continuation_rate
     if n < 11:
         print(f"  累積{n}回 → 次月視聴確率: {continuation_rate:.1%}")
 

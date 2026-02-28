@@ -322,31 +322,24 @@ print("\n" + "=" * 70)
 print(" Part 4: Stage 1 - MR活動 → 視聴")
 print("=" * 70)
 
-panel_clean = panel.copy().reset_index(drop=True)
+# PanelOLS（entity/time FE within変換）でダミー行列生成を回避
+from linearmodels import PanelOLS
 
-y_stage1 = panel_clean["viewing_count"].values
-X_stage1_base = panel_clean[["mr_activity_count"]].values
-
-# 医師固定効果
-doc_dum = pd.get_dummies(panel_clean["doctor_id"], prefix="doc", drop_first=True, dtype=float)
-# 時間固定効果
-time_dum = pd.get_dummies(panel_clean["month_index"], prefix="t", drop_first=True, dtype=float)
-
-X_stage1 = np.hstack([
-    np.ones((len(panel_clean), 1)),  # const
-    X_stage1_base,
-    doc_dum.values,
-    time_dum.values
-])
+panel_clean = panel.set_index(["doctor_id", "month_index"]).copy()
 
 try:
-    model_stage1 = sm.OLS(y_stage1, X_stage1).fit()
-    panel_clean["viewing_count_predicted"] = model_stage1.predict(X_stage1)
+    model_stage1 = PanelOLS(
+        panel_clean["viewing_count"],
+        panel_clean[["mr_activity_count"]],
+        entity_effects=True, time_effects=True
+    ).fit(cov_type="clustered", cluster_entity=True)
 
-    beta_mr = model_stage1.params[1]  # MR活動の係数
-    se_mr = model_stage1.bse[1]
-    pval_mr = model_stage1.pvalues[1]
-    sig_mr = "***" if pval_mr < 0.001 else "**" if pval_mr < 0.01 else "*" if pval_mr < 0.05 else "n.s."
+    panel_clean["viewing_count_predicted"] = model_stage1.fitted_values
+
+    beta_mr   = float(model_stage1.params["mr_activity_count"])
+    se_mr     = float(model_stage1.std_errors["mr_activity_count"])
+    pval_mr   = float(model_stage1.pvalues["mr_activity_count"])
+    sig_mr    = "***" if pval_mr < 0.001 else "**" if pval_mr < 0.01 else "*" if pval_mr < 0.05 else "n.s."
 
     print(f"\n  Stage 1推定完了")
     print(f"  MR活動 → 視聴の係数: {beta_mr:.4f} (SE={se_mr:.4f}, {sig_mr})")
@@ -365,23 +358,17 @@ print("\n" + "=" * 70)
 print(" Part 5: Stage 2 - 予測視聴 → 売上")
 print("=" * 70)
 
-y_stage2 = panel_clean["amount"].values
-X_stage2_base = panel_clean[["viewing_count_predicted"]].values
-
-X_stage2 = np.hstack([
-    np.ones((len(panel_clean), 1)),
-    X_stage2_base,
-    doc_dum.values,
-    time_dum.values
-])
-
 try:
-    model_stage2 = sm.OLS(y_stage2, X_stage2).fit()
+    model_stage2 = PanelOLS(
+        panel_clean["amount"],
+        panel_clean[["viewing_count_predicted"]],
+        entity_effects=True, time_effects=True
+    ).fit(cov_type="clustered", cluster_entity=True)
 
-    beta_viewing = model_stage2.params[1]
-    se_viewing = model_stage2.bse[1]
-    pval_viewing = model_stage2.pvalues[1]
-    sig_viewing = "***" if pval_viewing < 0.001 else "**" if pval_viewing < 0.01 else "*" if pval_viewing < 0.05 else "n.s."
+    beta_viewing   = float(model_stage2.params["viewing_count_predicted"])
+    se_viewing     = float(model_stage2.std_errors["viewing_count_predicted"])
+    pval_viewing   = float(model_stage2.pvalues["viewing_count_predicted"])
+    sig_viewing    = "***" if pval_viewing < 0.001 else "**" if pval_viewing < 0.01 else "*" if pval_viewing < 0.05 else "n.s."
 
     print(f"\n  Stage 2推定完了")
     print(f"  視聴 → 売上の係数: {beta_viewing:.2f} (SE={se_viewing:.2f}, {sig_viewing})")
@@ -404,23 +391,17 @@ print("\n" + "=" * 70)
 print(" Part 6: Direct effect - MR活動 → 売上")
 print("=" * 70)
 
-y_direct = panel_clean["amount"].values
-X_direct_base = panel_clean[["mr_activity_count", "viewing_count"]].values
-
-X_direct = np.hstack([
-    np.ones((len(panel_clean), 1)),
-    X_direct_base,
-    doc_dum.values,
-    time_dum.values
-])
-
 try:
-    model_direct = sm.OLS(y_direct, X_direct).fit()
+    model_direct = PanelOLS(
+        panel_clean["amount"],
+        panel_clean[["mr_activity_count", "viewing_count"]],
+        entity_effects=True, time_effects=True
+    ).fit(cov_type="clustered", cluster_entity=True)
 
-    beta_mr_direct = model_direct.params[1]
-    se_mr_direct = model_direct.bse[1]
-    pval_mr_direct = model_direct.pvalues[1]
-    sig_mr_direct = "***" if pval_mr_direct < 0.001 else "**" if pval_mr_direct < 0.01 else "*" if pval_mr_direct < 0.05 else "n.s."
+    beta_mr_direct   = float(model_direct.params["mr_activity_count"])
+    se_mr_direct     = float(model_direct.std_errors["mr_activity_count"])
+    pval_mr_direct   = float(model_direct.pvalues["mr_activity_count"])
+    sig_mr_direct    = "***" if pval_mr_direct < 0.001 else "**" if pval_mr_direct < 0.01 else "*" if pval_mr_direct < 0.05 else "n.s."
 
     print(f"\n  Direct effect推定完了")
     print(f"  MR活動 → 売上（直接）の係数: {beta_mr_direct:.2f} (SE={se_mr_direct:.2f}, {sig_mr_direct})")

@@ -289,15 +289,17 @@ print("\n" + "=" * 70)
 print(" Part 1: セッションベースの視聴パターン分類")
 print("=" * 70)
 
+# 事前に doctor_id → view_date リストの辞書を構築（ループ内フィルタを排除）
+viewing_by_doc = (
+    viewing_after_washout.sort_values("view_date")
+    .groupby("doctor_id")["view_date"].apply(list)
+    .to_dict()
+)
+
 session_results = []
-
 for doc_id in analysis_doc_ids:
-    doc_views = viewing_after_washout[
-        viewing_after_washout["doctor_id"] == doc_id
-    ]["view_date"].tolist()
-
+    doc_views = viewing_by_doc.get(doc_id, [])
     pattern, n_sessions, span_days = classify_viewing_sessions(doc_views)
-
     session_results.append({
         "doctor_id": doc_id,
         "facility_id": doc_to_fac.get(doc_id),
