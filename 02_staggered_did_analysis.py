@@ -450,8 +450,13 @@ def run_cs_with_bootstrap(panel, n_boot=200, label=""):
         dC   = ctrl_np  - ctrl_np[:, b:b+1]
         idx_T = np.random.randint(0, n_t,    (n_boot, n_t))
         idx_C = np.random.randint(0, n_ctrl, (n_boot, n_ctrl))
-        bT    = np.nanmean(dT[idx_T], axis=1)
-        bC    = np.nanmean(dC[idx_C], axis=1)
+        # 3Dテンソル回避: 列ごとに計算 → ピークメモリ (n_boot, n_units) のみ
+        n_cols = len(time_cols)
+        bT = np.empty((n_boot, n_cols))
+        bC = np.empty((n_boot, n_cols))
+        for col in range(n_cols):
+            bT[:, col] = np.nanmean(dT[:, col][idx_T], axis=1)
+            bC[:, col] = np.nanmean(dC[:, col][idx_C], axis=1)
         boot_att = bT - bC
         for ti in range(len(time_cols)):
             boot_per_gt[(g, ti)] = boot_att[:, ti]
