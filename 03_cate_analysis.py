@@ -88,9 +88,9 @@ CATE_DIMS = [
 FILE_DOCTOR_ATTR = "doctor_attribute.csv"
 DOCTOR_ATTR_ID_COL = "doc"
 DOCTOR_ATTR_SELECTED: list = [      # ← 分析したいカラム名をここに列挙
-    # "specialty",
-    # "age",
-    # "experience_years",
+    "年齢",
+    "卒業時年齢",
+    "医師歴",
 ]
 
 # --- 施設属性 (facility_attribute_修正.csv) ---
@@ -99,9 +99,8 @@ DOCTOR_ATTR_SELECTED: list = [      # ← 分析したいカラム名をここ�
 FILE_FACILITY_ATTR = "facility_attribute_修正.csv"
 FACILITY_ATTR_ID_COL = "fac_honin"
 FACILITY_ATTR_SELECTED: list = [    # ← 分析したいカラム名をここに列挙
-    # "region",
-    # "facility_type",
-    # "bed_count",
+    "UHP区分名",
+    "許可病床数_合計",
 ]
 
 # 連続値カラムのカテゴリ化設定
@@ -109,14 +108,58 @@ FACILITY_ATTR_SELECTED: list = [    # ← 分析したいカラム名をここ�
 #   "bins"         → pd.cut の境界値と labels を明示
 #   "method":"median" → 中央値で2分割
 CONTINUOUS_BINS: dict = {
-    # "age":       {"bins": [0, 40, 55, 200], "labels": ["<40歳", "40-55歳", "55歳+"]},
-    # "bed_count": {"method": "median"},
+    "年齢":         {"bins": [0, 35, 50, 200],    "labels": ["35歳未満", "35-50歳", "50歳以上"]},
+    "卒業時年齢":   {"bins": [0, 27, 30, 100],    "labels": ["27歳未満", "27-30歳", "30歳以上"]},
+    "医師歴":       {"bins": [0, 10, 20, 100],    "labels": ["10年未満", "10-20年", "20年以上"]},
+    "許可病床数_合計": {"bins": [-1, 19, 199, 10000], "labels": ["20床未満", "20-199床", "200床以上"]},
 }
 
 
 # ================================================================
 # 属性ファイル読み込み・カテゴリ化ユーティリティ
 # ================================================================
+
+def _safe_qcut(series, q=3, labels=("低", "中", "高")):
+    """重複binエッジ（ゼロ多数など）があっても動作するqcut。
+    実際に作れるbin数に合わせてlabelsを自動調整する。
+    Returns (Categorical Series, levels_list)
+    """
+    default_labels = list(labels)
+    # まず通常のqcutを試みる
+    try:
+        result = pd.qcut(series, q=q, labels=default_labels, duplicates="raise")
+        return result, default_labels
+    except ValueError:
+        pass
+
+    # フォールバック: 0超/以下 + 非ゼロ中央値 で分割
+    nonzero = series[series > 0]
+    if len(nonzero) == 0:
+        # 全員ゼロ → 単一カテゴリ
+        lvl = [default_labels[0]]
+        cat = pd.Categorical([default_labels[0]] * len(series), categories=lvl)
+        return pd.Series(cat, index=series.index), lvl
+
+    med_nonzero = nonzero.median()
+    max_val = series.max()
+
+    if med_nonzero >= max_val:
+        # 非ゼロが1値しかない → ゼロ/非ゼロで2分割
+        lvl = [default_labels[0], default_labels[-1]]
+        result = pd.cut(series, bins=[-np.inf, 0, np.inf], labels=lvl)
+        return result, lvl
+
+    # ゼロ / 0〜中央値 / 中央値超 の3分割
+    try:
+        bins3 = [-np.inf, 0, med_nonzero, np.inf]
+        lvl3 = default_labels[:3]
+        result = pd.cut(series, bins=bins3, labels=lvl3)
+        return result, lvl3
+    except ValueError:
+        lvl2 = [default_labels[0], default_labels[-1]]
+        result = pd.cut(series, bins=[-np.inf, 0, np.inf], labels=lvl2)
+        return result, lvl2
+
 
 def _show_and_bin(df, col, continuous_bins):
     """連続値カラムの分布を表示しカテゴリ化する。新カラム名とlevelsを返す。"""
@@ -139,8 +182,8 @@ def _show_and_bin(df, col, continuous_bins):
         levels = labels
         print(f"      → 中央値({med:.1f})で2分割: {levels}")
     else:
-        df[new_col] = pd.qcut(df[col], q=3, labels=["低", "中", "高"], duplicates="drop")
-        levels = ["低", "中", "高"]
+        result, levels = _safe_qcut(df[col], q=3, labels=("低", "中", "高"))
+        df[new_col] = result
         print(f"      → 自動3分位でカテゴリ化: {levels}")
 
     return new_col, levels
@@ -186,7 +229,8 @@ def load_attr_file(filepath, id_col, id_rename, selected_cols, continuous_bins):
         is_numeric = pd.api.types.is_numeric_dtype(series)
         n_unique = series.nunique()
 
-        if is_numeric and n_unique > 10:
+        force_continuous = is_numeric and (col in continuous_bins)
+        if is_numeric and (n_unique > 10 or force_continuous):
             # 連続値 → 分布を表示してカテゴリ化
             print(f"    [{col}] 連続値 (ユニーク={n_unique})")
             new_col, levels = _show_and_bin(df_out, col, continuous_bins)
@@ -533,9 +577,11 @@ print("\n[属性のマージ]")
 # ベースライン納入額 (wash-out期間の平均)
 baseline = panel[panel["month_index"] < WASHOUT_MONTHS].groupby("unit_id")["amount"].mean().reset_index()
 baseline.columns = ["unit_id", "baseline_amount"]
-baseline["baseline_cat"] = pd.qcut(baseline["baseline_amount"], q=3, labels=["低", "中", "高"])
+_bc_result, _bc_levels = _safe_qcut(baseline["baseline_amount"], q=3, labels=("低", "中", "高"))
+baseline["baseline_cat"] = _bc_result
+CATE_DIMS[0] = ("baseline_cat", _bc_levels)  # 実際のbin数に合わせてlevelsを更新
 panel = panel.merge(baseline[["unit_id", "baseline_cat"]], on="unit_id", how="left")
-print(f"  baseline_cat: wash-out期間平均から3分位 → 低/中/高")
+print(f"  baseline_cat: wash-out期間平均から3分位 → {_bc_levels}")
 
 # 属性ファイルの読み込み・カテゴリ化・マージ
 _attr_configs = [
@@ -726,7 +772,7 @@ for dim_name, levels in CATE_DIMS:
     p_str = ""
     if dim_name in diff_results:
         for key, d in diff_results[dim_name].items():
-            if (max_l in key and min_l in key):
+            if set(key.split(" - ")) == {str(max_l), str(min_l)}:
                 p_str = f" (p={d['p']:.3f} {d['sig']})"
                 break
 
