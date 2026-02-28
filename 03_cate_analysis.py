@@ -935,7 +935,7 @@ for dim_name, levels in CATE_DIMS:
     dim_json = {}
     for level in levels:
         r = cate_results[dim_name][level]
-        dim_json[level] = {
+        dim_json[str(level)] = {
             "att": float(r["att"]) if not np.isnan(r["att"]) else None,
             "se": float(r["se"]) if not np.isnan(r["se"]) else None,
             "ci_lo": float(r["ci_lo"]) if not np.isnan(r["ci_lo"]) else None,
@@ -943,7 +943,7 @@ for dim_name, levels in CATE_DIMS:
             "n": int(r["n"]),
         }
         if r["dynamic"] is not None:
-            dim_json[level]["dynamic"] = r["dynamic"][
+            dim_json[str(level)]["dynamic"] = r["dynamic"][
                 ["event_time", "att", "se", "ci_lo", "ci_hi"]
             ].to_dict("records")
     cate_json[dim_name] = dim_json
@@ -984,7 +984,7 @@ cate_results_json = {
     "diff_tests": diff_json,
     "attr_distribution": attr_dist_json,
     "true_modifiers": true_mods_json,
-    "dimensions": [{"name": d, "levels": l} for d, l in CATE_DIMS],
+    "dimensions": [{"name": d, "levels": [str(lv) for lv in l]} for d, l in CATE_DIMS],
 }
 
 json_path = os.path.join(results_dir, "cate_results.json")
