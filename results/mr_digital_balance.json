@@ -1,20 +1,19 @@
 {
+  "approach": "損益分岐点コストアプローチ（デジタルコストデータなし）",
   "cost_assumptions": {
     "mr_fte_annual": 1000,
-    "mr_per_visit": 2,
-    "digital_per_view": 0.5
+    "mr_per_visit": 2
   },
   "baseline": {
-    "mr_fte": 100,
-    "digital_budget": 5000
+    "mr_fte": 100
   },
   "current_status": {
     "mr_count_per_facility_month": 1.420909090909091,
     "digital_count_per_facility_month": 0.2884848484848485,
     "sales_per_facility_month": 251.59469696969697,
-    "mr_cost": 100000.0,
-    "digital_cost": 5000.0,
-    "total_cost": 105000.0
+    "n_facilities": 200,
+    "n_months": 33,
+    "mr_cost_annual": 100000
   },
   "marginal_effects": {
     "mr": {
@@ -30,94 +29,474 @@
       "sig": "***"
     }
   },
-  "scenarios": [
+  "breakeven_analysis": {
+    "mr_cost_efficiency": 0.9985017291079222,
+    "breakeven_digital_cost": 9.395611988682916,
+    "equivalence_ratio_mr_to_digital": 0.21286532504843908,
+    "interpretation": "デジタル視聴単価 < 9.396万円/視聴 であれば MR より費用対効果が高い。MR活動1回 = デジタル視聴0.2回分の売上インパクト(概算)。"
+  },
+  "revenue_neutral_costs": {
+    "mr_reduction_10pct": {
+      "mr_savings_annual": 10000.0,
+      "max_digital_cost_for_neutral": 137.75822653485827
+    },
+    "mr_reduction_20pct": {
+      "mr_savings_annual": 20000.0,
+      "max_digital_cost_for_neutral": 137.75822653485827
+    },
+    "mr_reduction_30pct": {
+      "mr_savings_annual": 30000.0,
+      "max_digital_cost_for_neutral": 137.7582265348583
+    },
+    "mr_reduction_50pct": {
+      "mr_savings_annual": 50000.0,
+      "max_digital_cost_for_neutral": 137.7582265348583
+    }
+  },
+  "sensitivity_grid": [
     {
-      "scenario_id": 0,
-      "scenario_name": "現状維持",
-      "mr_fte": 100.0,
-      "digital_budget": 5000.0,
-      "mr_count_per_facility_month": 1.420909090909091,
-      "digital_count_per_facility_month": 0.2884848484848485,
-      "sales_per_facility_month": 251.59469696969697,
-      "sales_change_pct": 0.0,
-      "mr_cost": 100000.0,
-      "digital_cost": 5000.0,
-      "total_cost": 105000.0,
-      "cost_change": 0.0,
-      "cost_change_pct": 0.0,
-      "roi": 5.750735930735931
+      "mr_reduction_pct": 10.0,
+      "mr_fte_new": 90.0,
+      "mr_savings_annual": 10000.0,
+      "digital_cost_per_view": 0.05,
+      "add_views_annual": 200000.0,
+      "delta_digital_pm": 83.33333333333333,
+      "delta_mr_pm": -0.1420909090909091,
+      "delta_sales_pm": 781.5108120237489,
+      "delta_sales_pct": 310.6229270475749
     },
     {
-      "scenario_id": 1,
-      "scenario_name": "MR半減+デジタル増額",
-      "mr_fte": 50.0,
-      "digital_budget": 7621.127912689418,
-      "mr_count_per_facility_month": 0.7104545454545454,
-      "digital_count_per_facility_month": 0.43971598623517133,
-      "sales_per_facility_month": 251.59469696969697,
-      "sales_change_pct": 0.0,
-      "mr_cost": 50000.0,
-      "digital_cost": 7621.127912689418,
-      "total_cost": 57621.127912689415,
-      "cost_change": -47378.872087310585,
-      "cost_change_pct": -45.12273532124817,
-      "roi": 10.479268535704886
+      "mr_reduction_pct": 10.0,
+      "mr_fte_new": 90.0,
+      "mr_savings_annual": 10000.0,
+      "digital_cost_per_view": 0.1,
+      "add_views_annual": 100000.0,
+      "delta_digital_pm": 41.666666666666664,
+      "delta_mr_pm": -0.1420909090909091,
+      "delta_sales_pm": 390.61352799345667,
+      "delta_sales_pct": 155.255072025824
     },
     {
-      "scenario_id": 2,
-      "scenario_name": "MR 30%減+デジタル増額",
-      "mr_fte": 70.0,
-      "digital_budget": 6572.676747613652,
-      "mr_count_per_facility_month": 0.9946363636363635,
-      "digital_count_per_facility_month": 0.37922353113504226,
-      "sales_per_facility_month": 251.59469696969697,
-      "sales_change_pct": 0.0,
-      "mr_cost": 70000.0,
-      "digital_cost": 6572.676747613652,
-      "total_cost": 76572.67674761364,
-      "cost_change": -28427.323252386355,
-      "cost_change_pct": -27.07364119274891,
-      "roi": 7.88567539198753
+      "mr_reduction_pct": 10.0,
+      "mr_fte_new": 90.0,
+      "mr_savings_annual": 10000.0,
+      "digital_cost_per_view": 0.3,
+      "add_views_annual": 33333.333333333336,
+      "delta_digital_pm": 13.88888888888889,
+      "delta_mr_pm": -0.1420909090909091,
+      "delta_sales_pm": 130.01533863992853,
+      "delta_sales_pct": 51.67650201132342
     },
     {
-      "scenario_id": 3,
-      "scenario_name": "デジタル特化(MR最小)",
-      "mr_fte": 20.0,
-      "digital_budget": 9193.80466030307,
-      "mr_count_per_facility_month": 0.2841818181818181,
-      "digital_count_per_facility_month": 0.5304546688853651,
-      "sales_per_facility_month": 251.59469696969697,
-      "sales_change_pct": 0.0,
-      "mr_cost": 20000.0,
-      "digital_cost": 9193.80466030307,
-      "total_cost": 29193.80466030307,
-      "cost_change": -75806.19533969693,
-      "cost_change_pct": -72.19637651399708,
-      "roi": 20.683404570023047
+      "mr_reduction_pct": 10.0,
+      "mr_fte_new": 90.0,
+      "mr_savings_annual": 10000.0,
+      "digital_cost_per_view": 0.5,
+      "add_views_annual": 20000.0,
+      "delta_digital_pm": 8.333333333333334,
+      "delta_mr_pm": -0.1420909090909091,
+      "delta_sales_pm": 77.89570076922288,
+      "delta_sales_pct": 30.9607880084233
     },
     {
-      "scenario_id": 4,
-      "scenario_name": "同コストでデジタル最大化",
-      "mr_fte": 20.0,
-      "digital_budget": 85000.0,
-      "mr_count_per_facility_month": 0.2841818181818181,
-      "digital_count_per_facility_month": 4.904242424242424,
-      "sales_per_facility_month": 292.62753907755354,
-      "sales_change_pct": 16.309104524885402,
-      "mr_cost": 20000.0,
-      "digital_cost": 85000.0,
-      "total_cost": 105000.0,
-      "cost_change": 0.0,
-      "cost_change_pct": 0.0,
-      "roi": 6.688629464629795
+      "mr_reduction_pct": 10.0,
+      "mr_fte_new": 90.0,
+      "mr_savings_annual": 10000.0,
+      "digital_cost_per_view": 1.0,
+      "add_views_annual": 10000.0,
+      "delta_digital_pm": 4.166666666666667,
+      "delta_mr_pm": -0.1420909090909091,
+      "delta_sales_pm": 38.80597236619366,
+      "delta_sales_pct": 15.424002506248213
+    },
+    {
+      "mr_reduction_pct": 10.0,
+      "mr_fte_new": 90.0,
+      "mr_savings_annual": 10000.0,
+      "digital_cost_per_view": 2.0,
+      "add_views_annual": 5000.0,
+      "delta_digital_pm": 2.0833333333333335,
+      "delta_mr_pm": -0.1420909090909091,
+      "delta_sales_pm": 19.261108164679037,
+      "delta_sales_pct": 7.655609755160666
+    },
+    {
+      "mr_reduction_pct": 10.0,
+      "mr_fte_new": 90.0,
+      "mr_savings_annual": 10000.0,
+      "digital_cost_per_view": 5.0,
+      "add_views_annual": 2000.0,
+      "delta_digital_pm": 0.8333333333333334,
+      "delta_mr_pm": -0.1420909090909091,
+      "delta_sales_pm": 7.534189643770268,
+      "delta_sales_pct": 2.9945741045081387
+    },
+    {
+      "mr_reduction_pct": 10.0,
+      "mr_fte_new": 90.0,
+      "mr_savings_annual": 10000.0,
+      "digital_cost_per_view": 10.0,
+      "add_views_annual": 1000.0,
+      "delta_digital_pm": 0.4166666666666667,
+      "delta_mr_pm": -0.1420909090909091,
+      "delta_sales_pm": 3.6252168034673447,
+      "delta_sales_pct": 1.4408955542906294
+    },
+    {
+      "mr_reduction_pct": 20.0,
+      "mr_fte_new": 80.0,
+      "mr_savings_annual": 20000.0,
+      "digital_cost_per_view": 0.05,
+      "add_views_annual": 400000.0,
+      "delta_digital_pm": 166.66666666666666,
+      "delta_mr_pm": -0.2841818181818182,
+      "delta_sales_pm": 1563.0216240474979,
+      "delta_sales_pct": 621.2458540951498
+    },
+    {
+      "mr_reduction_pct": 20.0,
+      "mr_fte_new": 80.0,
+      "mr_savings_annual": 20000.0,
+      "digital_cost_per_view": 0.1,
+      "add_views_annual": 200000.0,
+      "delta_digital_pm": 83.33333333333333,
+      "delta_mr_pm": -0.2841818181818182,
+      "delta_sales_pm": 781.2270559869133,
+      "delta_sales_pct": 310.510144051648
+    },
+    {
+      "mr_reduction_pct": 20.0,
+      "mr_fte_new": 80.0,
+      "mr_savings_annual": 20000.0,
+      "digital_cost_per_view": 0.3,
+      "add_views_annual": 66666.66666666667,
+      "delta_digital_pm": 27.77777777777778,
+      "delta_mr_pm": -0.2841818181818182,
+      "delta_sales_pm": 260.03067727985706,
+      "delta_sales_pct": 103.35300402264684
+    },
+    {
+      "mr_reduction_pct": 20.0,
+      "mr_fte_new": 80.0,
+      "mr_savings_annual": 20000.0,
+      "digital_cost_per_view": 0.5,
+      "add_views_annual": 40000.0,
+      "delta_digital_pm": 16.666666666666668,
+      "delta_mr_pm": -0.2841818181818182,
+      "delta_sales_pm": 155.79140153844577,
+      "delta_sales_pct": 61.9215760168466
+    },
+    {
+      "mr_reduction_pct": 20.0,
+      "mr_fte_new": 80.0,
+      "mr_savings_annual": 20000.0,
+      "digital_cost_per_view": 1.0,
+      "add_views_annual": 20000.0,
+      "delta_digital_pm": 8.333333333333334,
+      "delta_mr_pm": -0.2841818181818182,
+      "delta_sales_pm": 77.61194473238731,
+      "delta_sales_pct": 30.848005012496426
+    },
+    {
+      "mr_reduction_pct": 20.0,
+      "mr_fte_new": 80.0,
+      "mr_savings_annual": 20000.0,
+      "digital_cost_per_view": 2.0,
+      "add_views_annual": 10000.0,
+      "delta_digital_pm": 4.166666666666667,
+      "delta_mr_pm": -0.2841818181818182,
+      "delta_sales_pm": 38.52221632935807,
+      "delta_sales_pct": 15.311219510321331
+    },
+    {
+      "mr_reduction_pct": 20.0,
+      "mr_fte_new": 80.0,
+      "mr_savings_annual": 20000.0,
+      "digital_cost_per_view": 5.0,
+      "add_views_annual": 4000.0,
+      "delta_digital_pm": 1.6666666666666667,
+      "delta_mr_pm": -0.2841818181818182,
+      "delta_sales_pm": 15.068379287540536,
+      "delta_sales_pct": 5.989148209016277
+    },
+    {
+      "mr_reduction_pct": 20.0,
+      "mr_fte_new": 80.0,
+      "mr_savings_annual": 20000.0,
+      "digital_cost_per_view": 10.0,
+      "add_views_annual": 2000.0,
+      "delta_digital_pm": 0.8333333333333334,
+      "delta_mr_pm": -0.2841818181818182,
+      "delta_sales_pm": 7.250433606934689,
+      "delta_sales_pct": 2.881791108581259
+    },
+    {
+      "mr_reduction_pct": 30.0,
+      "mr_fte_new": 70.0,
+      "mr_savings_annual": 30000.0,
+      "digital_cost_per_view": 0.05,
+      "add_views_annual": 600000.0,
+      "delta_digital_pm": 250.0,
+      "delta_mr_pm": -0.42627272727272725,
+      "delta_sales_pm": 2344.532436071247,
+      "delta_sales_pct": 931.8687811427247
+    },
+    {
+      "mr_reduction_pct": 30.0,
+      "mr_fte_new": 70.0,
+      "mr_savings_annual": 30000.0,
+      "digital_cost_per_view": 0.1,
+      "add_views_annual": 300000.0,
+      "delta_digital_pm": 125.0,
+      "delta_mr_pm": -0.42627272727272725,
+      "delta_sales_pm": 1171.8405839803702,
+      "delta_sales_pct": 465.76521607747213
+    },
+    {
+      "mr_reduction_pct": 30.0,
+      "mr_fte_new": 70.0,
+      "mr_savings_annual": 30000.0,
+      "digital_cost_per_view": 0.3,
+      "add_views_annual": 100000.0,
+      "delta_digital_pm": 41.666666666666664,
+      "delta_mr_pm": -0.42627272727272725,
+      "delta_sales_pm": 390.04601591978553,
+      "delta_sales_pct": 155.02950603397025
+    },
+    {
+      "mr_reduction_pct": 30.0,
+      "mr_fte_new": 70.0,
+      "mr_savings_annual": 30000.0,
+      "digital_cost_per_view": 0.5,
+      "add_views_annual": 60000.0,
+      "delta_digital_pm": 25.0,
+      "delta_mr_pm": -0.42627272727272725,
+      "delta_sales_pm": 233.68710230766865,
+      "delta_sales_pct": 92.88236402526991
+    },
+    {
+      "mr_reduction_pct": 30.0,
+      "mr_fte_new": 70.0,
+      "mr_savings_annual": 30000.0,
+      "digital_cost_per_view": 1.0,
+      "add_views_annual": 30000.0,
+      "delta_digital_pm": 12.5,
+      "delta_mr_pm": -0.42627272727272725,
+      "delta_sales_pm": 116.41791709858096,
+      "delta_sales_pct": 46.27200751874464
+    },
+    {
+      "mr_reduction_pct": 30.0,
+      "mr_fte_new": 70.0,
+      "mr_savings_annual": 30000.0,
+      "digital_cost_per_view": 2.0,
+      "add_views_annual": 15000.0,
+      "delta_digital_pm": 6.25,
+      "delta_mr_pm": -0.42627272727272725,
+      "delta_sales_pm": 57.78332449403711,
+      "delta_sales_pct": 22.966829265481998
+    },
+    {
+      "mr_reduction_pct": 30.0,
+      "mr_fte_new": 70.0,
+      "mr_savings_annual": 30000.0,
+      "digital_cost_per_view": 5.0,
+      "add_views_annual": 6000.0,
+      "delta_digital_pm": 2.5,
+      "delta_mr_pm": -0.42627272727272725,
+      "delta_sales_pm": 22.6025689313108,
+      "delta_sales_pct": 8.983722313524414
+    },
+    {
+      "mr_reduction_pct": 30.0,
+      "mr_fte_new": 70.0,
+      "mr_savings_annual": 30000.0,
+      "digital_cost_per_view": 10.0,
+      "add_views_annual": 3000.0,
+      "delta_digital_pm": 1.25,
+      "delta_mr_pm": -0.42627272727272725,
+      "delta_sales_pm": 10.875650410402033,
+      "delta_sales_pct": 4.322686662871888
+    },
+    {
+      "mr_reduction_pct": 50.0,
+      "mr_fte_new": 50.0,
+      "mr_savings_annual": 50000.0,
+      "digital_cost_per_view": 0.05,
+      "add_views_annual": 1000000.0,
+      "delta_digital_pm": 416.6666666666667,
+      "delta_mr_pm": -0.7104545454545454,
+      "delta_sales_pm": 3907.554060118745,
+      "delta_sales_pct": 1553.1146352378746
+    },
+    {
+      "mr_reduction_pct": 50.0,
+      "mr_fte_new": 50.0,
+      "mr_savings_annual": 50000.0,
+      "digital_cost_per_view": 0.1,
+      "add_views_annual": 500000.0,
+      "delta_digital_pm": 208.33333333333334,
+      "delta_mr_pm": -0.7104545454545454,
+      "delta_sales_pm": 1953.0676399672836,
+      "delta_sales_pct": 776.2753601291201
+    },
+    {
+      "mr_reduction_pct": 50.0,
+      "mr_fte_new": 50.0,
+      "mr_savings_annual": 50000.0,
+      "digital_cost_per_view": 0.3,
+      "add_views_annual": 166666.6666666667,
+      "delta_digital_pm": 69.44444444444446,
+      "delta_mr_pm": -0.7104545454545454,
+      "delta_sales_pm": 650.0766931996427,
+      "delta_sales_pct": 258.38251005661715
+    },
+    {
+      "mr_reduction_pct": 50.0,
+      "mr_fte_new": 50.0,
+      "mr_savings_annual": 50000.0,
+      "digital_cost_per_view": 0.5,
+      "add_views_annual": 100000.0,
+      "delta_digital_pm": 41.666666666666664,
+      "delta_mr_pm": -0.7104545454545454,
+      "delta_sales_pm": 389.4785038461144,
+      "delta_sales_pct": 154.8039400421165
+    },
+    {
+      "mr_reduction_pct": 50.0,
+      "mr_fte_new": 50.0,
+      "mr_savings_annual": 50000.0,
+      "digital_cost_per_view": 1.0,
+      "add_views_annual": 50000.0,
+      "delta_digital_pm": 20.833333333333332,
+      "delta_mr_pm": -0.7104545454545454,
+      "delta_sales_pm": 194.02986183096823,
+      "delta_sales_pct": 77.12001253124104
+    },
+    {
+      "mr_reduction_pct": 50.0,
+      "mr_fte_new": 50.0,
+      "mr_savings_annual": 50000.0,
+      "digital_cost_per_view": 2.0,
+      "add_views_annual": 25000.0,
+      "delta_digital_pm": 10.416666666666666,
+      "delta_mr_pm": -0.7104545454545454,
+      "delta_sales_pm": 96.30554082339518,
+      "delta_sales_pct": 38.27804877580333
+    },
+    {
+      "mr_reduction_pct": 50.0,
+      "mr_fte_new": 50.0,
+      "mr_savings_annual": 50000.0,
+      "digital_cost_per_view": 5.0,
+      "add_views_annual": 10000.0,
+      "delta_digital_pm": 4.166666666666667,
+      "delta_mr_pm": -0.7104545454545454,
+      "delta_sales_pm": 37.67094821885134,
+      "delta_sales_pct": 14.972870522540694
+    },
+    {
+      "mr_reduction_pct": 50.0,
+      "mr_fte_new": 50.0,
+      "mr_savings_annual": 50000.0,
+      "digital_cost_per_view": 10.0,
+      "add_views_annual": 5000.0,
+      "delta_digital_pm": 2.0833333333333335,
+      "delta_mr_pm": -0.7104545454545454,
+      "delta_sales_pm": 18.126084017336723,
+      "delta_sales_pct": 7.2044777714531465
     }
   ],
-  "cost_efficiency": {
-    "mr_cost_per_effect": 1.0015005190761326,
-    "digital_cost_per_effect": 0.05329618338233035
+  "subgroup_effects": [
+    {
+      "group_col": "facility_type",
+      "group": "病院",
+      "n_obs": 2013,
+      "n_facilities": 61,
+      "beta_mr": 1.7789354072545662,
+      "beta_digital": 6.548483955521446,
+      "se_mr": 0.7026320518878569,
+      "se_digital": 2.6761259548469765,
+      "p_mr": 0.011426576969174818,
+      "p_digital": 0.014494205398194904
+    },
+    {
+      "group_col": "facility_type",
+      "group": "診療所",
+      "n_obs": 4587,
+      "n_facilities": 139,
+      "beta_mr": 2.1754709078215435,
+      "beta_digital": 10.955971150840368,
+      "se_mr": 0.745132787653177,
+      "se_digital": 2.1740953230383577,
+      "p_mr": 0.003522826351254116,
+      "p_digital": 4.858612423497277e-07
+    },
+    {
+      "group_col": "uhp_tier",
+      "group": "UHP-A",
+      "n_obs": 1188,
+      "n_facilities": 36,
+      "beta_mr": 2.1916366674803576,
+      "beta_digital": 18.675359996996146,
+      "se_mr": 1.4019940020266504,
+      "se_digital": 5.308574860680718,
+      "p_mr": 0.11828190888732015,
+      "p_digital": 0.0004523390549739936
+    },
+    {
+      "group_col": "uhp_tier",
+      "group": "UHP-B",
+      "n_obs": 1716,
+      "n_facilities": 52,
+      "beta_mr": 2.3746662855833245,
+      "beta_digital": 5.49781303289252,
+      "se_mr": 0.7347194349176063,
+      "se_digital": 2.2588328470840624,
+      "p_mr": 0.0012535053406776964,
+      "p_digital": 0.015043185718524255
+    },
+    {
+      "group_col": "uhp_tier",
+      "group": "UHP-C",
+      "n_obs": 1716,
+      "n_facilities": 52,
+      "beta_mr": 0.8652300187544847,
+      "beta_digital": 9.728332917148544,
+      "se_mr": 1.0701821257482365,
+      "se_digital": 2.772149047232236,
+      "p_mr": 0.41892736396436137,
+      "p_digital": 0.00046148070000073815
+    },
+    {
+      "group_col": "uhp_tier",
+      "group": "非UHP",
+      "n_obs": 1980,
+      "n_facilities": 60,
+      "beta_mr": 3.218318965279306,
+      "beta_digital": 4.844131814833219,
+      "se_mr": 1.2172894232778528,
+      "se_digital": 1.3767678700968295,
+      "p_mr": 0.008265057903220852,
+      "p_digital": 0.00044430904796022297
+    }
+  ],
+  "facility_master_source": {
+    "file": "facility_attribute_修正.csv",
+    "facilities_loaded": 200,
+    "facility_types": {
+      "診療所": 139,
+      "病院": 61
+    },
+    "uhp_tiers": {
+      "非UHP": 60,
+      "UHP-B": 52,
+      "UHP-C": 52,
+      "UHP-A": 36
+    }
   },
   "interpretation": {
     "warning": "MRとデジタルの両方が内生変数であり、結果は相関関係を示す",
-    "recommendation": "シミュレーション結果は参考値として扱い、実際の意思決定では追加的な検証が必要"
+    "recommendation": "損益分岐点コスト分析により、デジタルコストが不明でも意思決定の閾値を特定できる。感度分析ヒートマップで視聴単価ごとの売上変化率を参照し、コスト情報入手後に最適シナリオを選択すること。"
   }
 }

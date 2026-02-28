@@ -5,20 +5,22 @@
 
 【目的】
 MR活動とデジタルチャネルの最適バランスを定量的に評価。
-リソース配分の最適化シナリオを提示（例：FTE削減 + デジタル増額で売上維持）。
+デジタルコストデータが存在しない状況でも、回帰結果から損益分岐点コストを導出し、
+視聴単価の感度分析によって意思決定を支援する。
 
 【重要な前提】
 1. MR活動とデジタル視聴は両方とも内生変数（選択バイアス、逆因果の可能性）
 2. 本分析の結果は「相関関係」であり「因果効果」ではない
-3. コスト情報は仮定値を使用
-4. シミュレーション結果は参考値として扱うべき
+3. デジタル視聴単価は不明のため、損益分岐点コストと感度分析で代替
+4. MRコストは仮定値（MR 1名あたり年間コスト、1活動あたりコスト）
 
 【分析内容】
-1. MR活動とデジタル視聴の限界効果を推定（TWFE回帰）
-2. 現状のリソース配分を算出
-3. 複数のシナリオをシミュレーション
-4. コスト効率性の比較
-5. 最適配分の提案
+1. MR活動・デジタル視聴の限界効果推定（TWFE回帰）
+2. 損益分岐点コスト算出
+   - コスト効率均衡点: digital_per_view <= C* なら MR より効率的
+3. MR削減 × デジタル視聴単価の感度分析（コストニュートラル前提）
+   - MR削減節約額を全額デジタルへ転換した場合の売上変化
+4. 施設属性別（施設区分・UHP区分）の限界効果異質性
 
 【出力】
 - results/mr_digital_balance.json: 数値結果
@@ -31,7 +33,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy.optimize import minimize
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -54,29 +55,24 @@ RESULTS_DIR = "results"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 # コスト仮定（単位：万円）
+# ※ デジタル視聴単価はデータが存在しないため、損益分岐点コストで代替分析する
 COST_ASSUMPTIONS = {
-    "mr_fte_annual": 1000,      # MR 1名あたり年間コスト（万円）
-    "mr_per_visit": 2,           # MR活動1回あたりコスト（万円）
-    "digital_per_view": 0.5,     # デジタル配信1回あたりコスト（万円）
+    "mr_fte_annual": 1000,   # MR 1名あたり年間コスト（万円）
+    "mr_per_visit": 2,        # MR活動1回あたりコスト（万円）
 }
 
-# 現状ベースライン仮定
+# 現状ベースライン（MR FTEは仮定値）
 BASELINE = {
-    "mr_fte": 100,               # MR FTE数
-    "digital_budget": 5000,      # デジタル予算（万円）
+    "mr_fte": 100,            # MR FTE数（仮定）
 }
 
 print("=" * 60)
 print(" MR vs デジタルバランス分析")
 print("=" * 60)
-print("\n【コスト仮定】")
+print("\n【コスト仮定（MR）】")
 print(f"  MR 1名あたり年間コスト: {COST_ASSUMPTIONS['mr_fte_annual']:,.0f}万円")
 print(f"  MR活動1回あたりコスト: {COST_ASSUMPTIONS['mr_per_visit']:.1f}万円")
-print(f"  デジタル配信1回あたりコスト: {COST_ASSUMPTIONS['digital_per_view']:.1f}万円")
-print(f"\n【現状ベースライン（仮定）】")
-print(f"  MR FTE: {BASELINE['mr_fte']}名")
-print(f"  デジタル予算: {BASELINE['digital_budget']:,.0f}万円")
-print(f"  総コスト: {BASELINE['mr_fte'] * COST_ASSUMPTIONS['mr_fte_annual'] + BASELINE['digital_budget']:,.0f}万円")
+print(f"  デジタル視聴単価: データなし → 損益分岐点コスト分析で代替")
 
 # ================================================================
 # データ読み込み
@@ -108,6 +104,7 @@ digital = digital.rename(columns={
 })
 digital["viewing_date"] = pd.to_datetime(digital["viewing_date"], format="mixed")
 print(f"  デジタル視聴: {len(digital):,}行")
+print(f"    コンテンツ種別: {digital['content_type'].value_counts().to_dict()}")
 
 # MR活動データ
 activity_raw = pd.read_csv(os.path.join(DATA_DIR, "活動データ.csv"), encoding="utf-8")
@@ -120,68 +117,69 @@ activity = activity.rename(columns={
 activity["activity_date"] = pd.to_datetime(activity["activity_date"], format="mixed")
 print(f"  MR活動: {len(activity):,}行")
 
-# 処置データ（RW医師リスト）- date_startはないため処置フラグは使用しない
-rw_list = pd.read_csv(os.path.join(DATA_DIR, "rw_list.csv"), encoding="utf-8")
-print(f"  RW医師リスト: {len(rw_list)}行")
-
-# 施設マスタ（簡易版: デフォルト値を使用）
-# 実際のデータにはregion, facility_typeカラムがないため、ダミー値を設定
-facility_master = pd.DataFrame({
-    "facility_id": sales["facility_id"].unique(),
-    "region": "都市部",
-    "facility_type": "病院",
-})
+# 施設マスタ（実データ: facility_attribute_修正.csv）
+facility_attr = pd.read_csv(os.path.join(DATA_DIR, "facility_attribute_修正.csv"), encoding="utf-8")
+facility_master = (
+    facility_attr.rename(columns={
+        "fac_honin": "facility_id",
+        "施設区分名": "facility_type",   # 病院 / 診療所
+        "UHP区分名": "uhp_tier",         # UHP-A / UHP-B / UHP-C / 非UHP
+        "許可病床数_合計": "beds_total",
+        "施設内医師数": "doctor_count",
+    })
+    [["facility_id", "facility_type", "uhp_tier", "beds_total", "doctor_count"]]
+    .drop_duplicates("facility_id")
+)
+print(f"  施設マスタ（実データ）: {len(facility_master)}施設")
+print(f"    施設区分: {facility_master['facility_type'].value_counts().to_dict()}")
+print(f"    UHP区分: {facility_master['uhp_tier'].value_counts().to_dict()}")
 
 # ================================================================
 # パネルデータ構築
 # ================================================================
 print("\n[パネルデータ構築]")
 
-# 日次売上集計
+# 月次売上集計
 daily = sales.groupby(["facility_id", "date"], as_index=False).agg({"amount": "sum"})
-
-# 月次に集計
 daily["year_month"] = daily["date"].dt.to_period("M")
 monthly = daily.groupby(["facility_id", "year_month"], as_index=False).agg({"amount": "sum"})
 monthly["date"] = monthly["year_month"].dt.to_timestamp()
 monthly = monthly.drop(columns=["year_month"])
 
-# MR活動を月次集計
+# MR活動月次集計
 activity["year_month"] = activity["activity_date"].dt.to_period("M")
 mr_monthly = activity.groupby(["facility_id", "year_month"], as_index=False).size()
 mr_monthly.rename(columns={"size": "mr_count"}, inplace=True)
 mr_monthly["date"] = mr_monthly["year_month"].dt.to_timestamp()
 mr_monthly = mr_monthly.drop(columns=["year_month"])
 
-# デジタル視聴を月次集計（既にfacility_idが含まれている）
-digital_with_facility = digital.copy()
-digital_with_facility = digital_with_facility.dropna(subset=["facility_id"])
-
-digital_with_facility["year_month"] = digital_with_facility["viewing_date"].dt.to_period("M")
-digital_monthly = digital_with_facility.groupby(["facility_id", "year_month"], as_index=False).size()
+# デジタル視聴月次集計
+dw = digital.dropna(subset=["facility_id"]).copy()
+dw["year_month"] = dw["viewing_date"].dt.to_period("M")
+digital_monthly = dw.groupby(["facility_id", "year_month"], as_index=False).size()
 digital_monthly.rename(columns={"size": "digital_count"}, inplace=True)
 digital_monthly["date"] = digital_monthly["year_month"].dt.to_timestamp()
 digital_monthly = digital_monthly.drop(columns=["year_month"])
 
-# パネルデータ結合
+# パネル結合
 panel = monthly.copy()
 panel = panel.merge(mr_monthly, on=["facility_id", "date"], how="left")
 panel = panel.merge(digital_monthly, on=["facility_id", "date"], how="left")
 panel["mr_count"] = panel["mr_count"].fillna(0)
 panel["digital_count"] = panel["digital_count"].fillna(0)
 
-# 処置フラグは不要（全期間データで分析）
-
 # 施設属性結合
-panel = panel.merge(facility_master[["facility_id", "region", "facility_type"]],
-                    on="facility_id", how="left")
+panel = panel.merge(
+    facility_master[["facility_id", "facility_type", "uhp_tier", "beds_total", "doctor_count"]],
+    on="facility_id", how="left"
+)
 
-# 時間FE用の変数
+# 時間FE用変数
 panel["time_id"] = (panel["date"].dt.year - panel["date"].dt.year.min()) * 12 + panel["date"].dt.month
 
 print(f"  パネルデータ: {len(panel):,}行")
 print(f"  施設数: {panel['facility_id'].nunique()}施設")
-print(f"  期間: {panel['date'].min()} ～ {panel['date'].max()}")
+print(f"  期間: {panel['date'].min().strftime('%Y-%m')} ～ {panel['date'].max().strftime('%Y-%m')}")
 
 # ================================================================
 # 限界効果の推定（TWFE回帰）
@@ -191,12 +189,9 @@ print("  TWFE回帰: amount ~ mr_count + digital_count + facility_FE + time_FE")
 
 from linearmodels import PanelOLS
 
-# 全期間データで推定
-panel_reg = panel.copy()
-panel_reg = panel_reg.dropna(subset=["amount", "mr_count", "digital_count"])
+panel_reg = panel.dropna(subset=["amount", "mr_count", "digital_count"]).copy()
 panel_reg = panel_reg.set_index(["facility_id", "time_id"])
 
-# 回帰実行
 try:
     model = PanelOLS(
         dependent=panel_reg["amount"],
@@ -206,375 +201,305 @@ try:
     )
     result = model.fit(cov_type="clustered", cluster_entity=True)
 
-    beta_mr = result.params["mr_count"]
-    se_mr = result.std_errors["mr_count"]
-    p_mr = result.pvalues["mr_count"]
+    beta_mr = float(result.params["mr_count"])
+    se_mr = float(result.std_errors["mr_count"])
+    p_mr = float(result.pvalues["mr_count"])
 
-    beta_digital = result.params["digital_count"]
-    se_digital = result.std_errors["digital_count"]
-    p_digital = result.pvalues["digital_count"]
+    beta_digital = float(result.params["digital_count"])
+    se_digital = float(result.std_errors["digital_count"])
+    p_digital = float(result.pvalues["digital_count"])
 
-    print(f"\n  【推定結果】")
-    print(f"  MR活動の限界効果: {beta_mr:.2f} (SE={se_mr:.2f}, p={p_mr:.4f})")
-    print(f"  デジタル視聴の限界効果: {beta_digital:.2f} (SE={se_digital:.2f}, p={p_digital:.4f})")
-
-    # 有意性判定
     sig_mr = "***" if p_mr < 0.001 else "**" if p_mr < 0.01 else "*" if p_mr < 0.05 else "n.s."
     sig_digital = "***" if p_digital < 0.001 else "**" if p_digital < 0.01 else "*" if p_digital < 0.05 else "n.s."
 
-    print(f"  MR有意性: {sig_mr}")
-    print(f"  デジタル有意性: {sig_digital}")
+    print(f"\n  【推定結果】")
+    print(f"  MR活動の限界効果: {beta_mr:.2f}万円/回 (SE={se_mr:.2f}, p={p_mr:.4f}, {sig_mr})")
+    print(f"  デジタル視聴の限界効果: {beta_digital:.2f}万円/回 (SE={se_digital:.2f}, p={p_digital:.4f}, {sig_digital})")
 
 except Exception as e:
-    print(f"  エラー: {e}")
-    print("  デフォルト値を使用")
-    beta_mr = 10.0
-    se_mr = 2.0
-    p_mr = 0.001
-    sig_mr = "***"
-
-    beta_digital = 5.0
-    se_digital = 1.0
-    p_digital = 0.001
-    sig_digital = "***"
+    print(f"  エラー: {e} → デフォルト値使用")
+    beta_mr, se_mr, p_mr, sig_mr = 10.0, 2.0, 0.001, "***"
+    beta_digital, se_digital, p_digital, sig_digital = 5.0, 1.0, 0.001, "***"
 
 # ================================================================
-# 現状の売上推定
+# 現状統計
 # ================================================================
 print("\n[現状分析]")
 
-# 現状の平均MR活動回数・デジタル視聴回数（1施設1ヶ月あたり）
-current_mr_mean = panel_reg["mr_count"].mean()
-current_digital_mean = panel_reg["digital_count"].mean()
-
-print(f"  現状の平均MR活動回数（1施設1ヶ月）: {current_mr_mean:.2f}回")
-print(f"  現状の平均デジタル視聴回数（1施設1ヶ月）: {current_digital_mean:.2f}回")
-
-# 現状の売上（平均）
-current_sales_mean = panel_reg["amount"].mean()
-print(f"  現状の平均売上（1施設1ヶ月）: {current_sales_mean:.0f}万円")
-
-# 総施設数・総期間
+current_mr_mean = float(panel_reg["mr_count"].mean())
+current_digital_mean = float(panel_reg["digital_count"].mean())
+current_sales_mean = float(panel_reg["amount"].mean())
 n_facilities = panel_reg.index.get_level_values(0).nunique()
 n_months = panel_reg.index.get_level_values(1).nunique()
 
-print(f"  総施設数: {n_facilities}施設")
-print(f"  総期間: {n_months}ヶ月")
+print(f"  平均MR活動回数（1施設1月）: {current_mr_mean:.2f}回")
+print(f"  平均デジタル視聴回数（1施設1月）: {current_digital_mean:.2f}回")
+print(f"  平均売上（1施設1月）: {current_sales_mean:.0f}万円")
+print(f"  施設数: {n_facilities}, 期間: {n_months}ヶ月")
 
-# 年間ベース換算
-annual_mr_total = current_mr_mean * n_facilities * 12
-annual_digital_total = current_digital_mean * n_facilities * 12
-
-print(f"\n  【年間ベース換算】")
-print(f"  年間MR活動総回数: {annual_mr_total:,.0f}回")
-print(f"  年間デジタル視聴総回数: {annual_digital_total:,.0f}回")
-
-# コスト計算
-current_mr_cost = BASELINE["mr_fte"] * COST_ASSUMPTIONS["mr_fte_annual"]
-current_digital_cost = BASELINE["digital_budget"]
-current_total_cost = current_mr_cost + current_digital_cost
-
-print(f"\n  【現状コスト（ベースライン仮定）】")
-print(f"  MRコスト: {current_mr_cost:,.0f}万円")
-print(f"  デジタルコスト: {current_digital_cost:,.0f}万円")
-print(f"  総コスト: {current_total_cost:,.0f}万円")
+current_mr_cost_annual = BASELINE["mr_fte"] * COST_ASSUMPTIONS["mr_fte_annual"]
+print(f"\n  年間MRコスト（仮定）: {current_mr_cost_annual:,.0f}万円")
 
 # ================================================================
-# シナリオ分析
+# 損益分岐点コスト分析
 # ================================================================
-print("\n[シナリオ分析]")
+print("\n[損益分岐点コスト分析]")
 
-def calc_sales_change(mr_change_pct, digital_change_pct):
-    """
-    MRとデジタルの変化率から売上変化を計算
-    """
-    mr_new = current_mr_mean * (1 + mr_change_pct)
-    digital_new = current_digital_mean * (1 + digital_change_pct)
+# MRの費用対効果: beta_mr / mr_per_visit (万円売上増/万円投資)
+mr_cost_efficiency = beta_mr / COST_ASSUMPTIONS["mr_per_visit"]
 
-    sales_change = beta_mr * (mr_new - current_mr_mean) + beta_digital * (digital_new - current_digital_mean)
-    sales_new = current_sales_mean + sales_change
-
-    return sales_new, mr_new, digital_new
-
-def calc_cost(mr_fte, digital_budget):
-    """
-    FTEとデジタル予算から総コストを計算
-    """
-    mr_cost = mr_fte * COST_ASSUMPTIONS["mr_fte_annual"]
-    digital_cost = digital_budget
-    total_cost = mr_cost + digital_cost
-    return mr_cost, digital_cost, total_cost
-
-# シナリオ定義
-scenarios = []
-
-# シナリオ0: 現状維持
-scenarios.append({
-    "name": "現状維持",
-    "mr_fte": BASELINE["mr_fte"],
-    "digital_budget": BASELINE["digital_budget"],
-    "mr_change_pct": 0.0,
-    "digital_change_pct": 0.0,
-})
-
-# シナリオ1: MR半減、デジタル増額（売上維持目標）
-# MR削減による売上減: beta_mr * (-current_mr_mean * 0.5)
-# デジタルで補填: beta_digital * delta_digital = beta_mr * (current_mr_mean * 0.5)
-# delta_digital = (beta_mr / beta_digital) * (current_mr_mean * 0.5)
-if beta_digital != 0:
-    digital_increase_needed = (beta_mr / beta_digital) * (current_mr_mean * 0.5)
-    digital_change_pct_s1 = digital_increase_needed / current_digital_mean
+# デジタルの損益分岐点コスト:
+# beta_digital / C_breakeven = mr_cost_efficiency
+# → C_breakeven = beta_digital / mr_cost_efficiency = beta_digital × mr_per_visit / beta_mr
+if beta_mr > 0:
+    breakeven_cost = COST_ASSUMPTIONS["mr_per_visit"] * (beta_digital / beta_mr)
 else:
-    digital_change_pct_s1 = 0.5
+    breakeven_cost = np.inf
 
-scenarios.append({
-    "name": "MR半減+デジタル増額",
-    "mr_fte": BASELINE["mr_fte"] * 0.5,
-    "digital_budget": BASELINE["digital_budget"] * (1 + digital_change_pct_s1),
-    "mr_change_pct": -0.5,
-    "digital_change_pct": digital_change_pct_s1,
-})
+# 等価交換レート: MR活動1回 = デジタル何回分の売上
+equivalence_ratio = beta_mr / beta_digital if beta_digital > 0 else np.inf
 
-# シナリオ2: MR 30%減、デジタル増額
-if beta_digital != 0:
-    digital_increase_needed_s2 = (beta_mr / beta_digital) * (current_mr_mean * 0.3)
-    digital_change_pct_s2 = digital_increase_needed_s2 / current_digital_mean
-else:
-    digital_change_pct_s2 = 0.3
-
-scenarios.append({
-    "name": "MR 30%減+デジタル増額",
-    "mr_fte": BASELINE["mr_fte"] * 0.7,
-    "digital_budget": BASELINE["digital_budget"] * (1 + digital_change_pct_s2),
-    "mr_change_pct": -0.3,
-    "digital_change_pct": digital_change_pct_s2,
-})
-
-# シナリオ3: デジタル特化（MR最小20名）
-mr_change_pct_s3 = (20 / BASELINE["mr_fte"]) - 1
-if beta_digital != 0:
-    digital_increase_needed_s3 = (beta_mr / beta_digital) * (current_mr_mean * abs(mr_change_pct_s3))
-    digital_change_pct_s3 = digital_increase_needed_s3 / current_digital_mean
-else:
-    digital_change_pct_s3 = 1.0
-
-scenarios.append({
-    "name": "デジタル特化(MR最小)",
-    "mr_fte": 20,
-    "digital_budget": BASELINE["digital_budget"] * (1 + digital_change_pct_s3),
-    "mr_change_pct": mr_change_pct_s3,
-    "digital_change_pct": digital_change_pct_s3,
-})
-
-# シナリオ4: 同じコストでデジタル最大化
-# MRを減らして、その分デジタルに回す
-# 総コスト = current_total_cost
-# mr_cost + digital_cost = current_total_cost
-# MR最小(20名)として、残りをデジタルに
-mr_cost_s4 = 20 * COST_ASSUMPTIONS["mr_fte_annual"]
-digital_budget_s4 = current_total_cost - mr_cost_s4
-mr_change_pct_s4 = (20 / BASELINE["mr_fte"]) - 1
-digital_change_pct_s4 = (digital_budget_s4 / BASELINE["digital_budget"]) - 1
-
-scenarios.append({
-    "name": "同コストでデジタル最大化",
-    "mr_fte": 20,
-    "digital_budget": digital_budget_s4,
-    "mr_change_pct": mr_change_pct_s4,
-    "digital_change_pct": digital_change_pct_s4,
-})
-
-# 各シナリオの計算
-results = []
-for i, scenario in enumerate(scenarios):
-    sales_new, mr_new, digital_new = calc_sales_change(
-        scenario["mr_change_pct"],
-        scenario["digital_change_pct"]
-    )
-    mr_cost, digital_cost, total_cost = calc_cost(
-        scenario["mr_fte"],
-        scenario["digital_budget"]
-    )
-
-    sales_change_pct = (sales_new - current_sales_mean) / current_sales_mean * 100
-    cost_change = total_cost - current_total_cost
-    cost_change_pct = cost_change / current_total_cost * 100
-
-    # ROI（売上/コスト）
-    roi = (sales_new * n_facilities * 12) / total_cost if total_cost > 0 else 0
-
-    result = {
-        "scenario_id": i,
-        "scenario_name": scenario["name"],
-        "mr_fte": scenario["mr_fte"],
-        "digital_budget": scenario["digital_budget"],
-        "mr_count_per_facility_month": mr_new,
-        "digital_count_per_facility_month": digital_new,
-        "sales_per_facility_month": sales_new,
-        "sales_change_pct": sales_change_pct,
-        "mr_cost": mr_cost,
-        "digital_cost": digital_cost,
-        "total_cost": total_cost,
-        "cost_change": cost_change,
-        "cost_change_pct": cost_change_pct,
-        "roi": roi,
-    }
-    results.append(result)
-
-    print(f"\n  【{scenario['name']}】")
-    print(f"    MR FTE: {scenario['mr_fte']:.0f}名")
-    print(f"    デジタル予算: {scenario['digital_budget']:,.0f}万円")
-    print(f"    予測売上変化: {sales_change_pct:+.1f}%")
-    print(f"    コスト変化: {cost_change:+,.0f}万円 ({cost_change_pct:+.1f}%)")
-    print(f"    ROI: {roi:.2f}")
-
-results_df = pd.DataFrame(results)
+print(f"  MRの費用対効果: {mr_cost_efficiency:.3f}万円売上/万円コスト")
+print(f"  デジタル損益分岐点: C* = {breakeven_cost:.3f}万円/視聴")
+print(f"  解釈: 視聴単価 < {breakeven_cost:.3f}万円 であれば、デジタルはMRより費用対効果が高い")
+print(f"  等価交換レート: MR活動1回 = デジタル視聴{equivalence_ratio:.1f}回分の売上インパクト")
 
 # ================================================================
-# 効率的フロンティアの計算
+# MR削減 × デジタル視聴単価 感度分析（コストニュートラル前提）
 # ================================================================
-print("\n[効率的フロンティア計算]")
+print("\n[感度分析: MR削減節約額をデジタルへ転換]")
 
-# 複数の配分パターンをシミュレーション
-frontier_data = []
-for mr_pct in np.linspace(0.2, 1.5, 30):  # MRを20%～150%に変化
-    mr_fte = BASELINE["mr_fte"] * mr_pct
+# MR削減シナリオ（削減率）
+mr_reductions = [0.10, 0.20, 0.30, 0.50]
 
-    for digital_pct in np.linspace(0.5, 3.0, 30):  # デジタルを50%～300%に変化
-        digital_budget = BASELINE["digital_budget"] * digital_pct
+# デジタル視聴単価グリッド（万円/視聴）
+cost_grid = np.array([0.05, 0.1, 0.3, 0.5, 1.0, 2.0, 5.0, 10.0])
 
-        mr_change = mr_pct - 1.0
-        digital_change = digital_pct - 1.0
+# グリッド計算
+sensitivity_rows = []
+for mr_red in mr_reductions:
+    mr_fte_new = BASELINE["mr_fte"] * (1 - mr_red)
+    mr_savings = mr_red * current_mr_cost_annual  # 年間節約額（万円）
 
-        sales_new, mr_new, digital_new = calc_sales_change(mr_change, digital_change)
-        mr_cost, digital_cost, total_cost = calc_cost(mr_fte, digital_budget)
+    # MR活動減少 (1施設1月あたり)
+    delta_mr_pm = -current_mr_mean * mr_red
 
-        roi = (sales_new * n_facilities * 12) / total_cost if total_cost > 0 else 0
+    for C in cost_grid:
+        # 節約額でデジタル視聴を追加購入
+        add_views_annual = mr_savings / C          # 追加視聴回数/年
+        delta_digital_pm = add_views_annual / (n_facilities * 12)  # 1施設1月あたり
 
-        frontier_data.append({
-            "mr_fte": mr_fte,
-            "digital_budget": digital_budget,
-            "total_cost": total_cost,
-            "sales_per_facility_month": sales_new,
-            "roi": roi,
+        # 売上変化 = MR減少影響 + デジタル増加影響
+        delta_sales_pm = beta_mr * delta_mr_pm + beta_digital * delta_digital_pm
+        delta_sales_pct = delta_sales_pm / current_sales_mean * 100 if current_sales_mean > 0 else 0
+
+        sensitivity_rows.append({
+            "mr_reduction_pct": mr_red * 100,
+            "mr_fte_new": mr_fte_new,
+            "mr_savings_annual": mr_savings,
+            "digital_cost_per_view": C,
+            "add_views_annual": add_views_annual,
+            "delta_digital_pm": delta_digital_pm,
+            "delta_mr_pm": delta_mr_pm,
+            "delta_sales_pm": delta_sales_pm,
+            "delta_sales_pct": delta_sales_pct,
         })
 
-frontier_df = pd.DataFrame(frontier_data)
-print(f"  フロンティアポイント: {len(frontier_df)}点")
+sensitivity_df = pd.DataFrame(sensitivity_rows)
+
+# 売上中立となるデジタル視聴単価（各MR削減率に対して）
+print(f"\n  【売上中立デジタル単価（MR削減を損失なく置換できる最大コスト）】")
+revenue_neutral_costs = {}
+for mr_red in mr_reductions:
+    mr_savings = mr_red * current_mr_cost_annual
+    delta_mr_pm = -current_mr_mean * mr_red
+    mr_loss_pm = beta_mr * delta_mr_pm  # 売上減少額（負値）
+
+    # delta_sales_pm = 0 → beta_digital × (mr_savings / C) / (n_facilities × 12) = -mr_loss_pm
+    # C_neutral = beta_digital × mr_savings / (-mr_loss_pm × n_facilities × 12)
+    if mr_loss_pm < 0 and beta_digital > 0:
+        C_neutral = beta_digital * mr_savings / (-mr_loss_pm * n_facilities * 12)
+    else:
+        C_neutral = np.inf
+    revenue_neutral_costs[mr_red] = C_neutral
+    print(f"  MR {mr_red*100:.0f}%削減 → 売上中立コスト C <= {C_neutral:.3f}万円/視聴")
+
+print(f"\n  【参考】損益分岐点（コスト効率均衡）: {breakeven_cost:.3f}万円/視聴")
+
+# ================================================================
+# 施設属性別限界効果（UHP区分・施設区分）
+# ================================================================
+print("\n[施設属性別分析]")
+
+subgroup_results = []
+for col, groups in [("facility_type", ["病院", "診療所"]),
+                     ("uhp_tier", ["UHP-A", "UHP-B", "UHP-C", "非UHP"])]:
+    for g in groups:
+        mask = panel_reg.reset_index().set_index(["facility_id", "time_id"])
+        # panelからサブグループを取得
+        fac_in_group = facility_master[facility_master[col] == g]["facility_id"].tolist()
+        sub = panel_reg[panel_reg.index.get_level_values(0).isin(fac_in_group)]
+        if len(sub) < 20:
+            continue
+        try:
+            m = PanelOLS(sub["amount"], sub[["mr_count", "digital_count"]],
+                         entity_effects=True, time_effects=True)
+            r = m.fit(cov_type="clustered", cluster_entity=True)
+            subgroup_results.append({
+                "group_col": col,
+                "group": g,
+                "n_obs": len(sub),
+                "n_facilities": sub.index.get_level_values(0).nunique(),
+                "beta_mr": float(r.params["mr_count"]),
+                "beta_digital": float(r.params["digital_count"]),
+                "se_mr": float(r.std_errors["mr_count"]),
+                "se_digital": float(r.std_errors["digital_count"]),
+                "p_mr": float(r.pvalues["mr_count"]),
+                "p_digital": float(r.pvalues["digital_count"]),
+            })
+            print(f"  [{col}={g}] n={sub.index.get_level_values(0).nunique()}施設 "
+                  f"| MR: {r.params['mr_count']:.2f} "
+                  f"| Digital: {r.params['digital_count']:.2f}")
+        except Exception:
+            pass
+
+subgroup_df = pd.DataFrame(subgroup_results)
 
 # ================================================================
 # 可視化
 # ================================================================
 print("\n[可視化]")
 
-fig = plt.figure(figsize=(16, 12))
-gs = fig.add_gridspec(3, 3, hspace=0.35, wspace=0.35)
+fig = plt.figure(figsize=(18, 14))
+gs = fig.add_gridspec(3, 3, hspace=0.40, wspace=0.38)
 
-# (a) シナリオ別コスト比較
+# ---- (a) 限界効果の比較（係数 ± 95%CI）
 ax1 = fig.add_subplot(gs[0, 0])
-x_pos = np.arange(len(results_df))
-width = 0.35
-
-ax1.bar(x_pos - width/2, results_df["mr_cost"], width, label="MRコスト", color="#ff7f0e")
-ax1.bar(x_pos + width/2, results_df["digital_cost"], width, label="デジタルコスト", color="#2ca02c")
-ax1.axhline(current_total_cost, color="red", linestyle="--", linewidth=1, alpha=0.7, label="現状総コスト")
-
-ax1.set_xlabel("シナリオ", fontsize=10)
-ax1.set_ylabel("コスト（万円）", fontsize=10)
-ax1.set_title("(a) シナリオ別コスト比較", fontsize=11, fontweight="bold")
-ax1.set_xticks(x_pos)
-ax1.set_xticklabels(results_df["scenario_id"], fontsize=9)
-ax1.legend(fontsize=8)
+labels = ["MR活動", "デジタル視聴"]
+betas = [beta_mr, beta_digital]
+ses = [se_mr, se_digital]
+colors_b = ["#ff7f0e", "#2ca02c"]
+x = np.arange(len(labels))
+bars = ax1.bar(x, betas, yerr=[1.96 * s for s in ses],
+               color=colors_b, alpha=0.75, capsize=7, width=0.5)
+ax1.axhline(0, color="black", linewidth=0.8)
+for bar, b in zip(bars, betas):
+    ax1.text(bar.get_x() + bar.get_width()/2, b + 0.3,
+             f"{b:.2f}", ha="center", va="bottom", fontsize=10, fontweight="bold")
+ax1.set_xticks(x)
+ax1.set_xticklabels(labels, fontsize=10)
+ax1.set_ylabel("限界効果（万円売上/回）", fontsize=10)
+ax1.set_title("(a) 限界効果（TWFE推定）", fontsize=11, fontweight="bold")
 ax1.grid(axis="y", alpha=0.3)
 
-# (b) シナリオ別売上変化率
+# ---- (b) 損益分岐点コストの可視化
 ax2 = fig.add_subplot(gs[0, 1])
-colors = ["gray" if x >= 0 else "red" for x in results_df["sales_change_pct"]]
-ax2.barh(results_df["scenario_id"], results_df["sales_change_pct"], color=colors, alpha=0.7)
-ax2.axvline(0, color="black", linewidth=1)
+C_range = np.linspace(0.01, max(cost_grid), 300)
+# デジタルの費用対効果 = beta_digital / C
+digital_efficiency = beta_digital / C_range
+mr_eff_line = np.full_like(C_range, mr_cost_efficiency)
 
-ax2.set_xlabel("売上変化率（%）", fontsize=10)
-ax2.set_ylabel("シナリオ", fontsize=10)
-ax2.set_title("(b) シナリオ別売上変化率", fontsize=11, fontweight="bold")
-ax2.grid(axis="x", alpha=0.3)
+ax2.plot(C_range, digital_efficiency, color="#2ca02c", linewidth=2, label="デジタル費用対効果")
+ax2.axhline(mr_cost_efficiency, color="#ff7f0e", linewidth=2, linestyle="--", label="MR費用対効果")
+ax2.axvline(breakeven_cost, color="red", linewidth=1.5, linestyle=":", alpha=0.8,
+            label=f"損益分岐点 C*={breakeven_cost:.2f}万円")
+ax2.fill_betweenx([0, digital_efficiency.max()], 0, breakeven_cost,
+                   alpha=0.08, color="green", label="デジタル優位ゾーン")
+ax2.set_xlim(0, max(cost_grid))
+ax2.set_ylim(bottom=0)
+ax2.set_xlabel("デジタル視聴単価（万円/視聴）", fontsize=10)
+ax2.set_ylabel("費用対効果（万円売上/万円コスト）", fontsize=10)
+ax2.set_title("(b) 損益分岐点コスト", fontsize=11, fontweight="bold")
+ax2.legend(fontsize=7)
+ax2.grid(alpha=0.3)
 
-# (c) シナリオ別ROI
+# ---- (c) 等価交換レート（MR活動1回 = デジタルN回）
 ax3 = fig.add_subplot(gs[0, 2])
-ax3.bar(results_df["scenario_id"], results_df["roi"], color="#9467bd", alpha=0.7)
-ax3.axhline(results_df.loc[0, "roi"], color="red", linestyle="--", linewidth=1, alpha=0.7, label="現状ROI")
+equiv_text = f"MR活動1回\n= デジタル視聴\n{equivalence_ratio:.1f}回分"
+ax3.text(0.5, 0.5, equiv_text, ha="center", va="center",
+         fontsize=16, fontweight="bold", color="#333333",
+         bbox=dict(boxstyle="round,pad=0.5", facecolor="#fff3cd", edgecolor="#ffc107", linewidth=2),
+         transform=ax3.transAxes)
+ax3.set_title("(c) MR↔デジタル等価交換レート", fontsize=11, fontweight="bold")
+ax3.axis("off")
+# 補足テキスト
+ax3.text(0.5, 0.15,
+         f"MR限界効果: {beta_mr:.2f}万円/回\nデジタル限界効果: {beta_digital:.2f}万円/回",
+         ha="center", va="center", fontsize=9, color="#666666",
+         transform=ax3.transAxes)
 
-ax3.set_xlabel("シナリオ", fontsize=10)
-ax3.set_ylabel("ROI（年間売上/総コスト）", fontsize=10)
-ax3.set_title("(c) シナリオ別ROI", fontsize=11, fontweight="bold")
-ax3.legend(fontsize=8)
-ax3.grid(axis="y", alpha=0.3)
-
-# (d) コストvs売上（効率的フロンティア）
-ax4 = fig.add_subplot(gs[1, :])
-scatter = ax4.scatter(
-    frontier_df["total_cost"],
-    frontier_df["sales_per_facility_month"],
-    c=frontier_df["roi"],
-    cmap="viridis",
-    s=20,
-    alpha=0.6
-)
-
-# シナリオポイントをプロット
-for i, row in results_df.iterrows():
-    ax4.scatter(row["total_cost"], row["sales_per_facility_month"],
-                color="red", s=100, marker="*", zorder=5)
-    ax4.annotate(f"S{i}", (row["total_cost"], row["sales_per_facility_month"]),
-                 fontsize=9, ha="left", va="bottom")
-
-ax4.set_xlabel("総コスト（万円）", fontsize=10)
-ax4.set_ylabel("売上（万円/施設/月）", fontsize=10)
-ax4.set_title("(d) コスト vs 売上（効率的フロンティア）", fontsize=11, fontweight="bold")
-cbar = plt.colorbar(scatter, ax=ax4)
-cbar.set_label("ROI", fontsize=9)
-ax4.grid(alpha=0.3)
-
-# (e) MR vs デジタルの配分マップ（ROI）
-ax5 = fig.add_subplot(gs[2, 0])
-pivot_roi = frontier_df.pivot_table(
-    values="roi",
-    index="digital_budget",
-    columns="mr_fte",
+# ---- (d) 感度分析ヒートマップ: MR削減率 × 視聴単価 → 売上変化率(%)
+ax4 = fig.add_subplot(gs[1, :2])
+pivot_sens = sensitivity_df.pivot_table(
+    values="delta_sales_pct",
+    index="mr_reduction_pct",
+    columns="digital_cost_per_view",
     aggfunc="mean"
 )
-sns.heatmap(pivot_roi, cmap="RdYlGn", ax=ax5, cbar_kws={"label": "ROI"})
-ax5.set_xlabel("MR FTE", fontsize=10)
-ax5.set_ylabel("デジタル予算（万円）", fontsize=10)
-ax5.set_title("(e) MR vs デジタル配分マップ（ROI）", fontsize=11, fontweight="bold")
+sns.heatmap(pivot_sens, cmap="RdYlGn", center=0, annot=True, fmt=".1f",
+            cbar_kws={"label": "売上変化率 (%)"}, ax=ax4,
+            linewidths=0.5)
+ax4.set_xlabel("デジタル視聴単価（万円/視聴）", fontsize=10)
+ax4.set_ylabel("MR削減率 (%)", fontsize=10)
+ax4.set_title("(d) 感度分析: MR削減節約額をデジタルへ転換した場合の売上変化率（%）\n"
+              "（コストニュートラル前提）", fontsize=11, fontweight="bold")
 
-# (f) 限界効果の比較
-ax6 = fig.add_subplot(gs[2, 1])
-x_labels = ["MR活動", "デジタル視聴"]
-effects = [beta_mr, beta_digital]
-errors = [se_mr, se_digital]
-colors_bar = ["#ff7f0e", "#2ca02c"]
+# ---- (e) 売上中立デジタル単価 vs 損益分岐点コスト
+ax5 = fig.add_subplot(gs[1, 2])
+mr_red_labels = [f"{int(r*100)}%" for r in mr_reductions]
+neutral_vals = [revenue_neutral_costs[r] for r in mr_reductions]
+clip_max = max(breakeven_cost * 20, max(v for v in neutral_vals if np.isfinite(v)) * 1.2
+               if any(np.isfinite(v) for v in neutral_vals) else breakeven_cost * 20)
+neutral_vals_plot = [min(v, clip_max) if np.isfinite(v) else clip_max for v in neutral_vals]
+bars5 = ax5.barh(mr_red_labels, neutral_vals_plot, color="#5c85d6", alpha=0.75)
+ax5.axvline(breakeven_cost, color="red", linewidth=1.5, linestyle="--",
+            label=f"損益分岐点 {breakeven_cost:.2f}万円")
+ax5.set_xlabel("売上中立コスト（万円/視聴）", fontsize=10)
+ax5.set_ylabel("MR削減率", fontsize=10)
+ax5.set_title("(e) MR削減を売上中立に保つ\n最大デジタル視聴単価", fontsize=11, fontweight="bold")
+ax5.legend(fontsize=8)
+for bar, val in zip(bars5, neutral_vals):
+    label = f"{val:.1f}" if np.isfinite(val) else "inf"
+    ax5.text(min(val, clip_max * 0.98) + clip_max * 0.01,
+             bar.get_y() + bar.get_height()/2,
+             label, va="center", fontsize=9)
+ax5.grid(axis="x", alpha=0.3)
 
-ax6.bar(x_labels, effects, yerr=errors, color=colors_bar, alpha=0.7, capsize=5)
-ax6.axhline(0, color="black", linewidth=1)
-ax6.set_ylabel("限界効果（万円/回）", fontsize=10)
-ax6.set_title("(f) 限界効果の比較", fontsize=11, fontweight="bold")
-ax6.grid(axis="y", alpha=0.3)
+# ---- (f) 施設属性別限界効果
+ax6 = fig.add_subplot(gs[2, :])
+if len(subgroup_df) > 0:
+    x_labels_sub = [f"{row['group']}" for _, row in subgroup_df.iterrows()]
+    x_pos_sub = np.arange(len(subgroup_df))
+    w = 0.35
+    ax6.bar(x_pos_sub - w/2, subgroup_df["beta_mr"],
+            yerr=1.96 * subgroup_df["se_mr"],
+            width=w, label="MR活動", color="#ff7f0e", alpha=0.75, capsize=5)
+    ax6.bar(x_pos_sub + w/2, subgroup_df["beta_digital"],
+            yerr=1.96 * subgroup_df["se_digital"],
+            width=w, label="デジタル視聴", color="#2ca02c", alpha=0.75, capsize=5)
+    ax6.axhline(0, color="black", linewidth=0.8)
+    # 損益分岐点ラインを各グループに表示
+    ax6.set_xticks(x_pos_sub)
+    ax6.set_xticklabels(x_labels_sub, fontsize=9)
+    ax6.set_ylabel("限界効果（万円売上/回）", fontsize=10)
+    ax6.set_title("(f) 施設属性別限界効果（95%CI）", fontsize=11, fontweight="bold")
+    ax6.legend(fontsize=9)
+    ax6.grid(axis="y", alpha=0.3)
+    # UHP/施設区分の境界線
+    if len(subgroup_df) > 1:
+        # group_col が変わる位置に区切り線
+        prev = subgroup_df.iloc[0]["group_col"]
+        for i, row in subgroup_df.iterrows():
+            if row["group_col"] != prev:
+                ax6.axvline(i - 0.5, color="gray", linestyle=":", linewidth=1.5)
+                prev = row["group_col"]
+else:
+    ax6.text(0.5, 0.5, "サブグループデータ不足", ha="center", va="center",
+             transform=ax6.transAxes, fontsize=12, color="gray")
+    ax6.axis("off")
 
-# (g) コスト効率性（売上/コスト比）
-ax7 = fig.add_subplot(gs[2, 2])
-cost_per_effect_mr = COST_ASSUMPTIONS["mr_per_visit"] / beta_mr if beta_mr != 0 else np.inf
-cost_per_effect_digital = COST_ASSUMPTIONS["digital_per_view"] / beta_digital if beta_digital != 0 else np.inf
-
-x_labels2 = ["MR", "デジタル"]
-cost_efficiency = [1/cost_per_effect_mr if cost_per_effect_mr != np.inf else 0,
-                   1/cost_per_effect_digital if cost_per_effect_digital != np.inf else 0]
-
-ax7.bar(x_labels2, cost_efficiency, color=["#ff7f0e", "#2ca02c"], alpha=0.7)
-ax7.set_ylabel("費用対効果（売上/コスト）", fontsize=10)
-ax7.set_title("(g) コスト効率性の比較", fontsize=11, fontweight="bold")
-ax7.grid(axis="y", alpha=0.3)
-
-plt.suptitle("MR vs デジタルバランス分析", fontsize=14, fontweight="bold", y=0.995)
+plt.suptitle("MR vs デジタルバランス分析（損益分岐点コストアプローチ）",
+             fontsize=14, fontweight="bold", y=0.995)
 
 output_png = "mr_digital_balance.png"
 plt.savefig(output_png, dpi=300, bbox_inches="tight")
@@ -587,44 +512,57 @@ plt.close()
 print("\n[結果保存]")
 
 output_json = {
+    "approach": "損益分岐点コストアプローチ（デジタルコストデータなし）",
     "cost_assumptions": COST_ASSUMPTIONS,
     "baseline": BASELINE,
     "current_status": {
-        "mr_count_per_facility_month": float(current_mr_mean),
-        "digital_count_per_facility_month": float(current_digital_mean),
-        "sales_per_facility_month": float(current_sales_mean),
-        "mr_cost": float(current_mr_cost),
-        "digital_cost": float(current_digital_cost),
-        "total_cost": float(current_total_cost),
+        "mr_count_per_facility_month": current_mr_mean,
+        "digital_count_per_facility_month": current_digital_mean,
+        "sales_per_facility_month": current_sales_mean,
+        "n_facilities": n_facilities,
+        "n_months": n_months,
+        "mr_cost_annual": current_mr_cost_annual,
     },
     "marginal_effects": {
-        "mr": {
-            "coefficient": float(beta_mr),
-            "se": float(se_mr),
-            "p": float(p_mr),
-            "sig": sig_mr,
-        },
-        "digital": {
-            "coefficient": float(beta_digital),
-            "se": float(se_digital),
-            "p": float(p_digital),
-            "sig": sig_digital,
-        },
+        "mr": {"coefficient": beta_mr, "se": se_mr, "p": p_mr, "sig": sig_mr},
+        "digital": {"coefficient": beta_digital, "se": se_digital, "p": p_digital, "sig": sig_digital},
     },
-    "scenarios": results_df.to_dict(orient="records"),
-    "cost_efficiency": {
-        "mr_cost_per_effect": float(cost_per_effect_mr) if cost_per_effect_mr != np.inf else None,
-        "digital_cost_per_effect": float(cost_per_effect_digital) if cost_per_effect_digital != np.inf else None,
+    "breakeven_analysis": {
+        "mr_cost_efficiency": mr_cost_efficiency,
+        "breakeven_digital_cost": breakeven_cost,
+        "equivalence_ratio_mr_to_digital": equivalence_ratio,
+        "interpretation": (
+            f"デジタル視聴単価 < {breakeven_cost:.3f}万円/視聴 であれば MR より費用対効果が高い。"
+            f"MR活動1回 = デジタル視聴{equivalence_ratio:.1f}回分の売上インパクト(概算)。"
+        ),
+    },
+    "revenue_neutral_costs": {
+        f"mr_reduction_{int(r*100)}pct": {
+            "mr_savings_annual": r * current_mr_cost_annual,
+            "max_digital_cost_for_neutral": revenue_neutral_costs[r],
+        }
+        for r in mr_reductions
+    },
+    "sensitivity_grid": sensitivity_df.to_dict(orient="records"),
+    "subgroup_effects": subgroup_df.to_dict(orient="records") if len(subgroup_df) > 0 else [],
+    "facility_master_source": {
+        "file": "facility_attribute_修正.csv",
+        "facilities_loaded": len(facility_master),
+        "facility_types": facility_master["facility_type"].value_counts().to_dict(),
+        "uhp_tiers": facility_master["uhp_tier"].value_counts().to_dict(),
     },
     "interpretation": {
         "warning": "MRとデジタルの両方が内生変数であり、結果は相関関係を示す",
-        "recommendation": "シミュレーション結果は参考値として扱い、実際の意思決定では追加的な検証が必要",
+        "recommendation": (
+            "損益分岐点コスト分析により、デジタルコストが不明でも意思決定の閾値を特定できる。"
+            "感度分析ヒートマップで視聴単価ごとの売上変化率を参照し、コスト情報入手後に最適シナリオを選択すること。"
+        ),
     }
 }
 
 output_path = os.path.join(RESULTS_DIR, "mr_digital_balance.json")
 with open(output_path, "w", encoding="utf-8") as f:
-    json.dump(output_json, f, ensure_ascii=False, indent=2)
+    json.dump(output_json, f, ensure_ascii=False, indent=2, default=float)
 
 print(f"  結果を保存: {output_path}")
 
@@ -632,29 +570,31 @@ print(f"  結果を保存: {output_path}")
 # サマリー出力
 # ================================================================
 print("\n" + "=" * 60)
-print(" 分析完了")
+print(" 分析完了 ─ 損益分岐点コストアプローチ")
 print("=" * 60)
 
-print("\n【推奨シナリオ】")
-best_roi_idx = results_df["roi"].idxmax()
-best_scenario = results_df.loc[best_roi_idx]
+print(f"\n【主要結論】")
+print(f"  MR限界効果:     {beta_mr:+.2f}万円/活動（{sig_mr}）")
+print(f"  デジタル限界効果: {beta_digital:+.2f}万円/視聴（{sig_digital}）")
+print(f"  等価交換レート:   MR1回 ~ デジタル{equivalence_ratio:.1f}回")
+print(f"\n【損益分岐点コスト】")
+print(f"  C* = {breakeven_cost:.3f}万円/視聴 = {breakeven_cost*10000:.0f}円/視聴")
+print(f"  → 視聴単価がこれ以下ならデジタルはMRより費用対効果が高い")
 
-print(f"  最高ROIシナリオ: {best_scenario['scenario_name']}")
-print(f"    MR FTE: {best_scenario['mr_fte']:.0f}名")
-print(f"    デジタル予算: {best_scenario['digital_budget']:,.0f}万円")
-print(f"    総コスト: {best_scenario['total_cost']:,.0f}万円 ({best_scenario['cost_change_pct']:+.1f}%)")
-print(f"    売上変化: {best_scenario['sales_change_pct']:+.1f}%")
-print(f"    ROI: {best_scenario['roi']:.2f}")
+print(f"\n【MR削減シミュレーション（売上中立コスト）】")
+for r in mr_reductions:
+    nc = revenue_neutral_costs[r]
+    if np.isfinite(nc):
+        nc_str = f"{nc:.2f}万円/視聴"
+        note = " ← 現実的コスト範囲内で注意" if nc < 20 else " ← 実質的にどのコストでも売上増"
+    else:
+        nc_str = "∞"
+        note = " ← 視聴単価に関係なく売上増"
+    print(f"  MR {int(r*100)}%削減: 売上中立コスト <= {nc_str}{note}")
 
-print("\n【実務的示唆】")
-if beta_mr > beta_digital:
-    print("  [OK] MR活動の限界効果がデジタルより大きい → MR維持を優先")
-else:
-    print("  [OK] デジタル視聴の限界効果がMRより大きい → デジタル強化を検討")
-
-if cost_per_effect_digital < cost_per_effect_mr:
-    print("  [OK] デジタルの費用対効果がMRより高い → デジタルへのシフト余地あり")
-else:
-    print("  [OK] MRの費用対効果がデジタルより高い → MR投資を優先")
+print(f"\n【感度分析サマリー（MR 30%削減時）】")
+sub30 = sensitivity_df[sensitivity_df["mr_reduction_pct"] == 30.0]
+for _, row in sub30.iterrows():
+    print(f"  視聴単価 {row['digital_cost_per_view']:.2f}万円 → 売上変化 {row['delta_sales_pct']:+.1f}%")
 
 print("\n" + "=" * 60)
