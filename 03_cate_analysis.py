@@ -248,47 +248,105 @@ def aggregate_overall(att_gt):
 
 
 def cs_with_bootstrap(panel, n_boot=150, label=""):
-    att_gt = compute_cs_attgt(panel)
+    # ── 1. pivot を1回だけ計算し numpy 配列に変換 ──────────────────────
+    doc_info = panel.groupby("unit_id").agg(
+        {"treated": "first", "cohort_month": "first"}
+    )
+    pivot = panel.pivot_table(
+        values="amount", index="unit_id", columns="month_index", aggfunc="mean"
+    )
+    pivot_np   = pivot.to_numpy(dtype=float)
+    time_cols  = np.asarray(pivot.columns)
+    unit_order = pivot.index
+
+    ctrl_mask = (doc_info.loc[unit_order, "treated"] == 0).values
+    ctrl_np   = pivot_np[ctrl_mask]
+    n_ctrl    = len(ctrl_np)
+    if n_ctrl == 0:
+        return None, None, None, None
+
+    cohorts = sorted(doc_info["cohort_month"].dropna().unique())
+    coh_data = {}
+    for g in cohorts:
+        g    = int(g)
+        base = g - 1
+        if base not in time_cols:
+            continue
+        base_col = int(np.where(time_cols == base)[0][0])
+        cmask    = (doc_info.loc[unit_order, "cohort_month"] == g).values
+        treat_np = pivot_np[cmask]
+        if len(treat_np) == 0:
+            continue
+        coh_data[g] = {"base": base_col, "T": treat_np, "n": len(treat_np)}
+
+    if not coh_data:
+        return None, None, None, None
+
+    # ── 2. 点推定 (ベクトル化) ─────────────────────────────────────────
+    rows = []
+    for g, cd in coh_data.items():
+        b   = cd["base"]
+        dT  = cd["T"]  - cd["T"][:, b:b+1]
+        dC  = ctrl_np  - ctrl_np[:, b:b+1]
+        att = np.nanmean(dT, axis=0) - np.nanmean(dC, axis=0)
+        for ti, t in enumerate(time_cols):
+            rows.append({"cohort": g, "time": int(t), "event_time": int(t) - g,
+                         "att_gt": att[ti], "n_cohort": cd["n"]})
+    att_gt = pd.DataFrame(rows)
     if len(att_gt) == 0:
         return None, None, None, None
+
     dynamic = aggregate_dynamic(att_gt)
-    overall = aggregate_overall(att_gt)
-    doc_data = {uid: grp for uid, grp in panel.groupby("unit_id")}
-    treated_ids = panel.loc[panel["treated"] == 1, "unit_id"].unique()
-    control_ids = panel.loc[panel["treated"] == 0, "unit_id"].unique()
-    boot_overall = []
-    boot_dynamic = {}
+    overall  = aggregate_overall(att_gt)
+
+    # ── 3. ベクトル化ブートストラップ (全 n_boot 回を一括処理) ──────────
     tag = f"[{label}] " if label else ""
-    print(f"    {tag}Bootstrap (n={n_boot}) ...", end="", flush=True)
-    for b in range(n_boot):
-        if (b + 1) % 50 == 0:
-            print(f" {b + 1}", end="", flush=True)
-        bt = np.random.choice(treated_ids, len(treated_ids), replace=True)
-        bc = np.random.choice(control_ids, len(control_ids), replace=True)
-        parts = []
-        for i, uid in enumerate(np.concatenate([bt, bc])):
-            d = doc_data[uid].copy()
-            d["unit_id"] = f"B{i:04d}"
-            parts.append(d)
-        bpanel = pd.concat(parts, ignore_index=True)
-        try:
-            bgt = compute_cs_attgt(bpanel)
-            if len(bgt) == 0:
-                continue
-            boot_overall.append(aggregate_overall(bgt))
-            bdyn = aggregate_dynamic(bgt)
-            for _, row in bdyn.iterrows():
-                et = int(row["event_time"])
-                boot_dynamic.setdefault(et, []).append(row["att"])
-        except Exception:
+    print(f"    {tag}Bootstrap (n={n_boot}, vectorised) ...", end="", flush=True)
+
+    boot_per_gt = {}
+    for g, cd in coh_data.items():
+        b    = cd["base"]
+        n_t  = cd["n"]
+        dT   = cd["T"]  - cd["T"][:, b:b+1]
+        dC   = ctrl_np  - ctrl_np[:, b:b+1]
+        idx_T = np.random.randint(0, n_t,    (n_boot, n_t))
+        idx_C = np.random.randint(0, n_ctrl, (n_boot, n_ctrl))
+        bT    = np.nanmean(dT[idx_T], axis=1)
+        bC    = np.nanmean(dC[idx_C], axis=1)
+        boot_att = bT - bC
+        for ti in range(len(time_cols)):
+            boot_per_gt[(g, ti)] = boot_att[:, ti]
+
+    post_keys = [(g, ti) for g in coh_data
+                 for ti, t in enumerate(time_cols) if int(t) - g >= 0]
+    if post_keys:
+        w    = np.array([coh_data[g]["n"] for g, ti in post_keys], float)
+        w   /= w.sum()
+        mat  = np.stack([boot_per_gt[k] for k in post_keys], axis=1)
+        boot_overall_arr  = (mat * w).sum(1)
+        se_overall        = float(np.std(boot_overall_arr))
+        boot_overall_list = boot_overall_arr.tolist()
+    else:
+        se_overall        = 0.0
+        boot_overall_list = []
+
+    se_dyn_map = {}
+    for et in dynamic["event_time"].values:
+        keys = [(g, ti) for g in coh_data
+                for ti, t in enumerate(time_cols) if int(t) - g == et]
+        if not keys:
+            se_dyn_map[int(et)] = 0.0
             continue
+        w   = np.array([coh_data[g]["n"] for g, ti in keys], float)
+        w  /= w.sum()
+        mat = np.stack([boot_per_gt[k] for k in keys], axis=1)
+        se_dyn_map[int(et)] = float(np.std((mat * w).sum(1)))
+
     print(" done")
-    se_overall = np.std(boot_overall) if boot_overall else 0.0
-    se_dyn_map = {et: np.std(v) for et, v in boot_dynamic.items()}
-    dynamic["se"] = dynamic["event_time"].map(se_dyn_map).fillna(0)
+    dynamic["se"]    = dynamic["event_time"].map(se_dyn_map).fillna(0)
     dynamic["ci_lo"] = dynamic["att"] - 1.96 * dynamic["se"]
     dynamic["ci_hi"] = dynamic["att"] + 1.96 * dynamic["se"]
-    return overall, se_overall, dynamic, boot_overall
+    return overall, se_overall, dynamic, boot_overall_list
 
 
 # ================================================================

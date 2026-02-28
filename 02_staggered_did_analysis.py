@@ -240,109 +240,248 @@ def compute_cs_attgt_dr(pdata, cov_cols):
 
 
 def run_cs_dr_with_bootstrap(panel, cov_cols, n_boot=200, label=""):
-    att_gt = compute_cs_attgt_dr(panel, cov_cols)
+    try:
+        from sklearn.linear_model import LogisticRegression, Ridge
+    except ImportError:
+        return run_cs_with_bootstrap(panel, n_boot=n_boot, label=label)
+
+    # ── 1. Pre-compute once ──────────────────────────────────────────
+    doc_info = panel.groupby("unit_id").agg(
+        {"treated": "first", "cohort_month": "first"}
+    )
+    unit_cov = (
+        panel.groupby("unit_id")[cov_cols].first()
+        if cov_cols else pd.DataFrame(index=doc_info.index)
+    )
+    pivot = panel.pivot_table(
+        values="amount", index="unit_id", columns="month_index", aggfunc="mean"
+    )
+    pivot_np    = np.nan_to_num(pivot.to_numpy(dtype=float), nan=0.0)
+    time_cols   = np.asarray(pivot.columns)
+    n_months    = len(time_cols)
+    unit_order  = list(pivot.index)
+    unit_to_idx = {uid: i for i, uid in enumerate(unit_order)}
+
+    ctrl_ids  = doc_info[doc_info["treated"] == 0].index
+    ctrl_rows = np.array([unit_to_idx[u] for u in ctrl_ids if u in unit_to_idx])
+    n_ctrl    = len(ctrl_rows)
+    if n_ctrl == 0:
+        return None, None, None, None
+
+    cohorts = sorted(doc_info["cohort_month"].dropna().unique())
+    coh_data = {}
+    for g in cohorts:
+        g    = int(g)
+        base = g - 1
+        if base not in time_cols:
+            continue
+        base_col  = int(np.where(time_cols == base)[0][0])
+        cdoc_ids  = list(doc_info[doc_info["cohort_month"] == g].index)
+        treat_rows = np.array([unit_to_idx[u] for u in cdoc_ids if u in unit_to_idx])
+        if len(treat_rows) == 0:
+            continue
+        n_t = len(treat_rows)
+        sample_uids = [unit_order[r] for r in treat_rows] + [unit_order[r] for r in ctrl_rows]
+        X_full = (
+            unit_cov.reindex(sample_uids).fillna(0).values.astype(float)
+            if cov_cols else np.ones((n_t + n_ctrl, 1))
+        )
+        coh_data[g] = {
+            "base_col": base_col, "treat_rows": treat_rows,
+            "n_t": n_t, "X_full": X_full,  # treat 先頭 n_t 行, ctrl 残り
+        }
+
+    if not coh_data:
+        return None, None, None, None
+
+    # ── DR-ATT helper: multi-output Ridge で全月一括計算 ─────────────
+    def _dr_att_vec(pv, X_cov, n_t, n_c, base_col):
+        """pv: (n_t+n_c, n_months). Returns att: (n_months,)."""
+        t_mask = np.arange(n_t + n_c) < n_t
+        c_mask = ~t_mask
+        dY = pv - pv[:, base_col:base_col + 1]   # (n_sample, n_months)
+        D  = t_mask.astype(int)
+
+        if n_t >= 2 and n_c >= 2:
+            try:
+                ps = LogisticRegression(
+                    C=1.0, max_iter=500, solver="lbfgs", random_state=0
+                ).fit(X_cov, D).predict_proba(X_cov)[:, 1]
+            except Exception:
+                ps = np.full(n_t + n_c, n_t / (n_t + n_c))
+        else:
+            ps = np.full(n_t + n_c, n_t / (n_t + n_c))
+        ps  = np.clip(ps, 0.025, 0.975)
+        ipw = ps / (1.0 - ps)
+        w_c = ipw[c_mask]   # (n_ctrl,)
+
+        # multi-output Ridge: 1 fit で全 n_months 分のアウトカム回帰
+        try:
+            m_hat = Ridge(alpha=1.0).fit(X_cov[c_mask], dY[c_mask]).predict(X_cov)
+        except Exception:
+            m_hat = np.tile(dY[c_mask].mean(axis=0), (n_t + n_c, 1))
+
+        resid = dY - m_hat                                   # (n_sample, n_months)
+        tp    = resid[t_mask].mean(axis=0)                   # (n_months,)
+        w_sum = w_c.sum()
+        cp    = ((w_c[:, None] * resid[c_mask]).sum(0) / w_sum
+                 if w_sum > 0 else np.zeros(n_months))
+        return tp - cp
+
+    # ── 2. 点推定 ────────────────────────────────────────────────────
+    rows = []
+    for g, cd in coh_data.items():
+        pv  = pivot_np[np.concatenate([cd["treat_rows"], ctrl_rows])]
+        att = _dr_att_vec(pv, cd["X_full"], cd["n_t"], n_ctrl, cd["base_col"])
+        for ti, t in enumerate(time_cols):
+            rows.append({"cohort": g, "time": int(t), "event_time": int(t) - g,
+                         "att_gt": att[ti], "n_cohort": cd["n_t"]})
+
+    att_gt = pd.DataFrame(rows)
     if len(att_gt) == 0:
         return None, None, None, None
 
     dynamic = aggregate_dynamic(att_gt)
-    overall = aggregate_overall(att_gt)
+    overall  = aggregate_overall(att_gt)
 
-    doc_data = {uid: grp for uid, grp in panel.groupby("unit_id")}
-    treated_ids = panel.loc[panel["treated"] == 1, "unit_id"].unique()
-    control_ids = panel.loc[panel["treated"] == 0, "unit_id"].unique()
+    # ── 3. Bootstrap (DataFrame再構築・pivot_table再計算を排除) ───────
+    tag = f"[{label}] " if label else ""
+    print(f"  {tag}Bootstrap DR (n={n_boot}) ...", end="", flush=True)
 
     boot_overall = []
     boot_dynamic = {}
 
-    tag = f"[{label}] " if label else ""
-    print(f"  {tag}Bootstrap DR (n={n_boot}) ...", end="", flush=True)
-
     for b in range(n_boot):
         if (b + 1) % 50 == 0:
             print(f" {b + 1}", end="", flush=True)
-        bt = np.random.choice(treated_ids, len(treated_ids), replace=True)
-        bc = np.random.choice(control_ids, len(control_ids), replace=True)
-        parts = []
-        for i, uid in enumerate(np.concatenate([bt, bc])):
-            d = doc_data[uid].copy()
-            d["unit_id"] = f"B{i:04d}"
-            parts.append(d)
-        bpanel = pd.concat(parts, ignore_index=True)
-        try:
-            bgt = compute_cs_attgt_dr(bpanel, cov_cols)
-            if len(bgt) == 0:
-                continue
-            boot_overall.append(aggregate_overall(bgt))
-            bdyn = aggregate_dynamic(bgt)
-            for _, row in bdyn.iterrows():
-                et = int(row["event_time"])
-                boot_dynamic.setdefault(et, []).append(row["att"])
-        except Exception:
+
+        boot_att_rows = []
+        for g, cd in coh_data.items():
+            n_t   = cd["n_t"]
+            idx_t = np.random.randint(0, n_t,    n_t)
+            idx_c = np.random.randint(0, n_ctrl, n_ctrl)
+            pv    = pivot_np[np.concatenate([cd["treat_rows"][idx_t], ctrl_rows[idx_c]])]
+            X_b   = np.vstack([cd["X_full"][:n_t][idx_t], cd["X_full"][n_t:][idx_c]])
+            att   = _dr_att_vec(pv, X_b, n_t, n_ctrl, cd["base_col"])
+            for ti, t in enumerate(time_cols):
+                boot_att_rows.append({"cohort": g, "time": int(t), "event_time": int(t) - g,
+                                      "att_gt": att[ti], "n_cohort": n_t})
+
+        bgt = pd.DataFrame(boot_att_rows)
+        if len(bgt) == 0:
             continue
+        boot_overall.append(aggregate_overall(bgt))
+        bdyn = aggregate_dynamic(bgt)
+        for _, row in bdyn.iterrows():
+            et = int(row["event_time"])
+            boot_dynamic.setdefault(et, []).append(row["att"])
 
     print(" done")
 
     se_overall = np.std(boot_overall) if boot_overall else 0.0
     se_dyn_map = {et: np.std(v) for et, v in boot_dynamic.items()}
-    dynamic["se"] = dynamic["event_time"].map(se_dyn_map).fillna(0)
+    dynamic["se"]    = dynamic["event_time"].map(se_dyn_map).fillna(0)
     dynamic["ci_lo"] = dynamic["att"] - 1.96 * dynamic["se"]
     dynamic["ci_hi"] = dynamic["att"] + 1.96 * dynamic["se"]
     return att_gt, dynamic, overall, se_overall
 
 
 def run_cs_with_bootstrap(panel, n_boot=200, label=""):
-    att_gt = compute_cs_attgt(panel)
+    # ── 1. pivot を1回だけ計算し numpy 配列に変換 ──────────────────────
+    doc_info = panel.groupby("unit_id").agg(
+        {"treated": "first", "cohort_month": "first"}
+    )
+    pivot = panel.pivot_table(
+        values="amount", index="unit_id", columns="month_index", aggfunc="mean"
+    )
+    pivot_np   = pivot.to_numpy(dtype=float)
+    time_cols  = np.asarray(pivot.columns)
+    unit_order = pivot.index
+
+    ctrl_mask = (doc_info.loc[unit_order, "treated"] == 0).values
+    ctrl_np   = pivot_np[ctrl_mask]
+    n_ctrl    = len(ctrl_np)
+    if n_ctrl == 0:
+        return None, None, None, None
+
+    cohorts = sorted(doc_info["cohort_month"].dropna().unique())
+    coh_data = {}
+    for g in cohorts:
+        g    = int(g)
+        base = g - 1
+        if base not in time_cols:
+            continue
+        base_col = int(np.where(time_cols == base)[0][0])
+        cmask    = (doc_info.loc[unit_order, "cohort_month"] == g).values
+        treat_np = pivot_np[cmask]
+        if len(treat_np) == 0:
+            continue
+        coh_data[g] = {"base": base_col, "T": treat_np, "n": len(treat_np)}
+
+    if not coh_data:
+        return None, None, None, None
+
+    # ── 2. 点推定 (ベクトル化) ─────────────────────────────────────────
+    rows = []
+    for g, cd in coh_data.items():
+        b   = cd["base"]
+        dT  = cd["T"]  - cd["T"][:, b:b+1]
+        dC  = ctrl_np  - ctrl_np[:, b:b+1]
+        att = np.nanmean(dT, axis=0) - np.nanmean(dC, axis=0)
+        for ti, t in enumerate(time_cols):
+            rows.append({"cohort": g, "time": int(t), "event_time": int(t) - g,
+                         "att_gt": att[ti], "n_cohort": cd["n"]})
+    att_gt = pd.DataFrame(rows)
     if len(att_gt) == 0:
         return None, None, None, None
 
     dynamic = aggregate_dynamic(att_gt)
-    overall = aggregate_overall(att_gt)
+    overall  = aggregate_overall(att_gt)
 
-    doc_data = {uid: grp for uid, grp in panel.groupby("unit_id")}
-    treated_ids = panel.loc[panel["treated"] == 1, "unit_id"].unique()
-    control_ids = panel.loc[panel["treated"] == 0, "unit_id"].unique()
-
-    boot_overall = []
-    boot_dynamic = {}
-
+    # ── 3. ベクトル化ブートストラップ (全 n_boot 回を一括処理) ──────────
     tag = f"[{label}] " if label else ""
-    print(f"  {tag}Bootstrap (n={n_boot}) ...", end="", flush=True)
+    print(f"  {tag}Bootstrap (n={n_boot}, vectorised) ...", end="", flush=True)
 
-    for b in range(n_boot):
-        if (b + 1) % 50 == 0:
-            print(f" {b + 1}", end="", flush=True)
+    boot_per_gt = {}
+    for g, cd in coh_data.items():
+        b    = cd["base"]
+        n_t  = cd["n"]
+        dT   = cd["T"]  - cd["T"][:, b:b+1]
+        dC   = ctrl_np  - ctrl_np[:, b:b+1]
+        idx_T = np.random.randint(0, n_t,    (n_boot, n_t))
+        idx_C = np.random.randint(0, n_ctrl, (n_boot, n_ctrl))
+        bT    = np.nanmean(dT[idx_T], axis=1)
+        bC    = np.nanmean(dC[idx_C], axis=1)
+        boot_att = bT - bC
+        for ti in range(len(time_cols)):
+            boot_per_gt[(g, ti)] = boot_att[:, ti]
 
-        bt = np.random.choice(treated_ids, len(treated_ids), replace=True)
-        bc = np.random.choice(control_ids, len(control_ids), replace=True)
+    post_keys = [(g, ti) for g in coh_data
+                 for ti, t in enumerate(time_cols) if int(t) - g >= 0]
+    if post_keys:
+        w   = np.array([coh_data[g]["n"] for g, ti in post_keys], float)
+        w  /= w.sum()
+        mat = np.stack([boot_per_gt[k] for k in post_keys], axis=1)
+        se_overall = float(np.std((mat * w).sum(1)))
+    else:
+        se_overall = 0.0
 
-        parts = []
-        for i, uid in enumerate(np.concatenate([bt, bc])):
-            d = doc_data[uid].copy()
-            d["unit_id"] = f"B{i:04d}"
-            parts.append(d)
-        bpanel = pd.concat(parts, ignore_index=True)
-
-        try:
-            bgt = compute_cs_attgt(bpanel)
-            if len(bgt) == 0:
-                continue
-            boot_overall.append(aggregate_overall(bgt))
-            bdyn = aggregate_dynamic(bgt)
-            for _, row in bdyn.iterrows():
-                et = int(row["event_time"])
-                boot_dynamic.setdefault(et, []).append(row["att"])
-        except Exception:
+    se_dyn_map = {}
+    for et in dynamic["event_time"].values:
+        keys = [(g, ti) for g in coh_data
+                for ti, t in enumerate(time_cols) if int(t) - g == et]
+        if not keys:
+            se_dyn_map[int(et)] = 0.0
             continue
+        w   = np.array([coh_data[g]["n"] for g, ti in keys], float)
+        w  /= w.sum()
+        mat = np.stack([boot_per_gt[k] for k in keys], axis=1)
+        se_dyn_map[int(et)] = float(np.std((mat * w).sum(1)))
 
     print(" done")
-
-    se_overall = np.std(boot_overall) if boot_overall else 0.0
-    se_dyn_map = {et: np.std(v) for et, v in boot_dynamic.items()}
-
-    dynamic["se"] = dynamic["event_time"].map(se_dyn_map).fillna(0)
+    dynamic["se"]    = dynamic["event_time"].map(se_dyn_map).fillna(0)
     dynamic["ci_lo"] = dynamic["att"] - 1.96 * dynamic["se"]
     dynamic["ci_hi"] = dynamic["att"] + 1.96 * dynamic["se"]
-
     return att_gt, dynamic, overall, se_overall
 
 
