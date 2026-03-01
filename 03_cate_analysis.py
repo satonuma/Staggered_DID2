@@ -63,6 +63,7 @@ START_DATE = "2023-04-01"
 N_MONTHS = 33
 WASHOUT_MONTHS = 2
 LAST_ELIGIBLE_MONTH = 29
+BASELINE_START_MONTH_IDX = -12  # 解析開始前のベースライン期間開始 (2022/4 = month_index -12)
 MIN_ET, MAX_ET = -6, 18
 
 # DGPの真のmodifier (サンプルデータ用。本番データでは参照されないが定義は残す)
@@ -661,14 +662,20 @@ panel["treated"] = panel["cohort_month"].notna().astype(int)
 # ================================================================
 print("\n[属性のマージ]")
 
-# ベースライン納入額 (wash-out期間の平均)
-baseline = panel[panel["month_index"] < WASHOUT_MONTHS].groupby("unit_id")["amount"].mean().reset_index()
-baseline.columns = ["unit_id", "baseline_amount"]
+# ベースライン納入額 (解析開始前 BASELINE_START_MONTH_IDX 〜 -1 の平均: 例 2022/4-2023/3)
+_bline_raw = (
+    daily_target[daily_target["month_index"].isin(range(BASELINE_START_MONTH_IDX, 0))]
+    .groupby("facility_id")["amount"].mean().reset_index()
+)
+_bline_raw.columns = ["unit_id", "baseline_amount"]
+_all_units = pd.DataFrame({"unit_id": sorted(analysis_fac_ids)})
+baseline = _all_units.merge(_bline_raw, on="unit_id", how="left").fillna({"baseline_amount": 0.0})
 _bc_result, _bc_levels = _baseline_4cat(baseline["baseline_amount"])
 baseline["baseline_cat"] = _bc_result
 CATE_DIMS[0] = ("baseline_cat", _bc_levels)  # 実際のカテゴリ数に合わせてlevelsを更新
 panel = panel.merge(baseline[["unit_id", "baseline_cat"]], on="unit_id", how="left")
-print(f"  baseline_cat: wash-out期間平均から4カテゴリ (0以下/低/中/高) → {_bc_levels}")
+_n_bline_months = abs(BASELINE_START_MONTH_IDX)
+print(f"  baseline_cat: 解析前{_n_bline_months}ヶ月平均から4カテゴリ (0以下/低/中/高) → {_bc_levels}")
 
 # 属性ファイルの読み込み・カテゴリ化・マージ
 _attr_configs = [
