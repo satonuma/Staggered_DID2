@@ -664,7 +664,7 @@ print("\n[属性のマージ]")
 
 # ベースライン納入額 (解析開始前 BASELINE_START_MONTH_IDX 〜 -1 の平均: 例 2022/4-2023/3)
 _bline_raw = (
-    daily_target[daily_target["month_index"].isin(range(BASELINE_START_MONTH_IDX, 0))]
+    daily_target[daily_target["month_index"].isin(range(BASELINE_START_MONTH_IDX, WASHOUT_MONTHS))]
     .groupby("facility_id")["amount"].mean().reset_index()
 )
 _bline_raw.columns = ["unit_id", "baseline_amount"]
@@ -674,8 +674,8 @@ _bc_result, _bc_levels = _baseline_4cat(baseline["baseline_amount"])
 baseline["baseline_cat"] = _bc_result
 CATE_DIMS[0] = ("baseline_cat", _bc_levels)  # 実際のカテゴリ数に合わせてlevelsを更新
 panel = panel.merge(baseline[["unit_id", "baseline_cat"]], on="unit_id", how="left")
-_n_bline_months = abs(BASELINE_START_MONTH_IDX)
-print(f"  baseline_cat: 解析前{_n_bline_months}ヶ月平均から4カテゴリ (0以下/低/中/高) → {_bc_levels}")
+_n_bline_months = WASHOUT_MONTHS - BASELINE_START_MONTH_IDX
+print(f"  baseline_cat: 前処置期間{_n_bline_months}ヶ月平均から4カテゴリ (0以下/低/中/高) → {_bc_levels}")
 
 # 属性ファイルの読み込み・カテゴリ化・マージ
 _attr_configs = [

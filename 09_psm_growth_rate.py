@@ -408,7 +408,7 @@ unit_df = unit_df.merge(fac_df2[["facility_id"] + fac_cols], on="facility_id", h
 
 # ベースライン納入額カテゴリ: 解析開始前 BASELINE_START_MONTH_IDX〜-1 の施設月平均（例 2022/4-2023/3）
 _bline_fac = (
-    daily_target[daily_target["month_index"].isin(range(BASELINE_START_MONTH_IDX, 0))]
+    daily_target[daily_target["month_index"].isin(range(BASELINE_START_MONTH_IDX, WASHOUT_MONTHS))]
     .groupby("facility_id")["amount"].mean().reset_index()
     .rename(columns={"amount": "baseline_mean"})
 )
@@ -416,8 +416,8 @@ unit_df = unit_df.merge(_bline_fac, on="facility_id", how="left")
 unit_df["baseline_mean"] = unit_df["baseline_mean"].fillna(0.0)
 _bc_result, _bc_levels = _baseline_4cat(unit_df["baseline_mean"])
 unit_df["baseline_cat"] = _bc_result
-_n_bline_months = abs(BASELINE_START_MONTH_IDX)
-print(f"  baseline_cat: 解析前{_n_bline_months}ヶ月平均から4カテゴリ → " + str(_bc_levels))
+_n_bline_months = WASHOUT_MONTHS - BASELINE_START_MONTH_IDX
+print(f"  baseline_cat: 前処置期間{_n_bline_months}ヶ月平均から4カテゴリ → " + str(_bc_levels))
 print("  doctor_attribute 読み込み済みカラム: " + str(attr_cols_to_merge))
 
 # ===================================================================
