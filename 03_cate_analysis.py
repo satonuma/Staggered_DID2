@@ -104,20 +104,95 @@ FACILITY_ATTR_SELECTED: list = [    # ← 分析したいカラム名をここ�
 ]
 
 # 連続値カラムのカテゴリ化設定
-#   指定なし       → 自動で3分位（低 / 中 / 高）
-#   "bins"         → pd.cut の境界値と labels を明示
+#   指定なし  → 自動でN数ベース4分位（"最小~最大 単位" 形式ラベル）
+#   "bins"    → pd.cut の境界値と labels を明示（特定の自然な閾値がある場合のみ使用）
 #   "method":"median" → 中央値で2分割
 CONTINUOUS_BINS: dict = {
-    "年齢":         {"bins": [0, 35, 50, 200],    "labels": ["35歳未満", "35-50歳", "50歳以上"]},
-    "卒業時年齢":   {"bins": [0, 27, 30, 100],    "labels": ["27歳未満", "27-30歳", "30歳以上"]},
-    "医師歴":       {"bins": [0, 10, 20, 100],    "labels": ["10年未満", "10-20年", "20年以上"]},
-    "許可病床数_合計": {"bins": [-1, 19, 199, 10000], "labels": ["20床未満", "20-199床", "200床以上"]},
+    # 自然な閾値がない変数は空にして自動4分位に任せる
+    # 例: "許可病床数_合計": {"bins": [-1, 19, 199, 10000], "labels": ["20床未満", "20-199床", "200床以上"]},
 }
+
+# 自動分位数（CONTINUOUS_BINS 未指定の連続変数に適用）
+N_AUTO_BINS = 4   # 分位数
 
 
 # ================================================================
 # 属性ファイル読み込み・カテゴリ化ユーティリティ
 # ================================================================
+
+def _infer_unit(col_name):
+    """カラム名から値の単位文字列を推定"""
+    if col_name in ("年齢", "卒業時年齢") or "歳" in col_name:
+        return "歳"
+    if col_name in ("医師歴",) or ("歴" in col_name and "年" not in col_name):
+        return "年"
+    if "床" in col_name:
+        return "床"
+    return ""
+
+
+def _auto_range_labels(series, q=4, col_name=""):
+    """連続変数をN数ベースのq分位でカテゴリ化し '最小~最大 単位' 形式ラベルを生成。
+    不明以外で最大 q カテゴリを作成する。
+    Returns (Categorical Series, levels_list)
+    """
+    unit = _infer_unit(col_name)
+    s = series.dropna()
+    if len(s) == 0:
+        return pd.Categorical([pd.NA] * len(series)), []
+
+    n_unique = s.nunique()
+    actual_q = min(q, n_unique)
+
+    if actual_q == 1:
+        label = f"{int(round(s.iloc[0]))}{unit}"
+        result = pd.Categorical(
+            series.where(series.isna(), label), categories=[label]
+        )
+        return result, [label]
+
+    try:
+        _, bins = pd.qcut(s, q=actual_q, retbins=True, duplicates="drop")
+        labels = []
+        for i in range(len(bins) - 1):
+            lo = int(round(bins[i]))
+            hi = int(round(bins[i + 1]))
+            labels.append(f"{lo}~{hi}{unit}")
+        bins_cut = bins.copy()
+        bins_cut[0] = bins_cut[0] - 0.001
+        result = pd.cut(series, bins=bins_cut, labels=labels)
+        return result, list(labels)
+    except Exception:
+        med = s.median()
+        lo_label = f"{int(round(s.min()))}~{int(round(med))}{unit}"
+        hi_label = f"{int(round(med))+1}~{int(round(s.max()))}{unit}"
+        result = pd.cut(series, bins=[s.min() - 0.001, med, s.max()],
+                        labels=[lo_label, hi_label])
+        return result, [lo_label, hi_label]
+
+
+def _baseline_4cat(series):
+    """ベースライン納入額を '0以下' / '低' / '中' / '高' の4カテゴリに分類。
+    0以下: <= 0 (ゼロ・マイナス)
+    低/中/高: 正の値の3等分位
+    """
+    positive = series[series > 0]
+    if len(positive) == 0:
+        cat = pd.Categorical(["0以下"] * len(series), categories=["0以下"])
+        return pd.Series(cat, index=series.index), ["0以下"]
+
+    q33 = positive.quantile(1 / 3)
+    q67 = positive.quantile(2 / 3)
+    if q33 == q67:
+        bins   = [-np.inf, 0, q67, np.inf]
+        levels = ["0以下", "低", "高"]
+    else:
+        bins   = [-np.inf, 0, q33, q67, np.inf]
+        levels = ["0以下", "低", "中", "高"]
+
+    result = pd.cut(series, bins=bins, labels=levels, include_lowest=True)
+    return result, levels
+
 
 def _safe_qcut(series, q=3, labels=("低", "中", "高")):
     """重複binエッジ（ゼロ多数など）があっても動作するqcut。
@@ -182,9 +257,9 @@ def _show_and_bin(df, col, continuous_bins):
         levels = labels
         print(f"      → 中央値({med:.1f})で2分割: {levels}")
     else:
-        result, levels = _safe_qcut(df[col], q=3, labels=("低", "中", "高"))
+        result, levels = _auto_range_labels(df[col], q=N_AUTO_BINS, col_name=col)
         df[new_col] = result
-        print(f"      → 自動3分位でカテゴリ化: {levels}")
+        print(f"      → 自動{N_AUTO_BINS}分位でカテゴリ化: {levels}")
 
     # NaN（元の欠損値 + bins範囲外）を"不明"カテゴリとして扱う
     n_null = df[new_col].isna().sum()
@@ -589,11 +664,11 @@ print("\n[属性のマージ]")
 # ベースライン納入額 (wash-out期間の平均)
 baseline = panel[panel["month_index"] < WASHOUT_MONTHS].groupby("unit_id")["amount"].mean().reset_index()
 baseline.columns = ["unit_id", "baseline_amount"]
-_bc_result, _bc_levels = _safe_qcut(baseline["baseline_amount"], q=3, labels=("低", "中", "高"))
+_bc_result, _bc_levels = _baseline_4cat(baseline["baseline_amount"])
 baseline["baseline_cat"] = _bc_result
-CATE_DIMS[0] = ("baseline_cat", _bc_levels)  # 実際のbin数に合わせてlevelsを更新
+CATE_DIMS[0] = ("baseline_cat", _bc_levels)  # 実際のカテゴリ数に合わせてlevelsを更新
 panel = panel.merge(baseline[["unit_id", "baseline_cat"]], on="unit_id", how="left")
-print(f"  baseline_cat: wash-out期間平均から3分位 → {_bc_levels}")
+print(f"  baseline_cat: wash-out期間平均から4カテゴリ (0以下/低/中/高) → {_bc_levels}")
 
 # 属性ファイルの読み込み・カテゴリ化・マージ
 _attr_configs = [

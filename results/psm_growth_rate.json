@@ -4,7 +4,8 @@
     "post_period": "month 12-32 (21ヶ月)",
     "outcome": "後期月平均 - 前期月平均（万円）",
     "caliper": 0.18098281027116556,
-    "matching": "1:1 nearest-neighbor within caliper"
+    "matching": "1:1 nearest-neighbor within caliper",
+    "n_subgroup_dimensions": 9
   },
   "sample_sizes": {
     "washout_excluded": 2,
@@ -22,56 +23,240 @@
   },
   "subgroup_att": [
     {
-      "subgroup": "若手",
-      "n_treated_raw": 8,
-      "n_control_raw": 17,
-      "n_matched": 8,
-      "att": 17.06845238095238,
-      "se": 8.921392637351065,
-      "p_value": 0.09729773372315842,
-      "ci_95_lower": -0.41747718825570956,
-      "ci_95_upper": 34.55438195016047
-    },
-    {
-      "subgroup": "中堅",
+      "dimension": "医師歴区分",
+      "level": "中堅",
       "n_treated_raw": 17,
       "n_control_raw": 9,
-      "n_matched": 9,
-      "att": 25.453703703703713,
-      "se": 4.2429724281841175,
-      "p_value": 0.00032374429800752225,
-      "ci_95_lower": 17.137477744462842,
-      "ci_95_upper": 33.769929662944584
+      "n_matched": 4,
+      "att": 14.964285714285744,
+      "se": 11.268598414728713,
+      "p_value": 0.27618603990530044,
+      "ci_95_lower": -7.122167178582533,
+      "ci_95_upper": 37.05073860715402
     },
     {
-      "subgroup": "ベテラン",
+      "dimension": "医師歴区分",
+      "level": "若手",
+      "n_treated_raw": 8,
+      "n_control_raw": 17,
+      "n_matched": 4,
+      "att": 6.583333333333332,
+      "se": 10.221102141970738,
+      "p_value": 0.5653723736576739,
+      "ci_95_lower": -13.450026864929313,
+      "ci_95_upper": 26.616693531595978
+    },
+    {
+      "dimension": "医師歴区分",
+      "level": "ベテラン",
       "n_treated_raw": 23,
       "n_control_raw": 19,
-      "n_matched": 19,
-      "att": 23.970551378446117,
-      "se": 3.0884021608576946,
-      "p_value": 3.761244169453448e-07,
-      "ci_95_lower": 17.917283143165037,
-      "ci_95_upper": 30.0238196137272
-    }
-  ],
-  "covariate_balance_smd": [
-    {
-      "変数": "前期売上",
-      "SMD_before": -0.04705565436050211,
-      "SMD_after": -0.11334691548613979
+      "n_matched": 7,
+      "att": 14.778911564625849,
+      "se": 4.272619191227359,
+      "p_value": 0.013484058406259436,
+      "ci_95_lower": 6.404577949820226,
+      "ci_95_upper": 23.153245179431472
     },
     {
-      "変数": "医師歴(年)",
-      "SMD_before": 0.4922848999448385,
-      "SMD_after": -0.5580497649589222
+      "dimension": "ベースライン納入額",
+      "level": "高",
+      "n_treated_raw": 15,
+      "n_control_raw": 16,
+      "n_matched": 2,
+      "att": 63.97023809523809,
+      "se": 35.01441257554101,
+      "p_value": 0.3188255655700536,
+      "ci_95_lower": -4.65801055282229,
+      "ci_95_upper": 132.59848674329845
+    },
+    {
+      "dimension": "ベースライン納入額",
+      "level": "低",
+      "n_treated_raw": 16,
+      "n_control_raw": 15,
+      "n_matched": 3,
+      "att": 14.388888888888891,
+      "se": 6.378504657012334,
+      "p_value": 0.1527305947469848,
+      "ci_95_lower": 1.8870197611447175,
+      "ci_95_upper": 26.890758016633065
+    },
+    {
+      "dimension": "ベースライン納入額",
+      "level": "中",
+      "n_treated_raw": 17,
+      "n_control_raw": 14,
+      "n_matched": 2,
+      "att": 18.696428571428577,
+      "se": 16.116142054543392,
+      "p_value": 0.45290025486538354,
+      "ci_95_lower": -12.891209855476472,
+      "ci_95_upper": 50.28406699833363
+    },
+    {
+      "dimension": "年齢",
+      "level": "25~34歳",
+      "n_treated_raw": 8,
+      "n_control_raw": 17,
+      "n_matched": 4,
+      "att": 6.583333333333332,
+      "se": 10.221102141970738,
+      "p_value": 0.5653723736576739,
+      "ci_95_lower": -13.450026864929313,
+      "ci_95_upper": 26.616693531595978
+    },
+    {
+      "dimension": "年齢",
+      "level": "34~43歳",
+      "n_treated_raw": 14,
+      "n_control_raw": 9,
+      "n_matched": 4,
+      "att": 2.3214285714285907,
+      "se": 12.736783699725983,
+      "p_value": 0.8669977443287418,
+      "ci_95_lower": -22.642667480034337,
+      "ci_95_upper": 27.28552462289152
+    },
+    {
+      "dimension": "年齢",
+      "level": "43~50歳",
+      "n_treated_raw": 10,
+      "n_control_raw": 12,
+      "n_matched": 3,
+      "att": -6.0,
+      "se": 13.950404585811679,
+      "p_value": 0.7090351415087048,
+      "ci_95_lower": -33.342792988190894,
+      "ci_95_upper": 21.34279298819089
+    },
+    {
+      "dimension": "年齢",
+      "level": "50~59歳",
+      "n_treated_raw": 16,
+      "n_control_raw": 7,
+      "n_matched": 3,
+      "att": 24.32142857142857,
+      "se": 1.7358741334862475,
+      "p_value": 0.005055396911100907,
+      "ci_95_lower": 20.919115269795526,
+      "ci_95_upper": 27.723741873061613
+    },
+    {
+      "dimension": "デジタルチャネル選好",
+      "level": "マルチ",
+      "n_treated_raw": 34,
+      "n_control_raw": 8,
+      "n_matched": 3,
+      "att": 50.293650793650805,
+      "se": 27.94682818785196,
+      "p_value": 0.21372984189623478,
+      "ci_95_lower": -4.482132454539034,
+      "ci_95_upper": 105.06943404184065
+    },
+    {
+      "dimension": "デジタルチャネル選好",
+      "level": "なし",
+      "n_treated_raw": 0,
+      "n_control_raw": 32,
+      "n_matched": 0,
+      "att": null,
+      "se": null,
+      "p_value": null,
+      "ci_95_lower": null,
+      "ci_95_upper": null
+    },
+    {
+      "dimension": "デジタルチャネル選好",
+      "level": "Web講演会",
+      "n_treated_raw": 5,
+      "n_control_raw": 1,
+      "n_matched": 0,
+      "att": null,
+      "se": null,
+      "p_value": null,
+      "ci_95_lower": null,
+      "ci_95_upper": null
+    },
+    {
+      "dimension": "デジタルチャネル選好",
+      "level": "webiner",
+      "n_treated_raw": 7,
+      "n_control_raw": 2,
+      "n_matched": 0,
+      "att": null,
+      "se": null,
+      "p_value": null,
+      "ci_95_lower": null,
+      "ci_95_upper": null
+    },
+    {
+      "dimension": "デジタルチャネル選好",
+      "level": "e_contents",
+      "n_treated_raw": 2,
+      "n_control_raw": 2,
+      "n_matched": 0,
+      "att": null,
+      "se": null,
+      "p_value": null,
+      "ci_95_lower": null,
+      "ci_95_upper": null
+    },
+    {
+      "dimension": "医師セグメント",
+      "level": "Maintenance",
+      "n_treated_raw": 7,
+      "n_control_raw": 4,
+      "n_matched": 2,
+      "att": 50.82738095238095,
+      "se": 18.153283019390344,
+      "p_value": 0.21838300949590095,
+      "ci_95_lower": 15.246946234375876,
+      "ci_95_upper": 86.40781567038601
+    },
+    {
+      "dimension": "医師セグメント",
+      "level": "Potential",
+      "n_treated_raw": 20,
+      "n_control_raw": 9,
+      "n_matched": 2,
+      "att": 60.89880952380953,
+      "se": 27.724478379022564,
+      "p_value": 0.27197368119071696,
+      "ci_95_lower": 6.5588319009253055,
+      "ci_95_upper": 115.23878714669377
+    },
+    {
+      "dimension": "医師セグメント",
+      "level": "Key Account",
+      "n_treated_raw": 21,
+      "n_control_raw": 13,
+      "n_matched": 3,
+      "att": 18.56746031746032,
+      "se": 5.440493074584308,
+      "p_value": 0.07617545277324744,
+      "ci_95_lower": 7.9040938912750764,
+      "ci_95_upper": 29.230826743645565
+    },
+    {
+      "dimension": "医師セグメント",
+      "level": "Non-Target",
+      "n_treated_raw": 0,
+      "n_control_raw": 19,
+      "n_matched": 0,
+      "att": null,
+      "se": null,
+      "p_value": null,
+      "ci_95_lower": null,
+      "ci_95_upper": null
     }
   ],
-  "washout_excluded_by_experience": {
-    "若手": 1,
-    "中堅": 1,
-    "ベテラン": 0
-  },
+  "baseline_cat_levels": [
+    "0以下",
+    "低",
+    "中",
+    "高"
+  ],
   "interpretation": {
     "note": "PSMはobservable confoundersのみ調整。未観測交絡は残る。",
     "att_definition": "視聴群の（後期-前期）成長率 と 対照群の（後期-前期）成長率 の差"

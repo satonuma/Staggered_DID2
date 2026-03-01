@@ -605,7 +605,8 @@ png_files = [
     "propensity_score_analysis.png",
     "mr_activity_mediation.png",
     "mr_digital_balance.png",
-    "psm_growth_rate.png"
+    "psm_growth_rate.png",
+    "psm_subgroup_forest.png"
 ]
 for name in png_files:
     path = os.path.join(SCRIPT_DIR, name)
@@ -2207,7 +2208,7 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
   <tr><td>後期</td><td>{{ psm_results.analysis_settings.post_period }}</td></tr>
   <tr><td>アウトカム</td><td>{{ psm_results.analysis_settings.outcome }}</td></tr>
   <tr><td>マッチング手法</td><td>{{ psm_results.analysis_settings.matching }}</td></tr>
-  <tr><td>キャリパー (logit PS SD 単位)</td><td>{{ "%.4f"|format(psm_results.analysis_settings.caliper) }}</td></tr>
+  <tr><td>キャリパー (logit PS SD 単位)</td><td>{% if psm_results.analysis_settings.caliper is not none %}{{ "%.4f"|format(psm_results.analysis_settings.caliper) }}{% else %}なし（最近傍のみ）{% endif %}</td></tr>
 </table>
 
 <h3>サンプルサイズ</h3>
@@ -2238,21 +2239,24 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
   <strong>{{ "+%.1f"|format(att.att) if att.att >= 0 else "%.1f"|format(att.att) }} 万円</strong> 多い。
 </p>
 
-<h3>医師歴別サブグループ ATT</h3>
+<h3>サブグループ別 ATT</h3>
+{% set dimensions = psm_results.subgroup_att | map(attribute='dimension') | unique | list %}
+{% for dim in dimensions %}
+<h4 style="margin-top:16px;">{{ dim }}</h4>
 <table>
   <tr>
-    <th>医師歴区分</th>
-    <th>視聴群N（全体）</th>
-    <th>未視聴群N（全体）</th>
+    <th>カテゴリ</th>
+    <th>視聴群N</th>
+    <th>未視聴群N</th>
     <th>マッチ数</th>
     <th>ATT（万円/月）</th>
     <th>SE</th>
     <th>p値</th>
     <th>95% CI</th>
   </tr>
-  {% for sg in psm_results.subgroup_att %}
+  {% for sg in psm_results.subgroup_att if sg.dimension == dim %}
   <tr>
-    <td><strong>{{ sg.subgroup }}</strong></td>
+    <td><strong>{{ sg.level }}</strong></td>
     <td>{{ sg.n_treated_raw }}</td>
     <td>{{ sg.n_control_raw }}</td>
     <td>{{ sg.n_matched }}</td>
@@ -2269,6 +2273,7 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
   </tr>
   {% endfor %}
 </table>
+{% endfor %}
 
 <h3>共変量バランス（SMD）</h3>
 <table>
@@ -2289,18 +2294,11 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 </div>
 {% endif %}
 
-<div class="highlight-box">
-  <strong>若年層（若手医師）に関する観察:</strong><br>
-  ウォッシュアウト除外（若手: {{ psm_results.washout_excluded_by_experience.get("若手", 0) }}名、
-  中堅: {{ psm_results.washout_excluded_by_experience.get("中堅", 0) }}名、
-  ベテラン: {{ psm_results.washout_excluded_by_experience.get("ベテラン", 0) }}名）により、
-  若手医師が継続的視聴者として早期に除外されている。
-  PSMで残存する若手医師の視聴効果は
-  {% for sg in psm_results.subgroup_att %}{% if sg.subgroup == "若手" and sg.att is not none %}
-  ATT = {{ "+%.1f"|format(sg.att) if sg.att >= 0 else "%.1f"|format(sg.att) }} 万円/月
-  （p={{ "%.3f"|format(sg.p_value) }}）{% endif %}{% endfor %}であり、
-  サンプル規模に留意しつつ解釈する必要がある。
+{% if png_psm_forest %}
+<div style="text-align:center; margin:20px 0;">
+  <img src="data:image/png;base64,{{ png_psm_forest }}" alt="PSM Subgroup Forest Plot" style="max-width:100%;">
 </div>
+{% endif %}
 
 <div class="highlight-box">
   <strong>注意事項:</strong><br>
@@ -2530,6 +2528,7 @@ template_data = {
     # PSM 伸長率比較分析 (09)
     "psm_results": psm_growth_rate_results,
     "png_psm_growth": existing_pngs.get("psm_growth_rate.png", ""),
+    "png_psm_forest": existing_pngs.get("psm_subgroup_forest.png", ""),
 
     # 解析集団パラメータ
     "include_only_rw": INCLUDE_ONLY_RW,
