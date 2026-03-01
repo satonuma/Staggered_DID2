@@ -166,11 +166,13 @@ physician_viewing_path = os.path.join(RESULTS_DIR, "physician_viewing_analysis.j
 propensity_score_path = os.path.join(RESULTS_DIR, "propensity_score_analysis.json")
 mr_mediation_path = os.path.join(RESULTS_DIR, "mr_activity_mediation.json")
 mr_digital_balance_path = os.path.join(RESULTS_DIR, "mr_digital_balance.json")
+psm_growth_rate_path = os.path.join(RESULTS_DIR, "psm_growth_rate.json")
 
 physician_viewing_results = None
 propensity_score_results = None
 mr_mediation_results = None
 mr_digital_balance_results = None
+psm_growth_rate_results = None
 
 loaded_files = []
 if os.path.exists(physician_viewing_path):
@@ -192,6 +194,11 @@ if os.path.exists(mr_digital_balance_path):
     with open(mr_digital_balance_path, "r", encoding="utf-8") as f:
         mr_digital_balance_results = json.load(f)
     loaded_files.append("mr_digital_balance.json")
+
+if os.path.exists(psm_growth_rate_path):
+    with open(psm_growth_rate_path, "r", encoding="utf-8") as f:
+        psm_growth_rate_results = json.load(f)
+    loaded_files.append("psm_growth_rate.json")
 
 print(f"  did_results.json, cate_results.json, {', '.join(loaded_files) if loaded_files else '(医師視聴分析なし)'} 読み込み完了")
 
@@ -597,7 +604,8 @@ png_files = [
     "physician_viewing_analysis.png",
     "propensity_score_analysis.png",
     "mr_activity_mediation.png",
-    "mr_digital_balance.png"
+    "mr_digital_balance.png",
+    "psm_growth_rate.png"
 ]
 for name in png_files:
     path = os.path.join(SCRIPT_DIR, name)
@@ -825,7 +833,9 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
     <a href="#sec5">5. DID推定結果</a>
     <a href="#sec6">6. CATE分析</a>
     <a href="#sec7">7. 医師視聴パターン分析</a>
-    <a href="#sec8">8. 結論</a>
+    <a href="#sec8">8. MR vs デジタル</a>
+    <a href="#sec9psm">9. PSM伸長率比較</a>
+    <a href="#sec10">10. 結論</a>
   </div>
 </nav>
 
@@ -2176,8 +2186,139 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 <!-- ============================================================ -->
 <!-- Section 9: 結論 -->
 <!-- ============================================================ -->
-<section id="sec9">
-<h2>9. 結論・主な知見</h2>
+<!-- ============================================================ -->
+<!-- Section 9: PSM 伸長率比較分析 -->
+<!-- ============================================================ -->
+<section id="sec9psm">
+<h2>9. PSM 伸長率比較（視聴群 vs 未視聴群）</h2>
+
+{% if psm_results %}
+<p>
+  ウォッシュアウト期間（2023年4–5月）に視聴していた医師（継続的視聴者）を除外した母集団において、
+  解析期間中に視聴を開始した<strong>視聴群</strong>と全期間未視聴の<strong>未視聴群</strong>を
+  1:1 傾向スコアマッチング（最近傍、キャリパー付き）で比較した。
+  アウトカムは <strong>後期月平均 – 前期月平均（万円）</strong> で定義した伸長率差（ATT）。
+</p>
+
+<h3>分析設定</h3>
+<table>
+  <tr><th>項目</th><th>内容</th></tr>
+  <tr><td>前期</td><td>{{ psm_results.analysis_settings.pre_period }}</td></tr>
+  <tr><td>後期</td><td>{{ psm_results.analysis_settings.post_period }}</td></tr>
+  <tr><td>アウトカム</td><td>{{ psm_results.analysis_settings.outcome }}</td></tr>
+  <tr><td>マッチング手法</td><td>{{ psm_results.analysis_settings.matching }}</td></tr>
+  <tr><td>キャリパー (logit PS SD 単位)</td><td>{{ "%.4f"|format(psm_results.analysis_settings.caliper) }}</td></tr>
+</table>
+
+<h3>サンプルサイズ</h3>
+<table>
+  <tr><th>区分</th><th>人数</th></tr>
+  <tr><td>ウォッシュアウト除外（継続視聴者）</td><td>{{ psm_results.sample_sizes.washout_excluded }}</td></tr>
+  <tr><td>視聴群（解析対象）</td><td>{{ psm_results.sample_sizes.treated_raw }}</td></tr>
+  <tr><td>未視聴群（解析対象）</td><td>{{ psm_results.sample_sizes.control_raw }}</td></tr>
+  <tr><td>マッチング成立ペア数</td><td>{{ psm_results.sample_sizes.matched_pairs }}</td></tr>
+</table>
+
+<h3>全体 ATT（マッチング後）</h3>
+{% set att = psm_results.overall_att %}
+<table>
+  <tr><th>ATT（万円/月）</th><th>SE</th><th>t値</th><th>p値</th><th>95% CI</th></tr>
+  <tr>
+    <td class="{{ 'sig' if att.p_value < 0.05 else 'ns' }}">
+      {{ "+%.2f"|format(att.att) if att.att >= 0 else "%.2f"|format(att.att) }}
+    </td>
+    <td>{{ "%.2f"|format(att.se) }}</td>
+    <td>{{ "%.2f"|format(att.t_stat) }}</td>
+    <td class="{{ 'sig' if att.p_value < 0.05 else 'ns' }}">{{ "%.4f"|format(att.p_value) }}</td>
+    <td>[{{ "%.2f"|format(att.ci_95_lower) }}, {{ "%.2f"|format(att.ci_95_upper) }}]</td>
+  </tr>
+</table>
+<p>
+  視聴群は未視聴群（PSMマッチング後）に比べ、後期の月平均実績が
+  <strong>{{ "+%.1f"|format(att.att) if att.att >= 0 else "%.1f"|format(att.att) }} 万円</strong> 多い。
+</p>
+
+<h3>医師歴別サブグループ ATT</h3>
+<table>
+  <tr>
+    <th>医師歴区分</th>
+    <th>視聴群N（全体）</th>
+    <th>未視聴群N（全体）</th>
+    <th>マッチ数</th>
+    <th>ATT（万円/月）</th>
+    <th>SE</th>
+    <th>p値</th>
+    <th>95% CI</th>
+  </tr>
+  {% for sg in psm_results.subgroup_att %}
+  <tr>
+    <td><strong>{{ sg.subgroup }}</strong></td>
+    <td>{{ sg.n_treated_raw }}</td>
+    <td>{{ sg.n_control_raw }}</td>
+    <td>{{ sg.n_matched }}</td>
+    {% if sg.att is not none %}
+    <td class="{{ 'sig' if sg.p_value < 0.05 else 'ns' }}">
+      {{ "+%.2f"|format(sg.att) if sg.att >= 0 else "%.2f"|format(sg.att) }}
+    </td>
+    <td>{{ "%.2f"|format(sg.se) }}</td>
+    <td class="{{ 'sig' if sg.p_value < 0.05 else 'ns' }}">{{ "%.4f"|format(sg.p_value) }}</td>
+    <td>[{{ "%.2f"|format(sg.ci_95_lower) }}, {{ "%.2f"|format(sg.ci_95_upper) }}]</td>
+    {% else %}
+    <td colspan="4" style="color:#999;">推定不能（サンプル不足）</td>
+    {% endif %}
+  </tr>
+  {% endfor %}
+</table>
+
+<h3>共変量バランス（SMD）</h3>
+<table>
+  <tr><th>変数</th><th>マッチング前 SMD</th><th>マッチング後 SMD</th></tr>
+  {% for row in psm_results.covariate_balance_smd %}
+  <tr>
+    <td>{{ row["変数"] }}</td>
+    <td class="{{ 'ns' if row.SMD_before|abs < 0.1 else '' }}">{{ "%.3f"|format(row.SMD_before) }}</td>
+    <td class="{{ 'sig' if row.SMD_after|abs > 0.2 else '' }}">{{ "%.3f"|format(row.SMD_after) }}</td>
+  </tr>
+  {% endfor %}
+</table>
+<p style="font-size:0.85em; color:#666;">SMD &lt; 0.1 が望ましいバランス基準（Rubin, 2001）</p>
+
+{% if png_psm_growth %}
+<div style="text-align:center; margin:20px 0;">
+  <img src="data:image/png;base64,{{ png_psm_growth }}" alt="PSM Growth Rate Analysis" style="max-width:100%;">
+</div>
+{% endif %}
+
+<div class="highlight-box">
+  <strong>若年層（若手医師）に関する観察:</strong><br>
+  ウォッシュアウト除外（若手: {{ psm_results.washout_excluded_by_experience.get("若手", 0) }}名、
+  中堅: {{ psm_results.washout_excluded_by_experience.get("中堅", 0) }}名、
+  ベテラン: {{ psm_results.washout_excluded_by_experience.get("ベテラン", 0) }}名）により、
+  若手医師が継続的視聴者として早期に除外されている。
+  PSMで残存する若手医師の視聴効果は
+  {% for sg in psm_results.subgroup_att %}{% if sg.subgroup == "若手" and sg.att is not none %}
+  ATT = {{ "+%.1f"|format(sg.att) if sg.att >= 0 else "%.1f"|format(sg.att) }} 万円/月
+  （p={{ "%.3f"|format(sg.p_value) }}）{% endif %}{% endfor %}であり、
+  サンプル規模に留意しつつ解釈する必要がある。
+</div>
+
+<div class="highlight-box">
+  <strong>注意事項:</strong><br>
+  PSMは観察可能な共変量のみで選択バイアスを調整する。未観測交絡（医師の内発的動機等）は残存するため、
+  本推定値は因果効果の上限値として解釈すること。
+</div>
+
+{% else %}
+<p style="color:#999;">psm_growth_rate.json が見つかりません。09_psm_growth_rate.py を実行してください。</p>
+{% endif %}
+
+</section>
+
+<!-- ============================================================ -->
+<!-- Section 10: 結論・主な知見 -->
+<!-- ============================================================ -->
+<section id="sec10">
+<h2>10. 結論・主な知見</h2>
 
 <div class="conclusion-box">
 <h3>全体効果</h3>
@@ -2385,6 +2526,10 @@ template_data = {
     "mr_balance_breakeven":       _mr_balance_breakeven,
     "mr_balance_revenue_neutral": _mr_balance_revenue_neutral,
     "mr_balance_sensitivity_30":  _mr_balance_sensitivity_30,
+
+    # PSM 伸長率比較分析 (09)
+    "psm_results": psm_growth_rate_results,
+    "png_psm_growth": existing_pngs.get("psm_growth_rate.png", ""),
 
     # 解析集団パラメータ
     "include_only_rw": INCLUDE_ONLY_RW,

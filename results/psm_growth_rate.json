@@ -1,0 +1,79 @@
+{
+  "analysis_settings": {
+    "pre_period": "month 0-11 (12ヶ月)",
+    "post_period": "month 12-32 (21ヶ月)",
+    "outcome": "後期月平均 - 前期月平均（万円）",
+    "caliper": 0.18098281027116556,
+    "matching": "1:1 nearest-neighbor within caliper"
+  },
+  "sample_sizes": {
+    "washout_excluded": 2,
+    "treated_raw": 48,
+    "control_raw": 45,
+    "matched_pairs": 13
+  },
+  "overall_att": {
+    "att": 14.122710622710626,
+    "se": 11.72277340745135,
+    "t_stat": 1.2047243541986916,
+    "p_value": 0.2515322002685749,
+    "ci_95_lower": -8.853925255894017,
+    "ci_95_upper": 37.09934650131527
+  },
+  "subgroup_att": [
+    {
+      "subgroup": "若手",
+      "n_treated_raw": 8,
+      "n_control_raw": 17,
+      "n_matched": 8,
+      "att": 17.06845238095238,
+      "se": 8.921392637351065,
+      "p_value": 0.09729773372315842,
+      "ci_95_lower": -0.41747718825570956,
+      "ci_95_upper": 34.55438195016047
+    },
+    {
+      "subgroup": "中堅",
+      "n_treated_raw": 17,
+      "n_control_raw": 9,
+      "n_matched": 9,
+      "att": 25.453703703703713,
+      "se": 4.2429724281841175,
+      "p_value": 0.00032374429800752225,
+      "ci_95_lower": 17.137477744462842,
+      "ci_95_upper": 33.769929662944584
+    },
+    {
+      "subgroup": "ベテラン",
+      "n_treated_raw": 23,
+      "n_control_raw": 19,
+      "n_matched": 19,
+      "att": 23.970551378446117,
+      "se": 3.0884021608576946,
+      "p_value": 3.761244169453448e-07,
+      "ci_95_lower": 17.917283143165037,
+      "ci_95_upper": 30.0238196137272
+    }
+  ],
+  "covariate_balance_smd": [
+    {
+      "変数": "前期売上",
+      "SMD_before": -0.04705565436050211,
+      "SMD_after": -0.11334691548613979
+    },
+    {
+      "変数": "医師歴(年)",
+      "SMD_before": 0.4922848999448385,
+      "SMD_after": -0.5580497649589222
+    }
+  ],
+  "washout_excluded_by_experience": {
+    "若手": 1,
+    "中堅": 1,
+    "ベテラン": 0
+  },
+  "interpretation": {
+    "note": "PSMはobservable confoundersのみ調整。未観測交絡は残る。",
+    "att_definition": "視聴群の（後期-前期）成長率 と 対照群の（後期-前期）成長率 の差"
+  }
+}
