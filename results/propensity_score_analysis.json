@@ -10,14 +10,14 @@
     }
   },
   "propensity_score_model": {
-    "pseudo_r2": 0.9999999913714546,
+    "pseudo_r2": 0.999999991371461,
     "treated_mean": 0.9999999999663034,
-    "control_mean": 1.2315201547322293e-08
+    "control_mean": 1.2315192231092123e-08
   },
   "ipw_adjusted_means": [
     {
       "pattern": "未視聴",
-      "mean_ipw": 130.52390560705174,
+      "mean_ipw": 130.52390560705186,
       "n": 45.0
     },
     {
