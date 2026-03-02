@@ -575,8 +575,15 @@ for (disp_name, col, is_continuous, unit) in SUBGROUP_SPECS:
         if col not in ps_data.columns:
             print("  [" + disp_name + "] 列 '" + col + "' が存在しないためスキップ")
             continue
-        cat_levels = [str(v) for v in ps_data[cat_col].dropna().unique()
-                      if str(v) not in ("nan", "None", "不明")]
+        _col_s = ps_data[cat_col].dropna()
+        if hasattr(_col_s, "cat"):
+            # Categorical列: pd.cut で作成された category 順を保持
+            _present = set(_col_s.astype(str))
+            cat_levels = [str(v) for v in _col_s.cat.categories
+                          if str(v) in _present and str(v) not in ("nan", "None", "不明")]
+        else:
+            cat_levels = [str(v) for v in _col_s.unique()
+                          if str(v) not in ("nan", "None", "不明")]
 
     if not cat_levels:
         continue
