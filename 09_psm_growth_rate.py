@@ -84,7 +84,7 @@ N_BINS_CONTINUOUS  = 4   # 連続変数の自動ビン数
 #   列が存在しない場合は自動スキップ
 # ===================================================================
 SUBGROUP_SPECS = [
-    ("医師歴区分",               "experience_cat",                 False, ""),
+    ("医師歴区分",               "医師歴_cat",                     False, ""),
     ("ベースライン納入額",       "baseline_cat",                   False, ""),
     ("年齢",                     "年齢",                           True,  "歳"),
     ("デジタルチャネル選好",     "DIGITAL_CHANNEL_PREFERENCE",     False, ""),
@@ -384,14 +384,6 @@ print("\n[4] 属性マージ")
 
 doc_attr_df2 = doc_attr_df.rename(columns={"doc": "doctor_id"})
 
-def _exp_cat(y):
-    if y <= 10:   return "若手"
-    elif y <= 20: return "中堅"
-    return "ベテラン"
-
-if "医師歴" in doc_attr_df2.columns:
-    doc_attr_df2["experience_cat"] = doc_attr_df2["医師歴"].apply(_exp_cat)
-
 # 名前カラム以外を全てマージ（IDカラムを除く）
 exclude_cols = {"doctor_id", "doc_name", "DCF医師コード"}
 attr_cols_to_merge = [c for c in doc_attr_df2.columns
@@ -420,6 +412,14 @@ _n_bline_months = WASHOUT_MONTHS - BASELINE_START_MONTH_IDX
 print(f"  baseline_cat: 前処置期間{_n_bline_months}ヶ月平均から4カテゴリ → " + str(_bc_levels))
 print("  doctor_attribute 読み込み済みカラム: " + str(attr_cols_to_merge))
 
+# 医師歴区分: 03_cate_analysis と同様に自動N分位カテゴリ化（データ駆動型）
+if "医師歴" in unit_df.columns:
+    _exp_result, _exp_levels = _auto_range_labels(
+        unit_df["医師歴"], q=N_BINS_CONTINUOUS, col_name="医師歴", unit_override="年"
+    )
+    unit_df["医師歴_cat"] = _exp_result
+    print(f"  医師歴_cat: 自動{N_BINS_CONTINUOUS}分位 → {_exp_levels}")
+
 # ===================================================================
 # [5] 傾向スコア推定
 # ===================================================================
@@ -428,13 +428,13 @@ print("\n[5] 傾向スコア推定（Logistic Regression + L2正則化）")
 from sklearn.linear_model import LogisticRegression
 
 ps_data = unit_df.dropna(
-    subset=["experience_cat", "DOCTOR_SEGEMNT", "DIGITAL_CHANNEL_PREFERENCE",
+    subset=["医師歴_cat", "DOCTOR_SEGEMNT", "DIGITAL_CHANNEL_PREFERENCE",
             "施設区分名", "UHP区分名", "pre_mean"]
 ).copy()
 
 ps_dummies = pd.get_dummies(
     ps_data,
-    columns=["experience_cat", "DOCTOR_SEGEMNT", "DIGITAL_CHANNEL_PREFERENCE",
+    columns=["医師歴_cat", "DOCTOR_SEGEMNT", "DIGITAL_CHANNEL_PREFERENCE",
              "施設区分名", "UHP区分名"],
     drop_first=True,
 )
@@ -451,7 +451,7 @@ else:
     ps_dummies["exp_years_std"] = 0.0
 
 cov_cols = [c for c in ps_dummies.columns
-            if c.startswith(("experience_cat_", "DOCTOR_SEGEMNT_",
+            if c.startswith(("医師歴_cat_", "DOCTOR_SEGEMNT_",
                              "DIGITAL_CHANNEL_PREFERENCE_",
                              "施設区分名_", "UHP区分名_"))
             ] + ["pre_mean_std", "exp_years_std"]
