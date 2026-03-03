@@ -76,7 +76,13 @@ BASELINE_START_MONTH_IDX = -12  # baseline_cat 用: 解析開始前12ヶ月 (202
 
 CALIPER_MULTIPLIER = 0.2
 RANDOM_SEED        = 42
-N_BINS_CONTINUOUS  = 4   # 連続変数の自動ビン数
+N_BINS_CONTINUOUS  = 4   # 連続変数の自動ビン数（FIXED_BINS 未指定列に適用）
+
+# 医師歴・年齢は 10 年刻みの固定区分（SUBGROUP_SPECS の is_continuous=True 列にも適用）
+FIXED_BINS: dict = {
+    "医師歴": {"bins": [0, 9, 19, 29, 39, np.inf], "labels": ["1~9年",  "10~19年", "20~29年", "30~39年", "40年以上"]},
+    "年齢":   {"bins": [19, 29, 39, 49, 59, np.inf], "labels": ["20~29歳", "30~39歳", "40~49歳", "50~59歳", "60歳以上"]},
+}
 
 # ===================================================================
 # サブグループ分析設定
@@ -98,6 +104,15 @@ SUBGROUP_SPECS = [
 # ===================================================================
 # ユーティリティ関数
 # ===================================================================
+
+def _fixed_cut(series, bins, labels):
+    """固定ビンで pd.cut し (CategoricalSeries, levels_list) を返す。
+    データに存在するラベルのみ levels_list に含める。
+    """
+    result = pd.cut(series, bins=bins, labels=labels)
+    present = [l for l in labels if (result == l).any()]
+    return result, present
+
 
 def _infer_unit(col_name, unit_override=""):
     if unit_override:
@@ -428,13 +443,12 @@ _n_bline_months = WASHOUT_MONTHS - BASELINE_START_MONTH_IDX
 print(f"  baseline_cat: 前処置期間{_n_bline_months}ヶ月平均から4カテゴリ → " + str(_bc_levels))
 print("  doctor_attribute 読み込み済みカラム: " + str(attr_cols_to_merge))
 
-# 医師歴区分: 03_cate_analysis と同様に自動N分位カテゴリ化（データ駆動型）
+# 医師歴区分: FIXED_BINS 設定で固定10年刻みカテゴリ化
 if "医師歴" in unit_df.columns:
-    _exp_result, _exp_levels = _auto_range_labels(
-        unit_df["医師歴"], q=N_BINS_CONTINUOUS, col_name="医師歴", unit_override="年"
-    )
+    _fb = FIXED_BINS["医師歴"]
+    _exp_result, _exp_levels = _fixed_cut(unit_df["医師歴"], _fb["bins"], _fb["labels"])
     unit_df["医師歴_cat"] = _exp_result
-    print(f"  医師歴_cat: 自動{N_BINS_CONTINUOUS}分位 → {_exp_levels}")
+    print(f"  医師歴_cat: 10年刻み固定bins → {_exp_levels}")
 
 # ===================================================================
 # [5] 傾向スコア推定
@@ -578,9 +592,13 @@ for (disp_name, col, is_continuous, unit) in SUBGROUP_SPECS:
     if is_continuous:
         cat_col = col + "_cat"
         if col in ps_data.columns:
-            result_cat, cat_levels = _auto_range_labels(
-                ps_data[col], q=N_BINS_CONTINUOUS, col_name=col, unit_override=unit
-            )
+            if col in FIXED_BINS:
+                _fb = FIXED_BINS[col]
+                result_cat, cat_levels = _fixed_cut(ps_data[col], _fb["bins"], _fb["labels"])
+            else:
+                result_cat, cat_levels = _auto_range_labels(
+                    ps_data[col], q=N_BINS_CONTINUOUS, col_name=col, unit_override=unit
+                )
             ps_data[cat_col] = result_cat
         elif cat_col in ps_data.columns:
             cat_levels = [str(v) for v in ps_data[cat_col].dropna().unique()]
