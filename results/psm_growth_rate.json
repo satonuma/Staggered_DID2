@@ -156,21 +156,9 @@
     },
     {
       "dimension": "デジタルチャネル選好",
-      "level": "マルチ",
-      "n_treated_raw": 34,
-      "n_control_raw": 8,
-      "n_matched": 6,
-      "att": 33.85317460317461,
-      "se": 17.28826933601952,
-      "p_value": 0.10754108229493209,
-      "ci_95_lower": -0.03183329542365243,
-      "ci_95_upper": 67.73818250177287
-    },
-    {
-      "dimension": "デジタルチャネル選好",
-      "level": "なし",
-      "n_treated_raw": 0,
-      "n_control_raw": 32,
+      "level": "Web講演会",
+      "n_treated_raw": 5,
+      "n_control_raw": 1,
       "n_matched": 0,
       "att": null,
       "se": null,
@@ -180,9 +168,9 @@
     },
     {
       "dimension": "デジタルチャネル選好",
-      "level": "Web講演会",
-      "n_treated_raw": 5,
-      "n_control_raw": 1,
+      "level": "e_contents",
+      "n_treated_raw": 2,
+      "n_control_raw": 2,
       "n_matched": 0,
       "att": null,
       "se": null,
@@ -204,9 +192,9 @@
     },
     {
       "dimension": "デジタルチャネル選好",
-      "level": "e_contents",
-      "n_treated_raw": 2,
-      "n_control_raw": 2,
+      "level": "なし",
+      "n_treated_raw": 0,
+      "n_control_raw": 32,
       "n_matched": 0,
       "att": null,
       "se": null,
@@ -215,28 +203,16 @@
       "ci_95_upper": null
     },
     {
-      "dimension": "医師セグメント",
-      "level": "Maintenance",
-      "n_treated_raw": 7,
-      "n_control_raw": 4,
-      "n_matched": 4,
-      "att": 64.58035714285715,
-      "se": 9.75259825600622,
-      "p_value": 0.007014171829812232,
-      "ci_95_lower": 45.465264561084965,
-      "ci_95_upper": 83.69544972462934
-    },
-    {
-      "dimension": "医師セグメント",
-      "level": "Potential",
-      "n_treated_raw": 20,
-      "n_control_raw": 9,
-      "n_matched": 2,
-      "att": 60.89880952380953,
-      "se": 27.724478379022564,
-      "p_value": 0.27197368119071696,
-      "ci_95_lower": 6.5588319009253055,
-      "ci_95_upper": 115.23878714669377
+      "dimension": "デジタルチャネル選好",
+      "level": "マルチ",
+      "n_treated_raw": 34,
+      "n_control_raw": 8,
+      "n_matched": 6,
+      "att": 33.85317460317461,
+      "se": 17.28826933601952,
+      "p_value": 0.10754108229493209,
+      "ci_95_lower": -0.03183329542365243,
+      "ci_95_upper": 67.73818250177287
     },
     {
       "dimension": "医師セグメント",
@@ -252,6 +228,18 @@
     },
     {
       "dimension": "医師セグメント",
+      "level": "Maintenance",
+      "n_treated_raw": 7,
+      "n_control_raw": 4,
+      "n_matched": 4,
+      "att": 64.58035714285715,
+      "se": 9.75259825600622,
+      "p_value": 0.007014171829812232,
+      "ci_95_lower": 45.465264561084965,
+      "ci_95_upper": 83.69544972462934
+    },
+    {
+      "dimension": "医師セグメント",
       "level": "Non-Target",
       "n_treated_raw": 0,
       "n_control_raw": 19,
@@ -261,6 +249,18 @@
       "p_value": null,
       "ci_95_lower": null,
       "ci_95_upper": null
+    },
+    {
+      "dimension": "医師セグメント",
+      "level": "Potential",
+      "n_treated_raw": 20,
+      "n_control_raw": 9,
+      "n_matched": 2,
+      "att": 60.89880952380953,
+      "se": 27.724478379022564,
+      "p_value": 0.27197368119071696,
+      "ci_95_lower": 6.5588319009253055,
+      "ci_95_upper": 115.23878714669377
     }
   ],
   "baseline_cat_levels": [

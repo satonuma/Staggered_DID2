@@ -133,6 +133,22 @@ def _infer_unit(col_name):
     return ""
 
 
+# QUINTILE系カテゴリ (H/L/M/VH/Z) の表示順
+_QUINTILE_ORDER = ["不明", "Z", "L", "M", "H", "VH"]
+
+
+def _sort_levels(levels):
+    """カテゴリレベルを適切な順に並べる。
+    QUINTILE値 (H/L/M/VH/Z) のみで構成される場合は 不明,Z,L,M,H,VH 順、
+    それ以外は文字列ソート。
+    """
+    str_levels = [str(v) for v in levels]
+    non_missing = [v for v in str_levels if v not in ("nan", "None", "不明")]
+    if non_missing and all(v in ("H", "L", "M", "VH", "Z") for v in non_missing):
+        return [v for v in _QUINTILE_ORDER if v in str_levels]
+    return sorted(str_levels, key=str)
+
+
 def _auto_range_labels(series, q=4, col_name=""):
     """連続変数をN数ベースのq分位でカテゴリ化し '最小~最大 単位' 形式ラベルを生成。
     不明以外で最大 q カテゴリを作成する。
@@ -326,7 +342,7 @@ def load_attr_file(filepath, id_col, id_rename, selected_cols, continuous_bins):
                 df_out[col] = series.astype(object).fillna("不明")
                 series = df_out[col]
                 print(f"      欠損値 {n_null} 件 → '不明' カテゴリに追加")
-            levels = sorted(series.unique().tolist(), key=str)
+            levels = _sort_levels(series.unique().tolist())
             print(f"    [{col}] カテゴリ値: {levels}")
             cate_dims.append((col, levels))
 

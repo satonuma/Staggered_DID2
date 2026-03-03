@@ -111,6 +111,22 @@ def _infer_unit(col_name, unit_override=""):
     return ""
 
 
+# QUINTILE系カテゴリ (H/L/M/VH/Z) の表示順
+_QUINTILE_ORDER = ["不明", "Z", "L", "M", "H", "VH"]
+
+
+def _sort_levels(levels):
+    """カテゴリレベルを適切な順に並べる。
+    QUINTILE値 (H/L/M/VH/Z) のみで構成される場合は 不明,Z,L,M,H,VH 順、
+    それ以外は文字列ソート。
+    """
+    str_levels = [str(v) for v in levels]
+    non_missing = [v for v in str_levels if v not in ("nan", "None", "不明")]
+    if non_missing and all(v in ("H", "L", "M", "VH", "Z") for v in non_missing):
+        return [v for v in _QUINTILE_ORDER if v in str_levels]
+    return sorted(str_levels, key=str)
+
+
 def _auto_range_labels(series, q=4, col_name="", unit_override=""):
     """連続変数を q 分位カテゴリ化し '最小~最大単位' 形式ラベルを返す。"""
     unit = _infer_unit(col_name, unit_override)
@@ -582,8 +598,9 @@ for (disp_name, col, is_continuous, unit) in SUBGROUP_SPECS:
             cat_levels = [str(v) for v in _col_s.cat.categories
                           if str(v) in _present and str(v) not in ("nan", "None", "不明")]
         else:
-            cat_levels = [str(v) for v in _col_s.unique()
-                          if str(v) not in ("nan", "None", "不明")]
+            _raw = [str(v) for v in _col_s.unique()
+                    if str(v) not in ("nan", "None", "不明")]
+            cat_levels = _sort_levels(_raw)
 
     if not cat_levels:
         continue
