@@ -640,9 +640,9 @@ sg_df = pd.DataFrame(all_sg_results)
 # ===================================================================
 print("\n[8] 可視化")
 
-# ---- (a) 傾向スコア分布 ----
-fig_main, axes = plt.subplots(1, 2, figsize=(14, 5))
-fig_main.suptitle("09: PSM 伸長率比較 - 傾向スコア分布とマッチング後伸長率",
+# ---- (a)(b)(c) 傾向スコア分布 / 伸長率分布 / 平均伸長率棒グラフ ----
+fig_main, axes = plt.subplots(1, 3, figsize=(20, 5))
+fig_main.suptitle("09: PSM 伸長率比較 - 傾向スコア分布・伸長率分布・平均伸長率比較",
                   fontsize=12, fontweight="bold")
 
 ax = axes[0]
@@ -678,6 +678,39 @@ ax.set_title("(b) マッチング後 伸長率分布\nATT=" + str(round(att, 2))
              + " 万円/月, p=" + str(round(p_val, 4)))
 ax.legend(fontsize=8)
 ax.grid(True, alpha=0.3, axis="y")
+
+# ---- (c) 平均伸長率 棒グラフ ----
+ax = axes[2]
+n_t_bar = valid_mask.sum()
+means_bar = [mt_v.mean(), mc_v.mean()]
+ses_bar   = [mt_v.std() / np.sqrt(len(mt_v)), mc_v.std() / np.sqrt(len(mc_v))]
+ax.bar([0, 1], means_bar,
+       yerr=[1.96 * s for s in ses_bar],
+       color=["#1565C0", "#FF8F00"], alpha=0.75, capsize=6,
+       error_kw={"linewidth": 1.5, "ecolor": "black"})
+ax.set_xticks([0, 1])
+ax.set_xticklabels(["視聴群\n(N=" + str(n_t_bar) + ")",
+                    "未視聴群\n(N=" + str(n_t_bar) + ")"])
+ax.set_ylabel("平均伸長率（万円/月）")
+ax.axhline(0, color="gray", linewidth=0.8, linestyle="--")
+ax.grid(True, alpha=0.3, axis="y")
+
+pstar_bar = ("***" if p_val < 0.001 else ("**" if p_val < 0.01
+             else ("*" if p_val < 0.05 else "n.s.")))
+ax.set_title("(c) 平均伸長率の比較（マッチ後）\nATT=" + str(round(att, 2))
+             + " 万円/月, p=" + str(round(p_val, 3)) + " " + pstar_bar)
+
+# ATT ブラケット注釈
+_y_max = max(m + 1.96 * s for m, s in zip(means_bar, ses_bar))
+_y_top = _y_max * 1.15
+ax.annotate("", xy=(0, _y_top), xytext=(1, _y_top),
+            arrowprops=dict(arrowstyle="<->", color="black", lw=1.5))
+ax.text(0.5, _y_top * 1.03,
+        "ATT=" + str(round(att, 2)) + "  [" + str(round(ci_lo, 1))
+        + ", " + str(round(ci_hi, 1)) + "]",
+        ha="center", va="bottom", fontsize=8)
+ax.set_ylim(bottom=min(0, min(means_bar) - max(ses_bar) * 2),
+            top=_y_top * 1.20)
 
 plt.tight_layout()
 out_main = os.path.join(SCRIPT_DIR, "psm_growth_rate.png")
