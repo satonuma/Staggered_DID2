@@ -150,7 +150,7 @@ def _sort_levels(levels):
     non_missing = [v for v in str_levels if v not in ("nan", "None", "不明")]
     if non_missing and all(v in ("H", "L", "M", "VH", "Z") for v in non_missing):
         return [v for v in _QUINTILE_ORDER if v in str_levels]
-    return sorted(str_levels, key=str)
+    return sorted(levels, key=str)  # 元の型を保持（int の 0/1 フラグも崩さない）
 
 
 def _auto_range_labels(series, q=4, col_name=""):
