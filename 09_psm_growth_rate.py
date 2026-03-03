@@ -628,6 +628,58 @@ ci_hi  = att + 1.96 * se_att
 print("  全体 ATT=" + str(round(att, 2)) + " 万円/月  p=" + str(round(p_val, 4)))
 
 # ===================================================================
+# [6b] 共変量バランス（SMD）チェック
+# ===================================================================
+def _smd(t_vals, c_vals):
+    t = np.asarray(t_vals, dtype=float)
+    c = np.asarray(c_vals, dtype=float)
+    t, c = t[~np.isnan(t)], c[~np.isnan(c)]
+    if len(t) < 2 or len(c) < 2:
+        return np.nan
+    pv = (t.var() + c.var()) / 2
+    return 0.0 if pv < 1e-12 else (t.mean() - c.mean()) / np.sqrt(pv)
+
+_pre_t  = ps_data[ps_data["treated"] == 1]
+_pre_c  = ps_data[ps_data["treated"] == 0]
+_post_t = ps_data[ps_data["doctor_id"].isin(matched_t_ids)]
+_post_c = ps_data[ps_data["doctor_id"].isin(matched_c_ids)]
+
+covariate_balance_smd = []
+
+for _col in COV_CONT_COLS + ["pre_mean"]:
+    if _col not in ps_data.columns:
+        continue
+    smd_b = _smd(_pre_t[_col],  _pre_c[_col])
+    smd_a = _smd(_post_t[_col], _post_c[_col])
+    covariate_balance_smd.append({
+        "変数": _col,
+        "SMD_before": float(smd_b) if not np.isnan(smd_b) else 0.0,
+        "SMD_after":  float(smd_a) if not np.isnan(smd_a) else 0.0,
+    })
+
+for _cat in COV_CAT_COLS:
+    if _cat not in ps_data.columns:
+        continue
+    _levels = sorted(ps_data[_cat].dropna().astype(str).unique())
+    for _lv in _levels:
+        _b_t = (_pre_t[_cat].astype(str)  == _lv).astype(float)
+        _b_c = (_pre_c[_cat].astype(str)  == _lv).astype(float)
+        _a_t = (_post_t[_cat].astype(str) == _lv).astype(float)
+        _a_c = (_post_c[_cat].astype(str) == _lv).astype(float)
+        smd_b = _smd(_b_t, _b_c)
+        smd_a = _smd(_a_t, _a_c)
+        covariate_balance_smd.append({
+            "変数": f"{_cat}={_lv}",
+            "SMD_before": float(smd_b) if not np.isnan(smd_b) else 0.0,
+            "SMD_after":  float(smd_a) if not np.isnan(smd_a) else 0.0,
+        })
+
+print(f"\n  共変量バランス SMD ({len(covariate_balance_smd)}項目):")
+for r in covariate_balance_smd:
+    flag = " OK" if abs(r["SMD_after"]) < 0.1 else " !"
+    print(f"    {r['変数']}: before={r['SMD_before']:.3f} after={r['SMD_after']:.3f}{flag}")
+
+# ===================================================================
 # [7] サブグループ分析（SUBGROUP_SPECS に基づいて全次元を処理）
 # ===================================================================
 print("\n[7] サブグループ分析（" + str(len(SUBGROUP_SPECS)) + " 次元）")
@@ -746,18 +798,18 @@ ax.set_title("(b) マッチング後 伸長率分布\nATT=" + str(round(att, 2))
 ax.legend(fontsize=8)
 ax.grid(True, alpha=0.3, axis="y")
 
-# ---- (c) 平均伸長率 棒グラフ ----
+# ---- (c) 平均伸長率 棒グラフ (左=未視聴群, 右=視聴群) ----
 ax = axes[2]
 n_t_bar = valid_mask.sum()
-means_bar = [mt_v.mean(), mc_v.mean()]
-ses_bar   = [mt_v.std() / np.sqrt(len(mt_v)), mc_v.std() / np.sqrt(len(mc_v))]
+means_bar = [mc_v.mean(), mt_v.mean()]
+ses_bar   = [mc_v.std() / np.sqrt(len(mc_v)), mt_v.std() / np.sqrt(len(mt_v))]
 ax.bar([0, 1], means_bar,
        yerr=[1.96 * s for s in ses_bar],
-       color=["#1565C0", "#FF8F00"], alpha=0.75, capsize=6,
+       color=["#FF8F00", "#1565C0"], alpha=0.75, capsize=6,
        error_kw={"linewidth": 1.5, "ecolor": "black"})
 ax.set_xticks([0, 1])
-ax.set_xticklabels(["視聴群\n(N=" + str(n_t_bar) + ")",
-                    "未視聴群\n(N=" + str(n_t_bar) + ")"])
+ax.set_xticklabels(["未視聴群\n(N=" + str(n_t_bar) + ")",
+                    "視聴群\n(N=" + str(n_t_bar) + ")"])
 ax.set_ylabel("平均伸長率（万円/月）")
 ax.axhline(0, color="gray", linewidth=0.8, linestyle="--")
 ax.grid(True, alpha=0.3, axis="y")
@@ -906,6 +958,7 @@ results_json = {
         "p_value": float(p_val), "ci_95_lower": float(ci_lo), "ci_95_upper": float(ci_hi),
     },
     "subgroup_att": [_sg_to_dict(r) for r in all_sg_results],
+    "covariate_balance_smd": covariate_balance_smd,
     "baseline_cat_levels": _bc_levels,
     "interpretation": {
         "note": "PSMはobservable confoundersのみ調整。未観測交絡は残る。",
