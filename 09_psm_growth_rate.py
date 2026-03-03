@@ -44,6 +44,22 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 # ===================================================================
 ENT_PRODUCT_CODE = "00001"
 ACTIVITY_CHANNEL_FILTER = "Web講演会"
+CONTENT_TYPES = ["webiner", "e_contents", "Web講演会"]  # MR活動量計算で除外するデジタル種別
+
+# ===================================================================
+# 共変量設定 (02_staggered_did_analysis / 09_psm_growth_rate 共通)
+# 変更時は両ファイルを同期させること
+# -------------------------------------------------------------------
+# カテゴリ共変量 (one-hot 化) ← 両ファイルで同一リストを保つこと
+COV_CAT_COLS = [
+    "UHP区分名",        # 施設: UHPセグメント      (追加推奨: 処置選択と相関)
+    "施設区分名",        # 施設: 施設タイプ         (追加推奨: 処置選択と相関)
+    "DOCTOR_SEGEMNT",  # 医師: セグメント
+    "baseline_cat",    # 施設: ベースライン売上カテゴリ
+]
+# 連続共変量 (z-score 標準化) ← 両ファイルで同一リストを保つこと
+COV_CONT_COLS = ["医師歴", "年齢", "卒業時年齢"]
+# ===================================================================
 
 FILE_RW_LIST           = "rw_list.csv"
 FILE_SALES             = "sales.csv"
@@ -295,6 +311,28 @@ web_lecture = activity_raw[
 ].copy()
 web_lecture = web_lecture[web_lecture["fac_honin"].notna() & (web_lecture["fac_honin"].astype(str).str.strip() != "")].copy()
 
+# MR前処置期間活動量: 非デジタル活動を施設別に集計 (washout期間内の月平均)
+_mr_raw = activity_raw[
+    (activity_raw["品目コード"] == ENT_PRODUCT_CODE)
+    & (~activity_raw["活動種別"].isin(CONTENT_TYPES))
+    & activity_raw["fac_honin"].notna()
+].copy()
+if len(_mr_raw) > 0:
+    _mr_raw["活動日_dt"] = pd.to_datetime(_mr_raw["活動日_dt"], format="mixed")
+    _mr_raw["month_index"] = (
+        (_mr_raw["活動日_dt"].dt.year - 2023) * 12
+        + _mr_raw["活動日_dt"].dt.month - 4
+    )
+    mr_pre_fac = (
+        _mr_raw[_mr_raw["month_index"] < WASHOUT_MONTHS]
+        .groupby("fac_honin").size()
+        .reset_index(name="mr_total")
+    )
+    mr_pre_fac["mr_pre"] = mr_pre_fac["mr_total"] / max(WASHOUT_MONTHS, 1)
+    mr_pre_fac = mr_pre_fac.rename(columns={"fac_honin": "facility_id"})[["facility_id", "mr_pre"]]
+else:
+    mr_pre_fac = pd.DataFrame(columns=["facility_id", "mr_pre"])
+
 common_cols = ["活動日_dt", "品目コード", "活動種別", "fac_honin", "doc"]
 viewing = pd.concat([digital[common_cols], web_lecture[common_cols]], ignore_index=True)
 viewing = viewing.rename(columns={
@@ -450,6 +488,14 @@ if "医師歴" in unit_df.columns:
     unit_df["医師歴_cat"] = _exp_result
     print(f"  医師歴_cat: 10年刻み固定bins → {_exp_levels}")
 
+# MR前処置活動量をマージ (COV_CONT: cov_mr_pre と対応)
+if len(mr_pre_fac) > 0:
+    unit_df = unit_df.merge(mr_pre_fac, on="facility_id", how="left")
+    unit_df["mr_pre"] = unit_df["mr_pre"].fillna(0)
+else:
+    unit_df["mr_pre"] = 0.0
+print(f"  mr_pre: WO期間施設別月平均MR活動 (非ゼロ: {unit_df['mr_pre'].gt(0).sum()}件)")
+
 # ===================================================================
 # [5] 傾向スコア推定
 # ===================================================================
@@ -458,33 +504,35 @@ print("\n[5] 傾向スコア推定（Logistic Regression + L2正則化）")
 from sklearn.linear_model import LogisticRegression
 
 ps_data = unit_df.dropna(
-    subset=["医師歴_cat", "DOCTOR_SEGEMNT", "DIGITAL_CHANNEL_PREFERENCE",
-            "施設区分名", "UHP区分名", "pre_mean"]
+    subset=[c for c in COV_CAT_COLS if c in unit_df.columns] + ["pre_mean"]
 ).copy()
 
+_dummy_cols = [c for c in COV_CAT_COLS if c in ps_data.columns]
 ps_dummies = pd.get_dummies(
     ps_data,
-    columns=["医師歴_cat", "DOCTOR_SEGEMNT", "DIGITAL_CHANNEL_PREFERENCE",
-             "施設区分名", "UHP区分名"],
+    columns=_dummy_cols,
     drop_first=True,
 )
 ps_dummies["pre_mean_std"] = (
     (ps_dummies["pre_mean"] - ps_dummies["pre_mean"].mean())
     / (ps_dummies["pre_mean"].std() + 1e-9)
 )
-if "医師歴" in ps_dummies.columns:
-    ps_dummies["exp_years_std"] = (
-        (ps_dummies["医師歴"] - ps_dummies["医師歴"].mean())
-        / (ps_dummies["医師歴"].std() + 1e-9)
-    )
-else:
-    ps_dummies["exp_years_std"] = 0.0
+# COV_CONT_COLS の標準化 (NaN は平均で補完)
+_cont_std_cols = []
+for _cont in COV_CONT_COLS:
+    _std_name = _cont + "_std"
+    if _cont in ps_dummies.columns:
+        _m = ps_dummies[_cont].mean()
+        _s = ps_dummies[_cont].std() + 1e-9
+        ps_dummies[_std_name] = (ps_dummies[_cont].fillna(_m) - _m) / _s
+    else:
+        ps_dummies[_std_name] = 0.0
+    _cont_std_cols.append(_std_name)
 
+_cat_prefixes = tuple(col + "_" for col in COV_CAT_COLS)
 cov_cols = [c for c in ps_dummies.columns
-            if c.startswith(("医師歴_cat_", "DOCTOR_SEGEMNT_",
-                             "DIGITAL_CHANNEL_PREFERENCE_",
-                             "施設区分名_", "UHP区分名_"))
-            ] + ["pre_mean_std", "exp_years_std"]
+            if c.startswith(_cat_prefixes)
+            ] + ["pre_mean_std"] + _cont_std_cols
 
 y_ps = ps_dummies["treated"].astype(float).values
 X_ps = ps_dummies[cov_cols].astype(float).values
@@ -510,7 +558,8 @@ for C_val in [0.1, 0.05, 0.02]:
 if not ps_estimated:
     print("  警告: 完全分離 -> 前期売上+医師歴のみで単変量推定")
     try:
-        X_simple = ps_dummies[["pre_mean_std", "exp_years_std"]].values
+        _fallback_cols = ["pre_mean_std"] + [c for c in _cont_std_cols if c in ps_dummies.columns]
+        X_simple = ps_dummies[_fallback_cols].values
         lr_s = LogisticRegression(C=0.5, max_iter=1000, random_state=RANDOM_SEED)
         lr_s.fit(X_simple, y_ps)
         ps_data = ps_data.copy()
