@@ -7,7 +7,7 @@
   ウォッシュアウト期間（2023/4-5）に視聴していた医師を除外した母集団で、
   解析期間中に視聴を開始した「視聴群」と全期間未視聴の「未視聴群」を
   1:1 傾向スコアマッチング（最近傍、キャリパー付き）で比較。
-  アウトカム: 後期月平均 - 前期月平均（万円差）= 伸長率
+  アウトカム: 後期月平均 - 前期月平均（円差）= 伸長率
 
 サブグループ設定 (SUBGROUP_SPECS):
   (表示名, unit_df内の列名, 連続変数か, 単位文字列)
@@ -625,7 +625,7 @@ p_val  = 2 * (1 - stats.t.cdf(abs(t_stat), df=len(diffs) - 1))
 ci_lo  = att - 1.96 * se_att
 ci_hi  = att + 1.96 * se_att
 
-print("  全体 ATT=" + str(round(att, 2)) + " 万円/月  p=" + str(round(p_val, 4)))
+print("  全体 ATT=" + str(round(att, 2)) + " 円/月  p=" + str(round(p_val, 4)))
 
 # ===================================================================
 # [6b] 共変量バランス（SMD）チェック
@@ -791,10 +791,10 @@ ax.axvline(mt_v.mean(), color="#1565C0", linewidth=2, linestyle="--",
            label="視聴群 平均=" + str(round(mt_v.mean(), 1)))
 ax.axvline(mc_v.mean(), color="#FF8F00", linewidth=2, linestyle="--",
            label="未視聴群 平均=" + str(round(mc_v.mean(), 1)))
-ax.set_xlabel("伸長率（後期月平均 - 前期月平均, 万円）")
+ax.set_xlabel("伸長率（後期月平均 - 前期月平均, 円）")
 ax.set_ylabel("医師数")
 ax.set_title("(b) マッチング後 伸長率分布\nATT=" + str(round(att, 2))
-             + " 万円/月, p=" + str(round(p_val, 4)))
+             + " 円/月, p=" + str(round(p_val, 4)))
 ax.legend(fontsize=8)
 ax.grid(True, alpha=0.3, axis="y")
 
@@ -810,14 +810,14 @@ ax.bar([0, 1], means_bar,
 ax.set_xticks([0, 1])
 ax.set_xticklabels(["未視聴群\n(N=" + str(n_t_bar) + ")",
                     "視聴群\n(N=" + str(n_t_bar) + ")"])
-ax.set_ylabel("平均伸長率（万円/月）")
+ax.set_ylabel("平均伸長率（円/月）")
 ax.axhline(0, color="gray", linewidth=0.8, linestyle="--")
 ax.grid(True, alpha=0.3, axis="y")
 
 pstar_bar = ("***" if p_val < 0.001 else ("**" if p_val < 0.01
              else ("*" if p_val < 0.05 else "n.s.")))
 ax.set_title("(c) 平均伸長率の比較（マッチ後）\nATT=" + str(round(att, 2))
-             + " 万円/月, p=" + str(round(p_val, 3)) + " " + pstar_bar)
+             + " 円/月, p=" + str(round(p_val, 3)) + " " + pstar_bar)
 
 # ATT ブラケット注釈
 _y_max = max(m + 1.96 * s for m, s in zip(means_bar, ses_bar))
@@ -896,7 +896,7 @@ for i, row in enumerate(valid_sg_df.itertuples(), start=1):
 ax2.axvline(0, color="gray", linestyle="--", linewidth=1)
 ax2.set_yticks(range(len(y_labels)))
 ax2.set_yticklabels(y_labels, fontsize=8.5)
-ax2.set_xlabel("ATT（万円/月、後期-前期差の視聴群-対照群差）", fontsize=10)
+ax2.set_xlabel("ATT（円/月、後期-前期差の視聴群-対照群差）", fontsize=10)
 ax2.set_title("サブグループ別 ATT（全 " + str(len(valid_sg_df)) + " カテゴリ）", fontsize=10)
 ax2.grid(True, alpha=0.3, axis="x")
 
@@ -942,7 +942,7 @@ results_json = {
     "analysis_settings": {
         "pre_period":  "month 0-" + str(PRE_END) + " (" + str(PRE_END + 1) + "ヶ月)",
         "post_period": "month " + str(POST_START) + "-32 (" + str(33 - POST_START) + "ヶ月)",
-        "outcome": "後期月平均 - 前期月平均（万円）",
+        "outcome": "後期月平均 - 前期月平均（円）",
         "caliper": float(caliper) if caliper is not None else None,
         "matching": "1:1 nearest-neighbor within caliper",
         "n_subgroup_dimensions": len(SUBGROUP_SPECS),
@@ -975,7 +975,7 @@ print("  結果JSON: " + json_path)
 print("\n" + "=" * 70)
 print(" 分析完了")
 print("=" * 70)
-print("\n【全体 ATT】 " + str(round(att, 2)) + " 万円/月"
+print("\n【全体 ATT】 " + str(round(att, 2)) + " 円/月"
       + "  (p=" + str(round(p_val, 4)) + ", 95%CI ["
       + str(round(ci_lo, 2)) + ", " + str(round(ci_hi, 2)) + "])")
 print("\n【サブグループ別（有意なもの）】")

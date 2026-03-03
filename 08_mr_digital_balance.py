@@ -54,11 +54,11 @@ del _os, _script_dir, _data_dir_primary
 RESULTS_DIR = "results"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-# コスト仮定（単位：万円）
+# コスト仮定（単位：円）
 # ※ デジタル視聴単価はデータが存在しないため、損益分岐点コストで代替分析する
 COST_ASSUMPTIONS = {
-    "mr_fte_annual": 1000,   # MR 1名あたり年間コスト（万円）
-    "mr_per_visit": 2,        # MR活動1回あたりコスト（万円）
+    "mr_fte_annual": 1000,   # MR 1名あたり年間コスト（円）
+    "mr_per_visit": 2,        # MR活動1回あたりコスト（円）
 }
 
 # 現状ベースライン（MR FTEは仮定値）
@@ -70,8 +70,8 @@ print("=" * 60)
 print(" MR vs デジタルバランス分析")
 print("=" * 60)
 print("\n【コスト仮定（MR）】")
-print(f"  MR 1名あたり年間コスト: {COST_ASSUMPTIONS['mr_fte_annual']:,.0f}万円")
-print(f"  MR活動1回あたりコスト: {COST_ASSUMPTIONS['mr_per_visit']:.1f}万円")
+print(f"  MR 1名あたり年間コスト: {COST_ASSUMPTIONS['mr_fte_annual']:,.0f}円")
+print(f"  MR活動1回あたりコスト: {COST_ASSUMPTIONS['mr_per_visit']:.1f}円")
 print(f"  デジタル視聴単価: データなし → 損益分岐点コスト分析で代替")
 
 # ================================================================
@@ -213,8 +213,8 @@ try:
     sig_digital = "***" if p_digital < 0.001 else "**" if p_digital < 0.01 else "*" if p_digital < 0.05 else "n.s."
 
     print(f"\n  【推定結果】")
-    print(f"  MR活動の限界効果: {beta_mr:.2f}万円/回 (SE={se_mr:.2f}, p={p_mr:.4f}, {sig_mr})")
-    print(f"  デジタル視聴の限界効果: {beta_digital:.2f}万円/回 (SE={se_digital:.2f}, p={p_digital:.4f}, {sig_digital})")
+    print(f"  MR活動の限界効果: {beta_mr:.2f}円/回 (SE={se_mr:.2f}, p={p_mr:.4f}, {sig_mr})")
+    print(f"  デジタル視聴の限界効果: {beta_digital:.2f}円/回 (SE={se_digital:.2f}, p={p_digital:.4f}, {sig_digital})")
 
 except Exception as e:
     print(f"  エラー: {e} → デフォルト値使用")
@@ -234,18 +234,18 @@ n_months = panel_reg.index.get_level_values(1).nunique()
 
 print(f"  平均MR活動回数（1施設1月）: {current_mr_mean:.2f}回")
 print(f"  平均デジタル視聴回数（1施設1月）: {current_digital_mean:.2f}回")
-print(f"  平均売上（1施設1月）: {current_sales_mean:.0f}万円")
+print(f"  平均売上（1施設1月）: {current_sales_mean:.0f}円")
 print(f"  施設数: {n_facilities}, 期間: {n_months}ヶ月")
 
 current_mr_cost_annual = BASELINE["mr_fte"] * COST_ASSUMPTIONS["mr_fte_annual"]
-print(f"\n  年間MRコスト（仮定）: {current_mr_cost_annual:,.0f}万円")
+print(f"\n  年間MRコスト（仮定）: {current_mr_cost_annual:,.0f}円")
 
 # ================================================================
 # 損益分岐点コスト分析
 # ================================================================
 print("\n[損益分岐点コスト分析]")
 
-# MRの費用対効果: beta_mr / mr_per_visit (万円売上増/万円投資)
+# MRの費用対効果: beta_mr / mr_per_visit (円売上増/円投資)
 mr_cost_efficiency = beta_mr / COST_ASSUMPTIONS["mr_per_visit"]
 
 # デジタルの損益分岐点コスト:
@@ -259,9 +259,9 @@ else:
 # 等価交換レート: MR活動1回 = デジタル何回分の売上
 equivalence_ratio = beta_mr / beta_digital if beta_digital > 0 else np.inf
 
-print(f"  MRの費用対効果: {mr_cost_efficiency:.3f}万円売上/万円コスト")
-print(f"  デジタル損益分岐点: C* = {breakeven_cost:.3f}万円/視聴")
-print(f"  解釈: 視聴単価 < {breakeven_cost:.3f}万円 であれば、デジタルはMRより費用対効果が高い")
+print(f"  MRの費用対効果: {mr_cost_efficiency:.3f}円売上/円コスト")
+print(f"  デジタル損益分岐点: C* = {breakeven_cost:.3f}円/視聴")
+print(f"  解釈: 視聴単価 < {breakeven_cost:.3f}円 であれば、デジタルはMRより費用対効果が高い")
 print(f"  等価交換レート: MR活動1回 = デジタル視聴{equivalence_ratio:.1f}回分の売上インパクト")
 
 # ================================================================
@@ -272,14 +272,14 @@ print("\n[感度分析: MR削減節約額をデジタルへ転換]")
 # MR削減シナリオ（削減率）
 mr_reductions = [0.10, 0.20, 0.30, 0.50]
 
-# デジタル視聴単価グリッド（万円/視聴）
+# デジタル視聴単価グリッド（円/視聴）
 cost_grid = np.array([0.05, 0.1, 0.3, 0.5, 1.0, 2.0, 5.0, 10.0])
 
 # グリッド計算
 sensitivity_rows = []
 for mr_red in mr_reductions:
     mr_fte_new = BASELINE["mr_fte"] * (1 - mr_red)
-    mr_savings = mr_red * current_mr_cost_annual  # 年間節約額（万円）
+    mr_savings = mr_red * current_mr_cost_annual  # 年間節約額（円）
 
     # MR活動減少 (1施設1月あたり)
     delta_mr_pm = -current_mr_mean * mr_red
@@ -322,9 +322,9 @@ for mr_red in mr_reductions:
     else:
         C_neutral = np.inf
     revenue_neutral_costs[mr_red] = C_neutral
-    print(f"  MR {mr_red*100:.0f}%削減 → 売上中立コスト C <= {C_neutral:.3f}万円/視聴")
+    print(f"  MR {mr_red*100:.0f}%削減 → 売上中立コスト C <= {C_neutral:.3f}円/視聴")
 
-print(f"\n  【参考】損益分岐点（コスト効率均衡）: {breakeven_cost:.3f}万円/視聴")
+print(f"\n  【参考】損益分岐点（コスト効率均衡）: {breakeven_cost:.3f}円/視聴")
 
 # ================================================================
 # 施設属性別限界効果（UHP区分・施設区分）
@@ -388,7 +388,7 @@ for bar, b in zip(bars, betas):
              f"{b:.2f}", ha="center", va="bottom", fontsize=10, fontweight="bold")
 ax1.set_xticks(x)
 ax1.set_xticklabels(labels, fontsize=10)
-ax1.set_ylabel("限界効果（万円売上/回）", fontsize=10)
+ax1.set_ylabel("限界効果（円売上/回）", fontsize=10)
 ax1.set_title("(a) 限界効果（TWFE推定）", fontsize=11, fontweight="bold")
 ax1.grid(axis="y", alpha=0.3)
 
@@ -402,13 +402,13 @@ mr_eff_line = np.full_like(C_range, mr_cost_efficiency)
 ax2.plot(C_range, digital_efficiency, color="#2ca02c", linewidth=2, label="デジタル費用対効果")
 ax2.axhline(mr_cost_efficiency, color="#ff7f0e", linewidth=2, linestyle="--", label="MR費用対効果")
 ax2.axvline(breakeven_cost, color="red", linewidth=1.5, linestyle=":", alpha=0.8,
-            label=f"損益分岐点 C*={breakeven_cost:.2f}万円")
+            label=f"損益分岐点 C*={breakeven_cost:.2f}円")
 ax2.fill_betweenx([0, digital_efficiency.max()], 0, breakeven_cost,
                    alpha=0.08, color="green", label="デジタル優位ゾーン")
 ax2.set_xlim(0, max(cost_grid))
 ax2.set_ylim(bottom=0)
-ax2.set_xlabel("デジタル視聴単価（万円/視聴）", fontsize=10)
-ax2.set_ylabel("費用対効果（万円売上/万円コスト）", fontsize=10)
+ax2.set_xlabel("デジタル視聴単価（円/視聴）", fontsize=10)
+ax2.set_ylabel("費用対効果（円売上/円コスト）", fontsize=10)
 ax2.set_title("(b) 損益分岐点コスト", fontsize=11, fontweight="bold")
 ax2.legend(fontsize=7)
 ax2.grid(alpha=0.3)
@@ -424,7 +424,7 @@ ax3.set_title("(c) MR↔デジタル等価交換レート", fontsize=11, fontwei
 ax3.axis("off")
 # 補足テキスト
 ax3.text(0.5, 0.15,
-         f"MR限界効果: {beta_mr:.2f}万円/回\nデジタル限界効果: {beta_digital:.2f}万円/回",
+         f"MR限界効果: {beta_mr:.2f}円/回\nデジタル限界効果: {beta_digital:.2f}円/回",
          ha="center", va="center", fontsize=9, color="#666666",
          transform=ax3.transAxes)
 
@@ -439,7 +439,7 @@ pivot_sens = sensitivity_df.pivot_table(
 sns.heatmap(pivot_sens, cmap="RdYlGn", center=0, annot=True, fmt=".1f",
             cbar_kws={"label": "売上変化率 (%)"}, ax=ax4,
             linewidths=0.5)
-ax4.set_xlabel("デジタル視聴単価（万円/視聴）", fontsize=10)
+ax4.set_xlabel("デジタル視聴単価（円/視聴）", fontsize=10)
 ax4.set_ylabel("MR削減率 (%)", fontsize=10)
 ax4.set_title("(d) 感度分析: MR削減節約額をデジタルへ転換した場合の売上変化率（%）\n"
               "（コストニュートラル前提）", fontsize=11, fontweight="bold")
@@ -453,8 +453,8 @@ clip_max = max(breakeven_cost * 20, max(v for v in neutral_vals if np.isfinite(v
 neutral_vals_plot = [min(v, clip_max) if np.isfinite(v) else clip_max for v in neutral_vals]
 bars5 = ax5.barh(mr_red_labels, neutral_vals_plot, color="#5c85d6", alpha=0.75)
 ax5.axvline(breakeven_cost, color="red", linewidth=1.5, linestyle="--",
-            label=f"損益分岐点 {breakeven_cost:.2f}万円")
-ax5.set_xlabel("売上中立コスト（万円/視聴）", fontsize=10)
+            label=f"損益分岐点 {breakeven_cost:.2f}円")
+ax5.set_xlabel("売上中立コスト（円/視聴）", fontsize=10)
 ax5.set_ylabel("MR削減率", fontsize=10)
 ax5.set_title("(e) MR削減を売上中立に保つ\n最大デジタル視聴単価", fontsize=11, fontweight="bold")
 ax5.legend(fontsize=8)
@@ -481,7 +481,7 @@ if len(subgroup_df) > 0:
     # 損益分岐点ラインを各グループに表示
     ax6.set_xticks(x_pos_sub)
     ax6.set_xticklabels(x_labels_sub, fontsize=9)
-    ax6.set_ylabel("限界効果（万円売上/回）", fontsize=10)
+    ax6.set_ylabel("限界効果（円売上/回）", fontsize=10)
     ax6.set_title("(f) 施設属性別限界効果（95%CI）", fontsize=11, fontweight="bold")
     ax6.legend(fontsize=9)
     ax6.grid(axis="y", alpha=0.3)
@@ -532,7 +532,7 @@ output_json = {
         "breakeven_digital_cost": breakeven_cost,
         "equivalence_ratio_mr_to_digital": equivalence_ratio,
         "interpretation": (
-            f"デジタル視聴単価 < {breakeven_cost:.3f}万円/視聴 であれば MR より費用対効果が高い。"
+            f"デジタル視聴単価 < {breakeven_cost:.3f}円/視聴 であれば MR より費用対効果が高い。"
             f"MR活動1回 = デジタル視聴{equivalence_ratio:.1f}回分の売上インパクト(概算)。"
         ),
     },
@@ -574,18 +574,18 @@ print(" 分析完了 ─ 損益分岐点コストアプローチ")
 print("=" * 60)
 
 print(f"\n【主要結論】")
-print(f"  MR限界効果:     {beta_mr:+.2f}万円/活動（{sig_mr}）")
-print(f"  デジタル限界効果: {beta_digital:+.2f}万円/視聴（{sig_digital}）")
+print(f"  MR限界効果:     {beta_mr:+.2f}円/活動（{sig_mr}）")
+print(f"  デジタル限界効果: {beta_digital:+.2f}円/視聴（{sig_digital}）")
 print(f"  等価交換レート:   MR1回 ~ デジタル{equivalence_ratio:.1f}回")
 print(f"\n【損益分岐点コスト】")
-print(f"  C* = {breakeven_cost:.3f}万円/視聴 = {breakeven_cost*10000:.0f}円/視聴")
+print(f"  C* = {breakeven_cost:.3f}円/視聴 = {breakeven_cost*10000:.0f}円/視聴")
 print(f"  → 視聴単価がこれ以下ならデジタルはMRより費用対効果が高い")
 
 print(f"\n【MR削減シミュレーション（売上中立コスト）】")
 for r in mr_reductions:
     nc = revenue_neutral_costs[r]
     if np.isfinite(nc):
-        nc_str = f"{nc:.2f}万円/視聴"
+        nc_str = f"{nc:.2f}円/視聴"
         note = " ← 現実的コスト範囲内で注意" if nc < 20 else " ← 実質的にどのコストでも売上増"
     else:
         nc_str = "∞"
@@ -595,6 +595,6 @@ for r in mr_reductions:
 print(f"\n【感度分析サマリー（MR 30%削減時）】")
 sub30 = sensitivity_df[sensitivity_df["mr_reduction_pct"] == 30.0]
 for _, row in sub30.iterrows():
-    print(f"  視聴単価 {row['digital_cost_per_view']:.2f}万円 → 売上変化 {row['delta_sales_pct']:+.1f}%")
+    print(f"  視聴単価 {row['digital_cost_per_view']:.2f}円 → 売上変化 {row['delta_sales_pct']:+.1f}%")
 
 print("\n" + "=" * 60)

@@ -2,7 +2,7 @@
   "analysis_settings": {
     "pre_period": "month 0-11 (12ヶ月)",
     "post_period": "month 12-32 (21ヶ月)",
-    "outcome": "後期月平均 - 前期月平均（万円）",
+    "outcome": "後期月平均 - 前期月平均（円）",
     "caliper": 0.11409645757634518,
     "matching": "1:1 nearest-neighbor within caliper",
     "n_subgroup_dimensions": 9

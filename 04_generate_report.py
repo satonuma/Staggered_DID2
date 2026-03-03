@@ -1505,7 +1505,7 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 <table>
   <tr>
     <th>視聴回数</th>
-    <th>限界効果（万円）</th>
+    <th>限界効果（円）</th>
     <th>SE</th>
     <th>p値</th>
     <th>有意性</th>
@@ -1613,36 +1613,36 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
   <tr style="background-color:#ffebee;">
     <td><strong>新規医師 1回目</strong></td>
     <td>{{ "%.1f"|format(pv_results.initial_viewing_rate * 100) }}%</td>
-    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_1st.coefficient) }}万円</td>
-    <td style="font-weight:bold;">{{ "%.2f"|format(pv_results.expected_effects['1st']) }}万円</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_1st.coefficient) }}円</td>
+    <td style="font-weight:bold;">{{ "%.2f"|format(pv_results.expected_effects['1st']) }}円</td>
     <td>1.0倍</td>
   </tr>
   <tr style="background-color:#e8f5e9;">
     <td><strong>既存医師 2回目</strong></td>
     <td>35.5%</td>
-    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_2nd.coefficient) }}万円</td>
-    <td style="font-weight:bold;">{{ "%.2f"|format(pv_results.expected_effects['2nd']) }}万円</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_2nd.coefficient) }}円</td>
+    <td style="font-weight:bold;">{{ "%.2f"|format(pv_results.expected_effects['2nd']) }}円</td>
     <td>{{ "%.0f"|format(pv_results.expected_effects['2nd'] / pv_results.expected_effects['1st']) }}倍</td>
   </tr>
   <tr style="background-color:#e8f5e9;">
     <td><strong>既存医師 3回目</strong></td>
     <td>47.4%</td>
-    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_3rd.coefficient) }}万円</td>
-    <td style="font-weight:bold;">{{ "%.2f"|format(pv_results.expected_effects['3rd']) }}万円</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_3rd.coefficient) }}円</td>
+    <td style="font-weight:bold;">{{ "%.2f"|format(pv_results.expected_effects['3rd']) }}円</td>
     <td>{{ "%.0f"|format(pv_results.expected_effects['3rd'] / pv_results.expected_effects['1st']) }}倍</td>
   </tr>
   <tr style="background-color:#e8f5e9;">
     <td><strong>既存医師 4回目</strong></td>
     <td>56.6%</td>
-    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_4th.coefficient) }}万円</td>
-    <td style="font-weight:bold;">{{ "%.2f"|format(pv_results.expected_effects['4th']) }}万円</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_4th.coefficient) }}円</td>
+    <td style="font-weight:bold;">{{ "%.2f"|format(pv_results.expected_effects['4th']) }}円</td>
     <td>{{ "%.0f"|format(pv_results.expected_effects['4th'] / pv_results.expected_effects['1st']) }}倍</td>
   </tr>
   <tr style="background-color:#e8f5e9;">
     <td><strong>既存医師 5回以上</strong></td>
     <td>50.5%</td>
-    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_5plus.coefficient) }}万円</td>
-    <td style="font-weight:bold;">{{ "%.2f"|format(pv_results.expected_effects['5plus']) }}万円</td>
+    <td>{{ "%.2f"|format(pv_results.marginal_effects.view_5plus.coefficient) }}円</td>
+    <td style="font-weight:bold;">{{ "%.2f"|format(pv_results.expected_effects['5plus']) }}円</td>
     <td>{{ "%.0f"|format(pv_results.expected_effects['5plus'] / pv_results.expected_effects['1st']) }}倍</td>
   </tr>
 </table>
@@ -1656,7 +1656,7 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
     <td style="border:none; padding:10px; vertical-align:top; width:50%;">
       <strong>📊 期待効果ランキング:</strong><br>
       {% for label, value in pv_results.optimal_strategy.priority_ranking %}
-      {{ loop.index }}. {{ label }}: {{ "%.2f"|format(value) }}万円<br>
+      {{ loop.index }}. {{ label }}: {{ "%.2f"|format(value) }}円<br>
       {% endfor %}
     </td>
     <td style="border:none; padding:10px; vertical-align:top; width:50%; background-color:#fff9c4;">
@@ -2005,7 +2005,7 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 <table>
   <tr>
     <th>変数</th>
-    <th>限界効果（万円/回）</th>
+    <th>限界効果（円/回）</th>
     <th>SE</th>
     <th>p値</th>
     <th>有意性</th>
@@ -2032,8 +2032,8 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 
 <div class="conclusion-box" style="background-color:#fff3cd; border-left:4px solid #ffc107;">
   <strong>重要な知見:</strong><br>
-  デジタル視聴の限界効果（{{ "%.2f"|format(mr_balance_results.marginal_effects.digital.coefficient) }}万円）は、
-  MR活動（{{ "%.2f"|format(mr_balance_results.marginal_effects.mr.coefficient) }}万円）の
+  デジタル視聴の限界効果（{{ "%.2f"|format(mr_balance_results.marginal_effects.digital.coefficient) }}円）は、
+  MR活動（{{ "%.2f"|format(mr_balance_results.marginal_effects.mr.coefficient) }}円）の
   <strong>約{{ "%.1f"|format(mr_balance_results.marginal_effects.digital.coefficient / mr_balance_results.marginal_effects.mr.coefficient) }}倍</strong>。
 </div>
 
@@ -2041,9 +2041,9 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 <p>デジタル視聴単価のデータが存在しないため、「デジタルがMRより費用対効果が高くなる最大視聴単価（損益分岐点コスト C*）」を回帰結果から導出する。</p>
 
 <div class="highlight-box">
-  <strong>コスト仮定（万円）:</strong><br>
-  - MR 1名あたり年間コスト: {{ "{:,.0f}".format(mr_balance_results.cost_assumptions.mr_fte_annual) }}万円<br>
-  - MR活動1回あたりコスト: {{ "%.1f"|format(mr_balance_results.cost_assumptions.mr_per_visit) }}万円<br>
+  <strong>コスト仮定（円）:</strong><br>
+  - MR 1名あたり年間コスト: {{ "{:,.0f}".format(mr_balance_results.cost_assumptions.mr_fte_annual) }}円<br>
+  - MR活動1回あたりコスト: {{ "%.1f"|format(mr_balance_results.cost_assumptions.mr_per_visit) }}円<br>
   - デジタル視聴単価: データなし（損益分岐点コストで評価）
 </div>
 
@@ -2056,12 +2056,12 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
   </tr>
   <tr>
     <td>MRの費用対効果</td>
-    <td>{{ "%.3f"|format(mr_balance_breakeven.mr_cost_efficiency) }}万円売上/万円コスト</td>
+    <td>{{ "%.3f"|format(mr_balance_breakeven.mr_cost_efficiency) }}円売上/円コスト</td>
     <td>MR活動1回あたりのコスト効率</td>
   </tr>
   <tr>
     <td><strong>損益分岐点コスト C*</strong></td>
-    <td><strong>{{ "%.3f"|format(mr_balance_breakeven.breakeven_digital_cost) }}万円/視聴</strong></td>
+    <td><strong>{{ "%.3f"|format(mr_balance_breakeven.breakeven_digital_cost) }}円/視聴</strong></td>
     <td>この単価以下ならデジタルはMRより費用対効果が高い</td>
   </tr>
   <tr>
@@ -2084,8 +2084,8 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 <table>
   <tr>
     <th>MR削減率</th>
-    <th>年間節約額（万円）</th>
-    <th>売上中立コスト C<sub>neutral</sub>（万円/視聴）</th>
+    <th>年間節約額（円）</th>
+    <th>売上中立コスト C<sub>neutral</sub>（円/視聴）</th>
     <th>解釈</th>
   </tr>
   {% for row in mr_balance_revenue_neutral %}
@@ -2109,7 +2109,7 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
   <strong>MR 30%削減 × デジタル転換 感度分析（視聴単価別売上変化率）:</strong>
   <table style="margin:8px 0 0 0; font-size:0.9em;">
     <tr>
-      <th>視聴単価（万円）</th>
+      <th>視聴単価（円）</th>
       {% for row in mr_balance_sensitivity_30 %}<td>{{ row.digital_cost_per_view }}</td>{% endfor %}
     </tr>
     <tr>
@@ -2142,10 +2142,10 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 <h4>主要な知見</h4>
 {% if mr_balance_breakeven %}
 <ul style="margin-top:10px; padding-left:20px;">
-  <li>デジタルの限界効果（{{ "%.2f"|format(mr_balance_results.marginal_effects.digital.coefficient) }}万円/視聴）は
-      MR（{{ "%.2f"|format(mr_balance_results.marginal_effects.mr.coefficient) }}万円/活動）の
+  <li>デジタルの限界効果（{{ "%.2f"|format(mr_balance_results.marginal_effects.digital.coefficient) }}円/視聴）は
+      MR（{{ "%.2f"|format(mr_balance_results.marginal_effects.mr.coefficient) }}円/活動）の
       <strong>{{ "%.1f"|format(mr_balance_results.marginal_effects.digital.coefficient / mr_balance_results.marginal_effects.mr.coefficient) }}倍</strong></li>
-  <li>損益分岐点コスト C* = <strong>{{ "%.3f"|format(mr_balance_breakeven.breakeven_digital_cost) }}万円/視聴</strong>
+  <li>損益分岐点コスト C* = <strong>{{ "%.3f"|format(mr_balance_breakeven.breakeven_digital_cost) }}円/視聴</strong>
       （視聴単価がこれ以下ならデジタルはMRより費用対効果が高い）</li>
   <li>MR削減節約額をデジタルへ転換した場合、現実的な視聴単価の範囲ではほぼ全ての削減シナリオで売上増加が見込まれる</li>
 </ul>
@@ -2155,12 +2155,12 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
     <td style="width:50%; padding:10px; vertical-align:top;">
       <strong>現状（MR）</strong><br>
       MR FTE: {{ "%.0f"|format(mr_balance_results.baseline.mr_fte) }}名（仮定）<br>
-      年間MRコスト: {{ "{:,.0f}".format(mr_balance_results.current_status.mr_cost_annual) }}万円<br>
-      MR費用対効果: {{ "%.3f"|format(mr_balance_breakeven.mr_cost_efficiency) }}万円売上/万円コスト
+      年間MRコスト: {{ "{:,.0f}".format(mr_balance_results.current_status.mr_cost_annual) }}円<br>
+      MR費用対効果: {{ "%.3f"|format(mr_balance_breakeven.mr_cost_efficiency) }}円売上/円コスト
     </td>
     <td style="width:50%; padding:10px; vertical-align:top; background-color:#e8f5e9;">
       <strong>デジタル（試算）</strong><br>
-      損益分岐点: C* = {{ "%.3f"|format(mr_balance_breakeven.breakeven_digital_cost) }}万円/視聴<br>
+      損益分岐点: C* = {{ "%.3f"|format(mr_balance_breakeven.breakeven_digital_cost) }}円/視聴<br>
       等価レート: MR1回 = デジタル{{ "%.1f"|format(mr_balance_breakeven.equivalence_ratio_mr_to_digital) }}回<br>
       → 視聴単価 C* 以下で MR より費用対効果が高い
     </td>
@@ -2198,7 +2198,7 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
   ウォッシュアウト期間（2023年4–5月）に視聴していた医師（継続的視聴者）を除外した母集団において、
   解析期間中に視聴を開始した<strong>視聴群</strong>と全期間未視聴の<strong>未視聴群</strong>を
   1:1 傾向スコアマッチング（最近傍、キャリパー付き）で比較した。
-  アウトカムは <strong>後期月平均 – 前期月平均（万円）</strong> で定義した伸長率差（ATT）。
+  アウトカムは <strong>後期月平均 – 前期月平均（円）</strong> で定義した伸長率差（ATT）。
 </p>
 
 <h3>分析設定</h3>
@@ -2223,7 +2223,7 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 <h3>全体 ATT（マッチング後）</h3>
 {% set att = psm_results.overall_att %}
 <table>
-  <tr><th>ATT（万円/月）</th><th>SE</th><th>t値</th><th>p値</th><th>95% CI</th></tr>
+  <tr><th>ATT（円/月）</th><th>SE</th><th>t値</th><th>p値</th><th>95% CI</th></tr>
   <tr>
     <td class="{{ 'sig' if att.p_value < 0.05 else 'ns' }}">
       {{ "+%.2f"|format(att.att) if att.att >= 0 else "%.2f"|format(att.att) }}
@@ -2236,7 +2236,7 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 </table>
 <p>
   視聴群は未視聴群（PSMマッチング後）に比べ、後期の月平均実績が
-  <strong>{{ "+%.1f"|format(att.att) if att.att >= 0 else "%.1f"|format(att.att) }} 万円</strong> 多い。
+  <strong>{{ "+%.1f"|format(att.att) if att.att >= 0 else "%.1f"|format(att.att) }} 円</strong> 多い。
 </p>
 
 <h3>サブグループ別 ATT</h3>
@@ -2249,7 +2249,7 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
     <th>視聴群N</th>
     <th>未視聴群N</th>
     <th>マッチ数</th>
-    <th>ATT（万円/月）</th>
+    <th>ATT（円/月）</th>
     <th>SE</th>
     <th>p値</th>
     <th>95% CI</th>
@@ -2412,7 +2412,7 @@ if mr_digital_balance_results:
         pct_str = key.replace("mr_reduction_", "").replace("pct", "")
         pct = int(pct_str) if pct_str.isdigit() else 0
         nc = data.get("max_digital_cost_for_neutral", 0)
-        note = "どの単価でも売上増（実質上限なし）" if nc > 100 else f"{nc:.2f}万円以下で売上維持"
+        note = "どの単価でも売上増（実質上限なし）" if nc > 100 else f"{nc:.2f}円以下で売上維持"
         _mr_balance_revenue_neutral.append(DotDict({
             "mr_reduction_pct": pct,
             "mr_savings_annual": data.get("mr_savings_annual", 0),
