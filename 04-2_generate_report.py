@@ -158,11 +158,11 @@ print(f"  視聴データ結合 (ENT, Web講演会抽出): {n_viewing_combined:,
 print("\n[JSON結果読み込み]")
 with open(os.path.join(RESULTS_DIR, "did_results_v2.json"), "r", encoding="utf-8") as f:
     did_results = json.load(f)
-with open(os.path.join(RESULTS_DIR, "cate_results.json"), "r", encoding="utf-8") as f:
+with open(os.path.join(RESULTS_DIR, "cate_results_v2.json"), "r", encoding="utf-8") as f:
     cate_results = json.load(f)
 
 # 医師視聴パターン分析結果
-physician_viewing_path = os.path.join(RESULTS_DIR, "physician_viewing_analysis.json")
+physician_viewing_path = os.path.join(RESULTS_DIR, "physician_viewing_analysis_v2.json")
 propensity_score_path = os.path.join(RESULTS_DIR, "propensity_score_analysis_v2.json")
 mr_mediation_path = os.path.join(RESULTS_DIR, "mr_activity_mediation.json")
 mr_digital_balance_path = os.path.join(RESULTS_DIR, "mr_digital_balance.json")
@@ -178,7 +178,7 @@ loaded_files = []
 if os.path.exists(physician_viewing_path):
     with open(physician_viewing_path, "r", encoding="utf-8") as f:
         physician_viewing_results = json.load(f)
-    loaded_files.append("physician_viewing_analysis.json")
+    loaded_files.append("physician_viewing_analysis_v2.json")
 
 if os.path.exists(propensity_score_path):
     with open(propensity_score_path, "r", encoding="utf-8") as f:
@@ -628,9 +628,9 @@ print("\n[既存PNG読み込み]")
 existing_pngs = {}
 png_files = [
     "staggered_did_results_v2.png",
-    "cate_results.png",
-    "cate_dynamic_effects.png",
-    "physician_viewing_analysis.png",
+    "cate_results_v2.png",
+    "cate_dynamic_effects_v2.png",
+    "intensive_extensive_margin_v2.png",
     "propensity_score_analysis_v2.png",
     "mr_activity_mediation.png",
     "mr_digital_balance.png",
@@ -1724,7 +1724,7 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
   (d) 期待ROI / (e) 配信優先順位 / (f) 最適配分メッセージ
 </p>
 {% else %}
-<p>physician_viewing_analysis.png が見つかりません。</p>
+<p>intensive_extensive_margin_v2.png が見つかりません。</p>
 {% endif %}
 
 {% else %}
@@ -2545,9 +2545,9 @@ template_data = {
     "viewing_b64": viewing_b64,
     "cohort_dist_b64": cohort_dist_b64,
     "png_did": existing_pngs.get("staggered_did_results_v2.png", ""),
-    "png_cate": existing_pngs.get("cate_results.png", ""),
-    "png_cate_dyn": existing_pngs.get("cate_dynamic_effects.png", ""),
-    "png_physician_viewing": existing_pngs.get("physician_viewing_analysis.png", ""),
+    "png_cate": existing_pngs.get("cate_results_v2.png", ""),
+    "png_cate_dyn": existing_pngs.get("cate_dynamic_effects_v2.png", ""),
+    "png_physician_viewing": existing_pngs.get("intensive_extensive_margin_v2.png", ""),
     "png_propensity_score": existing_pngs.get("propensity_score_analysis_v2.png", ""),
     "png_mr_mediation": existing_pngs.get("mr_activity_mediation.png", ""),
     "png_mr_balance": existing_pngs.get("mr_digital_balance.png", ""),
