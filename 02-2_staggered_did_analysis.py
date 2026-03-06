@@ -1583,9 +1583,13 @@ exclusion_flow = {
     "total_facilities": len(fac_to_docs),
     "multi_doctor_facilities": _multi,
     "washout_excluded_facilities": len(washout_fac_ids),
+    "washout_excluded_doctors": sum(len(fac_to_docs.get(f, [])) for f in washout_fac_ids),
     "final_treated": len(treated_fac_ids),
+    "final_treated_doctors": sum(len(fac_to_docs.get(f, [])) for f in treated_fac_ids),
     "final_control": len(control_fac_ids),
+    "final_control_doctors": sum(len(fac_to_docs.get(f, [])) for f in control_fac_ids),
     "final_total": len(analysis_fac_ids),
+    "final_total_doctors": sum(len(fac_to_docs.get(f, [])) for f in analysis_fac_ids),
     "include_only_rw": INCLUDE_ONLY_RW,
     "exclude_zero_sales": EXCLUDE_ZERO_SALES_FACILITIES,
     "total_viewing_rows": len(viewing),       # viewing（ENT絞り込み済み、施設ID付与前）の行数

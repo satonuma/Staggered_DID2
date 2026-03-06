@@ -380,6 +380,11 @@ def create_consort_diagram(flow):
                   f"他品目/その他活動\n{n_view_all - n_view_after:,} 行除外")
 
     if is_v2:
+        n_washout_docs = flow.get("washout_excluded_doctors", 0)
+        n_final_docs   = flow.get("final_total_doctors", 0)
+        n_treated_docs = flow.get("final_treated_doctors", 0)
+        n_control_docs = flow.get("final_control_doctors", 0)
+
         # ver2: Step 3 → 主施設割り当て → ウォッシュアウト
         draw_arrow(ax, cx, y - 0.45, cx, y - sp + 0.45)
         y -= sp
@@ -394,10 +399,10 @@ def create_consort_diagram(flow):
         y -= sp
         after_washout = n_clean - n_washout
         draw_box(ax, cx, y, 4.2, 0.9,
-                 f"wash-out後\n{after_washout}施設")
+                 f"wash-out後\n{after_washout}施設 / {n_final_docs}医師")
         draw_arrow_right(ax, cx + 2.1, y, ex - 1.5, y)
         draw_excluded(ax, ex, y, 2.8, 0.7,
-                      f"wash-out視聴\n{n_washout}施設 除外")
+                      f"wash-out視聴\n{n_washout}施設 / {n_washout_docs}医師 除外")
     else:
         # ver1: Step 1 / Step 2 / Step 3 / Washout / Late
         # Step 1: facility_attribute → 施設内医師数==1 (fac単位)
@@ -451,18 +456,24 @@ def create_consort_diagram(flow):
     # Final: analysis sample
     draw_arrow(ax, cx, y - 0.45, cx, y - sp + 0.45)
     y -= sp
+    _final_docs_label = flow.get("final_total_doctors", 0) if is_v2 else ""
+    _final_docs_str = f" / {_final_docs_label}医師" if is_v2 else ""
     draw_box(ax, cx, y, 4.2, 0.9,
-             f"最終分析対象\n{n_final}施設", color="#E8F5E9", edge="#4CAF50")
+             f"最終分析対象\n{n_final}施設{_final_docs_str}", color="#E8F5E9", edge="#4CAF50")
 
     # Split to treated / control
     draw_arrow(ax, cx - 0.8, y - 0.45, cx - 1.8, y - sp + 0.45)
     draw_arrow(ax, cx + 0.8, y - 0.45, cx + 1.8, y - sp + 0.45)
     y -= sp
 
+    _t_docs = flow.get("final_treated_doctors", 0) if is_v2 else ""
+    _c_docs = flow.get("final_control_doctors", 0) if is_v2 else ""
+    _t_docs_str = f"\n{_t_docs}医師" if is_v2 else ""
+    _c_docs_str = f"\n{_c_docs}医師" if is_v2 else ""
     draw_box(ax, cx - 2.0, y, 3.0, 0.9,
-             f"処置群\n{n_treated}施設", color="#FFF3E0", edge="#FF9800")
+             f"処置群\n{n_treated}施設{_t_docs_str}", color="#FFF3E0", edge="#FF9800")
     draw_box(ax, cx + 2.0, y, 3.0, 0.9,
-             f"対照群\n{n_control}施設", color="#E3F2FD", edge="#1565C0")
+             f"対照群\n{n_control}施設{_c_docs_str}", color="#E3F2FD", edge="#1565C0")
 
     return fig
 
@@ -1037,8 +1048,8 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
   <tr>
     <td>[D] Wash-out視聴 (施設単位)</td>
     <td>ウォッシュアウト期間内に施設内いずれかの医師が視聴</td>
-    <td>{{ flow.washout_excluded_facilities }}施設</td>
-    <td>{{ flow.final_total }}施設</td>
+    <td>{{ flow.washout_excluded_facilities }}施設 / {{ flow.washout_excluded_doctors }}医師</td>
+    <td>{{ flow.final_total }}施設 / {{ flow.final_total_doctors }}医師</td>
   </tr>
   {% else %}
   <tr>
@@ -1076,7 +1087,11 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
     <td>最終</td>
     <td>分析対象</td>
     <td>-</td>
+    {% if flow.version == "v2" %}
+    <td>{{ flow.final_total }}施設 / {{ flow.final_total_doctors }}医師<br>(処置: {{ flow.final_treated }}施設/{{ flow.final_treated_doctors }}医師 + 対照: {{ flow.final_control }}施設/{{ flow.final_control_doctors }}医師)</td>
+    {% else %}
     <td>{{ flow.final_total }}施設 (処置{{ flow.final_treated }} + 対照{{ flow.final_control }})</td>
+    {% endif %}
   </tr>
 </table>
 </section>
