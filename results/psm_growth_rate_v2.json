@@ -4,7 +4,7 @@
     "pre_period": "month 0-11 (12ヶ月)",
     "post_period": "month 12-32 (21ヶ月)",
     "outcome": "後期月平均 - 前期月平均（円）",
-    "caliper": 0.07447883077561886,
+    "caliper": 0.07447883077561888,
     "matching": "1:1 nearest-neighbor within caliper (facility level)",
     "n_subgroup_dimensions": 4
   },
@@ -175,6 +175,11 @@
       "SMD_after": -0.016868179978975353
     },
     {
+      "変数": "n_pre_viewed_docs",
+      "SMD_before": 0.0,
+      "SMD_after": 0.0
+    },
+    {
       "変数": "pre_mean",
       "SMD_before": 0.3837970317433786,
       "SMD_after": 0.007597424145301905
@@ -235,5 +240,9 @@
     "note": "PSMはobservable confoundersのみ調整。未観測交絡は残る。",
     "att_definition": "視聴施設の（後期-前期）成長率 と 対照施設の（後期-前期）成長率 の差",
     "unit": "施設レベル (facility_id)。複数医師施設含む。主施設=平均納入額最大施設。"
+  },
+  "coverage_stats": {
+    "treated_mean_coverage": 0.777,
+    "coverage_growth_corr": -0.4120902332643513
   }
 }

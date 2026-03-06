@@ -51,7 +51,7 @@ COV_CAT_COLS = [
     "baseline_cat",    # 施設: ベースライン売上カテゴリ
 ]
 # 連続共変量 (z-score 標準化)
-COV_CONT_COLS = ["n_docs"]  # 施設あたり医師数
+COV_CONT_COLS = ["n_docs", "n_pre_viewed_docs"]  # 施設あたり医師数 / ウォッシュアウト前視聴医師数
 # ===================================================================
 
 FILE_RW_LIST           = "rw_list.csv"
@@ -496,6 +496,33 @@ else:
     unit_df["mr_pre"] = 0.0
 print(f"  mr_pre: WO期間施設別月平均MR活動 (非ゼロ: {unit_df['mr_pre'].gt(0).sum()}件)")
 
+# ウォッシュアウト期間の視聴医師数（施設別）を共変量として追加
+_pre_viewed = (
+    viewing_all[
+        (viewing_all["month_index"] < WASHOUT_MONTHS) &
+        viewing_all["facility_id"].isin(analysis_fac_ids)
+    ]
+    .groupby("facility_id")["doc"].nunique()
+)
+unit_df["n_pre_viewed_docs"] = unit_df["facility_id"].map(_pre_viewed).fillna(0).astype(int)
+print(f"  n_pre_viewed_docs: WO前視聴医師数 (非ゼロ施設: {unit_df['n_pre_viewed_docs'].gt(0).sum()}件)")
+
+# 解析期間（WASHOUT_MONTHS〜LAST_ELIGIBLE_MONTH）での最終Coverage（処置群の累積視聴率）
+_post_view = (
+    viewing_all[
+        viewing_all["month_index"].between(WASHOUT_MONTHS, LAST_ELIGIBLE_MONTH) &
+        viewing_all["facility_id"].isin(treated_fac_ids)
+    ]
+    .groupby("facility_id")["doc"].nunique()
+    .rename("n_viewed_docs_post")
+)
+_total_docs_ser = pd.Series({fac: len(docs) for fac, docs in fac_to_docs.items()})
+_coverage_ser = (
+    _post_view / _total_docs_ser
+).clip(0, 1).rename("final_coverage")
+unit_df["final_coverage"] = unit_df["facility_id"].map(_coverage_ser).fillna(0.0)
+print(f"  final_coverage: 処置群 mean={unit_df.loc[unit_df['treated']==1, 'final_coverage'].mean():.3f}")
+
 # ===================================================================
 # [5] 傾向スコア推定
 # ===================================================================
@@ -758,6 +785,68 @@ for (disp_name, col, is_continuous, unit) in SUBGROUP_SPECS:
 sg_df = pd.DataFrame(all_sg_results)
 
 # ===================================================================
+# [7b] Coverage 別サブグループ分析（処置群のみ）
+# ===================================================================
+print("\n[7b] Coverage別サブグループ分析（処置群のみ）")
+
+_coverage_corr_r = None  # JSON出力用に外部スコープで保持
+
+_cov_treated = unit_df.loc[unit_df["treated"] == 1, "final_coverage"]
+if len(_cov_treated) > 0 and _cov_treated.max() > 0:
+    try:
+        unit_df["coverage_cat"] = pd.qcut(
+            unit_df["final_coverage"].where(unit_df["treated"] == 1),
+            q=3, labels=["低Coverage", "中Coverage", "高Coverage"],
+            duplicates="drop"
+        )
+    except Exception:
+        _med = _cov_treated.median()
+        unit_df["coverage_cat"] = pd.cut(
+            unit_df["final_coverage"].where(unit_df["treated"] == 1),
+            bins=[-0.001, _med, 1.001], labels=["低Coverage", "高Coverage"]
+        )
+
+    _cov_cats = unit_df["coverage_cat"].dropna().unique()
+    print(f"  Coverage分布 (処置群): {_cov_treated.describe().to_dict()}")
+
+    # unit_df に facility_id インデックスを一時的に使うため facility_id を key にした辞書を作成
+    _fac_to_growth = dict(zip(unit_df["facility_id"], unit_df["growth"]))
+    _fac_to_cov_cat = dict(zip(unit_df["facility_id"], unit_df.get("coverage_cat", pd.Series(dtype=str))))
+
+    for cat in sorted(_cov_cats, key=str):
+        # 処置群のうちこのカテゴリに属する施設ID
+        _cat_fac_ids = set(
+            unit_df.loc[unit_df["coverage_cat"].astype(str) == str(cat), "facility_id"]
+        )
+        # matched_pairs（タプルリスト）からこのカテゴリの処置施設に対応するペアを抽出
+        _cat_pairs = [(t, c) for t, c in matched_pairs if t in _cat_fac_ids]
+        if len(_cat_pairs) < 3:
+            print(f"  {cat}: サンプル不足 (N={len(_cat_pairs)})")
+            continue
+        _t_gr = np.array([_fac_to_growth.get(t, np.nan) for t, c in _cat_pairs])
+        _c_gr = np.array([_fac_to_growth.get(c, np.nan) for t, c in _cat_pairs])
+        _valid = ~(np.isnan(_t_gr) | np.isnan(_c_gr))
+        _t_gr = _t_gr[_valid]
+        _c_gr = _c_gr[_valid]
+        if len(_t_gr) == 0 or len(_c_gr) == 0:
+            continue
+        _att = float(np.mean(_t_gr) - np.mean(_c_gr))
+        _, _p = stats.ttest_rel(_t_gr, _c_gr)
+        print(f"  {cat}: ATT={_att:.2f} N処置={len(_t_gr)} N対照={len(_c_gr)} p={_p:.4f}")
+
+    # Coverage と伸長率の相関（処置群のみ）
+    _cov_growth = unit_df[unit_df["treated"] == 1][["final_coverage", "growth"]].dropna()
+    if len(_cov_growth) > 3:
+        try:
+            _r, _p_corr = stats.pearsonr(_cov_growth["final_coverage"], _cov_growth["growth"])
+            _coverage_corr_r = float(_r)
+            print(f"\n  Coverage × 伸長率 相関係数: r={_r:.3f} (p={_p_corr:.4f})")
+        except Exception:
+            pass
+else:
+    print("  処置群のCoverageデータなし、スキップ")
+
+# ===================================================================
 # [8] 可視化
 # ===================================================================
 print("\n[8] 可視化")
@@ -968,6 +1057,13 @@ results_json = {
         "note": "PSMはobservable confoundersのみ調整。未観測交絡は残る。",
         "att_definition": "視聴施設の（後期-前期）成長率 と 対照施設の（後期-前期）成長率 の差",
         "unit": "施設レベル (facility_id)。複数医師施設含む。主施設=平均納入額最大施設。",
+    },
+    "coverage_stats": {
+        "treated_mean_coverage": (
+            float(unit_df.loc[unit_df["treated"] == 1, "final_coverage"].mean())
+            if "final_coverage" in unit_df.columns else None
+        ),
+        "coverage_growth_corr": _coverage_corr_r,
     },
 }
 

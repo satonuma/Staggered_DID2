@@ -47,7 +47,7 @@ COV_CAT_COLS = [
     "baseline_cat",    # 施設: ベースライン売上カテゴリ
 ]
 # 連続共変量 (z-score 標準化)
-COV_CONT_COLS = ["n_docs"]  # 施設あたり医師数 (ver2追加)
+COV_CONT_COLS = ["n_docs", "n_pre_viewed_docs"]  # 施設あたり医師数 / 前処置期間の視聴医師数 (ver2追加)
 # ===================================================================
 
 # ファイル名
@@ -892,6 +892,19 @@ _cov.index.name = "facility_id"
 _cov["n_docs"] = pd.Series(n_docs_map).reindex(_cov.index, fill_value=1)
 print(f"  n_docs: 平均={_cov['n_docs'].mean():.1f}, 最大={_cov['n_docs'].max()}")
 
+# ウォッシュアウト期間（month_index < WASHOUT_MONTHS）の視聴医師数（施設別）
+_pre_viewed = (
+    viewing_all[
+        (viewing_all["month_index"] < WASHOUT_MONTHS) &
+        viewing_all["facility_id"].isin(analysis_fac_ids)
+    ]
+    .groupby("facility_id")["doctor_id"].nunique()
+    .reindex(_cov.index, fill_value=0)
+    .rename("n_pre_viewed_docs")
+)
+_cov["n_pre_viewed_docs"] = _pre_viewed
+print(f"  n_pre_viewed_docs: 平均={_cov['n_pre_viewed_docs'].mean():.1f}, 最大={_cov['n_pre_viewed_docs'].max()}")
+
 # 施設属性 (UHP区分名, 施設区分名)
 _fac_attr_idx = fac_df.drop_duplicates("fac_honin").set_index("fac_honin")
 for _cat in COV_CAT_COLS:
@@ -987,6 +1000,75 @@ print(f"  p値          : {pval_twfe_dr:.6f} {sig_twfe_dr}")
 print(f"  95%CI        : [{ci_twfe_dr[0]:.2f}, {ci_twfe_dr[1]:.2f}]")
 print(f"\n  [比較] TWFE(無調整)={beta:.2f}  →  TWFE-DR={beta_dr_twfe:.2f}"
       f"  (差: {beta_dr_twfe - beta:+.2f})")
+
+# ================================================================
+# Coverage パネル構築 (施設視聴率: 累積視聴医師数 / 施設総医師数)
+# ================================================================
+_first_view_per_doc = (
+    viewing_all[viewing_all["facility_id"].isin(analysis_fac_ids) &
+                viewing_all["month_index"].between(0, N_MONTHS - 1)]
+    .groupby(["facility_id", "doctor_id"])["month_index"].min()
+    .reset_index(name="first_view_month")
+)
+
+_all_fac_months = pd.MultiIndex.from_product(
+    [sorted(analysis_fac_ids), range(N_MONTHS)],
+    names=["facility_id", "month_index"]
+).to_frame(index=False)
+
+_fvd = _first_view_per_doc.copy()
+_fvd_expanded = _all_fac_months.merge(
+    _fvd[["facility_id", "first_view_month"]], on="facility_id", how="left"
+)
+_fvd_expanded["viewed_by_month"] = (
+    _fvd_expanded["first_view_month"] <= _fvd_expanded["month_index"]
+).astype(int)
+_cum_viewed = (
+    _fvd_expanded.groupby(["facility_id", "month_index"])["viewed_by_month"]
+    .sum().reset_index(name="n_viewed_docs")
+)
+
+_n_docs_ser = pd.Series({fac: len(docs) for fac, docs in fac_to_docs.items()}, name="n_docs")
+_cum_viewed["n_docs_total"] = _cum_viewed["facility_id"].map(_n_docs_ser)
+_cum_viewed["coverage"] = (
+    _cum_viewed["n_viewed_docs"] / _cum_viewed["n_docs_total"].clip(lower=1)
+)
+coverage_panel = _cum_viewed[["facility_id", "month_index", "coverage"]]
+
+# ================================================================
+# Part 5e: Coverage TWFE 推定（連続処置強度）
+# ================================================================
+print("\n" + "=" * 70)
+print(" Part 5e: Coverage TWFE（施設視聴率を連続処置として推定）")
+print("=" * 70)
+
+panel_cov = panel.merge(coverage_panel, on=["facility_id", "month_index"], how="left")
+panel_cov["coverage"] = panel_cov["coverage"].fillna(0.0)
+panel_cov = panel_cov.set_index(["unit_id", "month_index"])
+
+try:
+    from linearmodels import PanelOLS
+    _formula_cov = "amount ~ coverage + EntityEffects + TimeEffects"
+    _mod_cov = PanelOLS.from_formula(_formula_cov, data=panel_cov)
+    _res_cov = _mod_cov.fit(cov_type="clustered", cluster_entity=True)
+    beta_cov = float(_res_cov.params["coverage"])
+    se_cov   = float(_res_cov.std_errors["coverage"])
+    pval_cov = float(_res_cov.pvalues["coverage"])
+    ci_cov   = _res_cov.conf_int().loc["coverage"].values.tolist()
+    sig_cov  = "***" if pval_cov < 0.001 else "**" if pval_cov < 0.01 else "*" if pval_cov < 0.05 else "n.s."
+    print(f"  Coverage ATT: {beta_cov:.4f}")
+    print(f"  SE          : {se_cov:.4f}")
+    print(f"  p値         : {pval_cov:.6f} {sig_cov}")
+    print(f"  95%CI       : [{ci_cov[0]:.4f}, {ci_cov[1]:.4f}]")
+    print(f"  解釈: Coverage が 1（= 0→100% 全員視聴）変化したときの月次売上への効果 = {beta_cov:.2f}円/月")
+    coverage_twfe = {
+        "att": beta_cov, "se": se_cov, "p": pval_cov,
+        "ci_lo": ci_cov[0], "ci_hi": ci_cov[1], "sig": sig_cov,
+        "note": "coverage=0→1の変化に対応する売上変化(円/月)"
+    }
+except Exception as e:
+    print(f"  Coverage TWFE 推定失敗: {e}")
+    coverage_twfe = None
 
 # ================================================================
 # Part 6: CS推定 (全体)
@@ -1382,7 +1464,9 @@ exclusion_flow = {
     "final_control": len(control_fac_ids),
     "final_total": len(analysis_fac_ids),
     "include_only_rw": INCLUDE_ONLY_RW,
-    "version": "v2_multi_doctor",
+    "total_viewing_rows": len(viewing),       # viewing（ENT絞り込み済み、施設ID付与前）の行数
+    "viewing_after_filter": len(viewing_all), # 施設ID付与済みの視聴データ行数
+    "version": "v2",
 }
 
 # 除外された施設ID一覧
@@ -1518,6 +1602,7 @@ did_results_json = {
     "n_control": n_control,
     "n_total": n_total,
     "include_only_rw": INCLUDE_ONLY_RW,
+    "coverage_twfe": coverage_twfe,
 }
 
 json_path = os.path.join(results_dir, "did_results_v2.json")
