@@ -68,6 +68,7 @@ FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 # ver2: 複数医師施設を含める
 FILTER_SINGLE_FAC_DOCTOR = False
 INCLUDE_ONLY_RW = False  # True: RW医師のみ, False: 全医師
+EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入が0の施設を解析対象から除外
 
 UHP_RANK = {"UHP-A": 0, "UHP-B": 1, "UHP-C": 2}
 
@@ -204,6 +205,17 @@ for _doc in analysis_docs_all:
         fac_to_docs.setdefault(_fac, []).append(_doc)
 
 n_docs_map = {fac: len(docs) for fac, docs in fac_to_docs.items()}
+
+# 全期間納入0施設の除外（フラグで制御）
+if EXCLUDE_ZERO_SALES_FACILITIES:
+    _fac_total_sales = daily.groupby("facility_id")["amount"].sum()
+    _zero_sale_facs = set(_fac_total_sales[_fac_total_sales <= 0].index)
+    _no_sale_facs   = {fac for fac in fac_to_docs if fac not in _fac_total_sales.index}
+    _exclude_zero   = _zero_sale_facs | _no_sale_facs
+    fac_to_docs = {fac: docs for fac, docs in fac_to_docs.items()
+                   if fac not in _exclude_zero}
+    n_docs_map  = {fac: len(docs) for fac, docs in fac_to_docs.items()}
+    print(f"  [全期間0売上除外] {len(_exclude_zero)} 施設を除外 → 残 {len(fac_to_docs)} 施設")
 
 print(f"\n  主施設割り当て完了:")
 print(f"    解析対象医師数: {len(analysis_docs_all)}")

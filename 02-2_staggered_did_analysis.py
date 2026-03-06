@@ -61,6 +61,7 @@ FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 
 # 解析集団フィルタパラメータ
 INCLUDE_ONLY_RW = False
+EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入が0の施設を解析対象から除外
 UHP_RANK = {"UHP-A": 0, "UHP-B": 1, "UHP-C": 2}  # 数値小さいほど上位
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -646,6 +647,17 @@ print(f"    解析対象医師数: {len(analysis_docs_all)}")
 print(f"    解析対象施設数: {len(fac_to_docs)}")
 _multi = sum(1 for docs in fac_to_docs.values() if len(docs) > 1)
 print(f"    複数医師施設: {_multi} 施設")
+
+# 全期間納入0施設の除外（フラグで制御）
+if EXCLUDE_ZERO_SALES_FACILITIES:
+    _fac_total_sales = daily.groupby("facility_id")["amount"].sum()
+    _zero_sale_facs = set(_fac_total_sales[_fac_total_sales <= 0].index)
+    _no_sale_facs   = {fac for fac in fac_to_docs if fac not in _fac_total_sales.index}
+    _exclude_zero   = _zero_sale_facs | _no_sale_facs
+    fac_to_docs = {fac: docs for fac, docs in fac_to_docs.items()
+                   if fac not in _exclude_zero}
+    n_docs_map  = {fac: len(docs) for fac, docs in fac_to_docs.items()}
+    print(f"  [全期間0売上除外] {len(_exclude_zero)} 施設を除外 → 残 {len(fac_to_docs)} 施設")
 
 # --- 視聴データに主施設IDを付与 ---
 viewing_all = viewing.copy()  # viewing は既に digital + web_lecture を結合したもの
@@ -1417,6 +1429,117 @@ plt.close(fig)
 print(f"\n  図を保存: {out_path}")
 
 # ================================================================
+# Coverage サンプル可視化（複数医師施設）
+# ================================================================
+print("\n[Coverage サンプル可視化]")
+
+_multi_treated = [
+    fac for fac in treated_fac_ids
+    if n_docs_map.get(fac, 1) >= 2
+]
+_sample_facs = sorted(_multi_treated, key=lambda f: -n_docs_map.get(f, 1))[:3]
+
+if not _sample_facs:
+    print("  複数医師の処置施設なし - スキップ")
+else:
+    _ncols = len(_sample_facs)
+    fig_cov, axes_cov = plt.subplots(
+        2, _ncols, figsize=(6 * _ncols, 9),
+        gridspec_kw={"height_ratios": [2, 1]},
+        sharex="col"
+    )
+    if _ncols == 1:
+        axes_cov = axes_cov.reshape(2, 1)
+
+    _month_labels = [m.strftime("%Y/%m") for m in months]
+    _xticks_sparse = list(range(0, N_MONTHS, 6))
+
+    for col_i, fac in enumerate(_sample_facs):
+        ax_top = axes_cov[0, col_i]
+        ax_bot = axes_cov[1, col_i]
+
+        _docs_in_fac = fac_to_docs.get(fac, [])
+        _n_total = len(_docs_in_fac)
+        _cohort = int(_first_view.get(fac, np.nan)) if fac in _first_view.index else None
+
+        # --- Coverage 折れ線 ---
+        _cov_fac = (
+            coverage_panel[coverage_panel["facility_id"] == fac]
+            .set_index("month_index")["coverage"]
+            .reindex(range(N_MONTHS), fill_value=0.0)
+        )
+        ax_top.plot(range(N_MONTHS), _cov_fac.values,
+                    color="#1565C0", linewidth=2, label="Coverage")
+        ax_top.fill_between(range(N_MONTHS), _cov_fac.values, alpha=0.15, color="#1565C0")
+
+        # --- 各医師の初回視聴月（縦線） ---
+        _colors_doc = plt.cm.Set2(np.linspace(0, 1, max(_n_total, 1)))
+        _doc_labels = []
+        for di, doc in enumerate(_docs_in_fac):
+            _doc_rows = _first_view_per_doc[
+                (_first_view_per_doc["facility_id"] == fac) &
+                (_first_view_per_doc["doctor_id"] == doc)
+            ]
+            if len(_doc_rows) == 0:
+                continue
+            _fvm = int(_doc_rows["first_view_month"].iloc[0])
+            _c = _colors_doc[di]
+            ax_top.axvline(_fvm, color=_c, linestyle="--", alpha=0.8, linewidth=1.5)
+            ax_top.text(_fvm + 0.2, 0.05 + 0.12 * di,
+                        f"医師{di+1}初回", fontsize=7, color=_c, va="bottom")
+            _doc_labels.append(f"医師{di+1}初回 (month={_fvm})")
+
+        # --- 施設コホート月（太い点線） ---
+        if _cohort is not None:
+            ax_top.axvline(_cohort, color="red", linestyle=":", linewidth=2.5,
+                           label=f"施設初回視聴 (month={_cohort})")
+
+        # --- ウォッシュアウト期間シェード ---
+        ax_top.axvspan(0, WASHOUT_MONTHS, alpha=0.08, color="gray", label="washout")
+
+        ax_top.set_ylim(-0.05, 1.15)
+        ax_top.set_ylabel("Coverage（視聴率）")
+        ax_top.set_title(f"施設 {str(fac)[:12]}\n医師数={_n_total}名", fontsize=10)
+        ax_top.legend(fontsize=7, loc="upper left")
+        ax_top.set_xticks(_xticks_sparse)
+        ax_top.set_xticklabels([_month_labels[i] for i in _xticks_sparse],
+                                rotation=45, fontsize=7)
+        ax_top.grid(axis="y", alpha=0.3)
+
+        # --- 月次売上（棒グラフ） ---
+        _sales_fac = (
+            panel_base[panel_base["facility_id"] == fac]
+            .set_index("month_index")["amount"]
+            .reindex(range(N_MONTHS), fill_value=0)
+        )
+        _bar_colors = ["#FF8F00" if _cov_fac.iloc[mi] > 0 else "#B0BEC5"
+                       for mi in range(N_MONTHS)]
+        ax_bot.bar(range(N_MONTHS), _sales_fac.values, color=_bar_colors,
+                   width=0.8, alpha=0.8)
+        if _cohort is not None:
+            ax_bot.axvline(_cohort, color="red", linestyle=":", linewidth=2.5)
+        ax_bot.axvspan(0, WASHOUT_MONTHS, alpha=0.08, color="gray")
+        ax_bot.set_ylabel("月次売上（円）")
+        ax_bot.set_xlabel("月")
+        ax_bot.set_xticks(_xticks_sparse)
+        ax_bot.set_xticklabels([_month_labels[i] for i in _xticks_sparse],
+                                rotation=45, fontsize=7)
+        ax_bot.yaxis.get_major_formatter().set_scientific(False)
+        ax_bot.grid(axis="y", alpha=0.3)
+
+    fig_cov.suptitle(
+        "Coverage（施設視聴率）月次推移 - サンプル複数医師施設\n"
+        "棒グラフ: 月次売上（橙=視聴後、灰=未視聴）　点線赤: 施設初回視聴月　破線: 各医師初回視聴月",
+        fontsize=10, y=1.01
+    )
+    plt.tight_layout()
+    _cov_sample_path = os.path.join(SCRIPT_DIR, "coverage_sample_v2.png")
+    fig_cov.savefig(_cov_sample_path, dpi=150, bbox_inches="tight")
+    plt.close(fig_cov)
+    print(f"  図保存: {_cov_sample_path}")
+    print(f"  サンプル施設: {_sample_facs}")
+
+# ================================================================
 # 結論
 # ================================================================
 print("\n" + "=" * 70)
@@ -1464,6 +1587,7 @@ exclusion_flow = {
     "final_control": len(control_fac_ids),
     "final_total": len(analysis_fac_ids),
     "include_only_rw": INCLUDE_ONLY_RW,
+    "exclude_zero_sales": EXCLUDE_ZERO_SALES_FACILITIES,
     "total_viewing_rows": len(viewing),       # viewing（ENT絞り込み済み、施設ID付与前）の行数
     "viewing_after_filter": len(viewing_all), # 施設ID付与済みの視聴データ行数
     "version": "v2",
