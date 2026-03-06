@@ -635,7 +635,8 @@ png_files = [
     "mr_activity_mediation.png",
     "mr_digital_balance.png",
     "psm_growth_rate_v2.png",
-    "psm_subgroup_forest_v2.png"
+    "psm_subgroup_forest_v2.png",
+    "coverage_sample_v2.png"
 ]
 for name in png_files:
     path = os.path.join(SCRIPT_DIR, name)
@@ -1268,8 +1269,16 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
 <p>staggered_did_results.png が見つかりません。</p>
 {% endif %}
 
+{% if png_coverage_sample %}
+<h3>5.4 Coverage（施設視聴率）推移サンプル</h3>
+<p>複数医師が所属する処置施設（医師数上位）の月次Coverage推移。破線は各医師の初回視聴月、赤点線は施設としての初回視聴月（コホート月）。棒グラフは月次売上（橙：視聴後、灰：未視聴）。</p>
+<div class="img-container">
+  <img src="data:image/png;base64,{{ png_coverage_sample }}" alt="Coverage Sample">
+</div>
+{% endif %}
+
 {% if twfe_robust %}
-<h3>5.4 ロバストネスチェック: MR活動共変量</h3>
+<h3>5.5 ロバストネスチェック: MR活動共変量</h3>
 <p>MR活動（面談、面談_アポ、説明会等）の月次実施回数を共変量として追加した場合の推定結果。
 デジタル視聴の効果推定がMR活動の時変交絡に頑健かどうかを検証する。</p>
 
@@ -2573,6 +2582,9 @@ template_data = {
     "psm_results": psm_growth_rate_results,
     "png_psm_growth": existing_pngs.get("psm_growth_rate_v2.png", ""),
     "png_psm_forest": existing_pngs.get("psm_subgroup_forest_v2.png", ""),
+
+    # Coverage サンプル可視化 (02-2)
+    "png_coverage_sample": existing_pngs.get("coverage_sample_v2.png", ""),
 
     # 解析集団パラメータ
     "include_only_rw": INCLUDE_ONLY_RW,
