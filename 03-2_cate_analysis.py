@@ -40,7 +40,7 @@ FILTER_SINGLE_FAC_DOCTOR = False  # ver2: 複数医師施設を含める
 INCLUDE_ONLY_RW     = False        # True: RW医師のみ (Step 3適用)
 INCLUDE_ONLY_NON_RW = False       # True: 非RW医師のみ (INCLUDE_ONLY_RW=Falseのとき有効)
 EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入が0の施設を解析対象から除外
-UHP_RANK = {"UHP-A": 0, "UHP-B": 1, "UHP-C": 2}  # 数値小さいほど上位
+UHP_RANK = {"U": 0, "H": 1, "P": 2, "雑": 3}  # 数値小さいほど上位 (U>H>P>雑)
 
 # 出力ファイル名サフィックス
 if INCLUDE_ONLY_RW:
@@ -117,15 +117,14 @@ def _infer_unit(col_name):
 
 # QUINTILE系カテゴリ (H/L/M/VH/Z) の表示順
 # カテゴリ固定表示順序
-_QUINTILE_ORDER      = ["Z", "L", "M", "H", "VH", "不明"]  # 不明は末尾
-_BASELINE_ORDER      = ["0以下", "低", "中", "高"]
-_UHP_ORDER           = ["UHP-A", "UHP-B", "UHP-C", "非UHP", "不明"]
-_FACILITY_TYPE_ORDER = ["診療所", "病院", "大学病院", "特定機能病院", "地域医療支援病院", "不明"]
+_QUINTILE_ORDER = ["Z", "L", "M", "H", "VH", "不明"]
+_BASELINE_ORDER = ["0以下", "低", "中", "高"]
+_UHP_ORDER      = ["U", "H", "P", "雑", "不明"]  # U>H>P>雑 (規模大→小)
 
 
 def _sort_levels(levels):
     """カテゴリレベルを固定順序で並べる。
-    既知のカテゴリセット (Quintile/baseline/UHP/施設区分) は固定順、
+    既知のカテゴリセット (Quintile/baseline/UHP) は固定順、
     それ以外は文字列ソート。
     """
     str_levels = [str(v) for v in levels]
@@ -139,14 +138,9 @@ def _sort_levels(levels):
     if non_missing and all(v in set(_BASELINE_ORDER) for v in non_missing):
         return [v for v in _BASELINE_ORDER if v in str_levels]
 
-    # UHP区分名
-    if non_missing and all(v in {"UHP-A", "UHP-B", "UHP-C", "非UHP"} for v in non_missing):
+    # UHP区分名 (U/H/P/雑)
+    if non_missing and all(v in {"U", "H", "P", "雑"} for v in non_missing):
         return [v for v in _UHP_ORDER if v in str_levels]
-
-    # 施設区分名
-    _fac_vals = {v for v in _FACILITY_TYPE_ORDER if v != "不明"}
-    if non_missing and all(v in _fac_vals for v in non_missing):
-        return [v for v in _FACILITY_TYPE_ORDER if v in str_levels]
 
     return sorted(levels, key=str)  # 元の型を保持（int の 0/1 フラグも崩さない）
 

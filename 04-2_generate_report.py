@@ -1058,14 +1058,7 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
     <td>UHP区分名</td>
     <td>カテゴリ</td>
     <td>one-hot化</td>
-    <td>施設のUHPセグメント（UHP-A / UHP-B / UHP-C / 非UHP）</td>
-    <td>TWFE, CS-DR, PSM</td>
-  </tr>
-  <tr>
-    <td>施設区分名</td>
-    <td>カテゴリ</td>
-    <td>one-hot化</td>
-    <td>施設タイプ（診療所・一般病院・大学病院等）</td>
+    <td>施設のUHP区分（U / H / P / 雑、規模大→小）</td>
     <td>TWFE, CS-DR, PSM</td>
   </tr>
   <tr>

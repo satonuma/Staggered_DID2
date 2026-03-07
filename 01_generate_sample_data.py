@@ -510,7 +510,7 @@ facility_doc_counts = (
 )
 facility_doc_counts_dict = dict(zip(facility_doc_counts["facility_id"], facility_doc_counts["施設内医師数"]))
 
-uhp_options = ["UHP-A", "UHP-B", "UHP-C", "非UHP"]
+uhp_options = ["U", "H", "P", "雑"]
 management_orgs = [f"医療法人{chr(0x611B + i % 20)}{chr(0x548C + i % 15)}会" for i in range(N_FACILITIES)]
 fac_kubun_map = {"病院": "病院", "クリニック": "診療所"}
 

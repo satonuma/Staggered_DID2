@@ -67,7 +67,7 @@ FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 INCLUDE_ONLY_RW     = False   # True: RW医師のみ
 INCLUDE_ONLY_NON_RW = False  # True: 非RW医師のみ (INCLUDE_ONLY_RW=Falseのとき有効)
 EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入が0の施設を解析対象から除外
-UHP_RANK = {"UHP-A": 0, "UHP-B": 1, "UHP-C": 2}
+UHP_RANK = {"U": 0, "H": 1, "P": 2, "雑": 3}  # U>H>P>雑 (規模大→小)
 
 # 出力ファイル名サフィックス
 if INCLUDE_ONLY_RW:
@@ -410,18 +410,18 @@ print("\n" + "=" * 70)
 print(" Part 3: 視聴傾向スコア推定")
 print("=" * 70)
 
-# PS推定用共変量 (ver2: 施設区分名, UHP区分名, n_docs)
-ps_data = fac_session.dropna(subset=["施設区分名", "UHP区分名"]).copy()
+# PS推定用共変量 (ver2: UHP区分名, n_docs)
+ps_data = fac_session.dropna(subset=["UHP区分名"]).copy()
 ps_dummies = pd.get_dummies(
     ps_data,
-    columns=["施設区分名", "UHP区分名"],
+    columns=["UHP区分名"],
     drop_first=True
 )
 _n_docs_std = (ps_dummies["n_docs"] - ps_dummies["n_docs"].mean()) / (ps_dummies["n_docs"].std() + 1e-9)
 ps_dummies["n_docs_std"] = _n_docs_std
 
 X_ps_cols = [c for c in ps_dummies.columns
-             if c.startswith(("施設区分名_", "UHP区分名_"))] + ["n_docs_std"]
+             if c.startswith("UHP区分名_")] + ["n_docs_std"]
 
 # Logitモデル
 y_ps = ps_dummies["has_viewed"].astype(float)

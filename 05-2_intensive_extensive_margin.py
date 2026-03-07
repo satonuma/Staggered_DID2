@@ -71,7 +71,7 @@ INCLUDE_ONLY_RW     = False   # True: RW医師のみ
 INCLUDE_ONLY_NON_RW = False  # True: 非RW医師のみ (INCLUDE_ONLY_RW=Falseのとき有効)
 EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入が0の施設を解析対象から除外
 
-UHP_RANK = {"UHP-A": 0, "UHP-B": 1, "UHP-C": 2}
+UHP_RANK = {"U": 0, "H": 1, "P": 2, "雑": 3}  # U>H>P>雑 (規模大→小)
 
 # 出力ファイル名サフィックス
 if INCLUDE_ONLY_RW:
