@@ -647,7 +647,8 @@ png_files = [
     "mr_digital_balance.png",
     "psm_growth_rate_v2.png",
     "psm_subgroup_forest_v2.png",
-    "coverage_sample_v2.png"
+    "coverage_sample_v2.png",
+    "coverage_dose_response_v2.png"
 ]
 for name in png_files:
     path = os.path.join(SCRIPT_DIR, name)
@@ -2343,6 +2344,16 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 </table>
 {% endfor %}
 
+<h3>PS推定に使用した共変量</h3>
+{% if psm_results.psm_covariates %}
+<table>
+  <tr><th>#</th><th>共変量</th></tr>
+  {% for cov in psm_results.psm_covariates %}
+  <tr><td>{{ loop.index }}</td><td style="font-family:monospace;">{{ cov }}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+
 <h3>共変量バランス（SMD）</h3>
 <table>
   <tr><th>変数</th><th>マッチング前 SMD</th><th>マッチング後 SMD</th></tr>
@@ -2366,6 +2377,25 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 <div style="text-align:center; margin:20px 0;">
   <img src="data:image/png;base64,{{ png_psm_forest }}" alt="PSM Subgroup Forest Plot" style="max-width:100%;">
 </div>
+{% endif %}
+
+{% if png_coverage_dose %}
+<h3>Coverage（施設視聴率）と売上実績の関係</h3>
+<p>
+  「施設内1人が視聴すれば十分か、それとも施設への浸透率（複数医師への普及）が実績に寄与するか」を検証する。
+  左図: 処置施設の最終視聴率（Coverage）と売上伸長率の散布図（用量反応）。
+  右図: 対照群（マッチ後未視聴施設）と処置群を視聴率水準（低・中・高）で分けた群別の平均伸長率比較。
+</p>
+<div style="text-align:center; margin:20px 0;">
+  <img src="data:image/png;base64,{{ png_coverage_dose }}" alt="Coverage Dose-Response" style="max-width:100%;">
+</div>
+{% if psm_results.coverage_stats %}
+<table>
+  <tr><th>指標</th><th>値</th></tr>
+  <tr><td>処置群の平均最終Coverage</td><td>{{ "%.3f"|format(psm_results.coverage_stats.treated_mean_coverage) if psm_results.coverage_stats.treated_mean_coverage is not none else "-" }}</td></tr>
+  <tr><td>Coverage × 伸長率 相関係数 r</td><td>{{ "%.3f"|format(psm_results.coverage_stats.coverage_growth_corr) if psm_results.coverage_stats.coverage_growth_corr is not none else "-" }}</td></tr>
+</table>
+{% endif %}
 {% endif %}
 
 <div class="highlight-box">
@@ -2600,6 +2630,8 @@ template_data = {
 
     # Coverage サンプル可視化 (02-2)
     "png_coverage_sample": existing_pngs.get("coverage_sample_v2.png", ""),
+    # Coverage 用量反応 (09-2)
+    "png_coverage_dose": existing_pngs.get("coverage_dose_response_v2.png", ""),
 
     # 解析集団パラメータ
     "include_only_rw": INCLUDE_ONLY_RW,

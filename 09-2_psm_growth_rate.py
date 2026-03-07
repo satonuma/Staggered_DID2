@@ -1022,6 +1022,89 @@ print("  psm_growth_rate_v2.png を保存")
 print("  psm_subgroup_forest_v2.png を保存")
 
 # ===================================================================
+# [8c] Coverage 用量反応可視化
+# ===================================================================
+print("\n[8c] Coverage 用量反応可視化")
+
+if "final_coverage" in unit_df.columns:
+    try:
+        fig_dose, axes_dose = plt.subplots(1, 2, figsize=(14, 5))
+        fig_dose.suptitle(
+            "09-2: Coverage（施設視聴率）と売上伸長率の関係 [ver2]\n"
+            "左: 用量反応散布図  右: Coverage群別 平均伸長率比較",
+            fontsize=11, fontweight="bold"
+        )
+
+        # --- 左: Coverage vs 伸長率 散布図 + 回帰直線 ---
+        ax_s = axes_dose[0]
+        _cov_data = unit_df[unit_df["treated"] == 1][["final_coverage", "growth"]].dropna()
+        _x = _cov_data["final_coverage"].values
+        _y = _cov_data["growth"].values
+
+        ax_s.scatter(_x, _y, alpha=0.5, color="#1565C0", s=40, label="処置施設")
+        if len(_x) > 3:
+            from scipy.stats import linregress as _linreg
+            _slope, _intercept, _r_val, _p_reg, _ = _linreg(_x, _y)
+            _xl = np.linspace(_x.min(), _x.max(), 100)
+            ax_s.plot(_xl, _slope * _xl + _intercept, color="red", linewidth=2,
+                      label=f"回帰直線 (r={_r_val:.3f}, p={_p_reg:.3f})")
+        ax_s.axhline(0, color="gray", linestyle="--", alpha=0.5)
+        ax_s.set_xlabel("最終視聴率 Coverage（0→1）")
+        ax_s.set_ylabel("売上伸長率（後期月平均 − 前期月平均, 円）")
+        ax_s.set_title(f"(a) 用量反応: Coverage × 売上伸長率\n処置施設のみ (N={len(_x)})")
+        ax_s.legend(fontsize=9)
+        ax_s.grid(True, alpha=0.3)
+
+        # --- 右: 対照群(マッチ後) + Coverage群別 処置群 平均伸長率 ---
+        ax_b = axes_dose[1]
+
+        _ctrl_g = mc_growth[valid_mask]
+        _ctrl_g = _ctrl_g[~np.isnan(_ctrl_g)]
+        _bar_labels = ["対照群\n(マッチ後)"]
+        _bar_means  = [float(np.mean(_ctrl_g))]
+        _bar_ses    = [float(np.std(_ctrl_g) / np.sqrt(len(_ctrl_g))) if len(_ctrl_g) > 1 else 0.0]
+        _bar_ns     = [int(len(_ctrl_g))]
+        _bar_colors = ["#FF8F00"]
+
+        _cov_order_lbl = [lbl for lbl in ["低Coverage", "中Coverage", "高Coverage"]
+                          if "coverage_cat" in unit_df.columns
+                          and lbl in unit_df["coverage_cat"].astype(str).unique()]
+        _cov_palette = {"低Coverage": "#90CAF9", "中Coverage": "#42A5F5", "高Coverage": "#1565C0"}
+
+        for _cl in _cov_order_lbl:
+            _g_vals = unit_df.loc[unit_df["coverage_cat"].astype(str) == _cl, "growth"].dropna().values
+            if len(_g_vals) < 2:
+                continue
+            _bar_labels.append(f"処置群\n{_cl}")
+            _bar_means.append(float(np.mean(_g_vals)))
+            _bar_ses.append(float(np.std(_g_vals) / np.sqrt(len(_g_vals))))
+            _bar_ns.append(int(len(_g_vals)))
+            _bar_colors.append(_cov_palette.get(_cl, "#1565C0"))
+
+        _x_pos = np.arange(len(_bar_labels))
+        ax_b.bar(_x_pos, _bar_means, yerr=_bar_ses, capsize=5,
+                 color=_bar_colors, alpha=0.85, width=0.6)
+        _max_abs = max(abs(m) for m in _bar_means) if _bar_means else 1.0
+        for xi, (m, se, n) in enumerate(zip(_bar_means, _bar_ses, _bar_ns)):
+            ax_b.text(xi, m + se + _max_abs * 0.04, f"N={n}", ha="center", fontsize=9)
+        ax_b.axhline(0, color="gray", linestyle="--", alpha=0.5)
+        ax_b.set_xticks(_x_pos)
+        ax_b.set_xticklabels(_bar_labels, fontsize=9)
+        ax_b.set_ylabel("平均売上伸長率（後期月平均 − 前期月平均, 円）")
+        ax_b.set_title("(b) Coverage群別 平均伸長率\n（対照群との比較）")
+        ax_b.grid(True, alpha=0.3, axis="y")
+
+        plt.tight_layout()
+        _dose_path = os.path.join(SCRIPT_DIR, "coverage_dose_response_v2.png")
+        fig_dose.savefig(_dose_path, dpi=150, bbox_inches="tight")
+        plt.close(fig_dose)
+        print(f"  coverage_dose_response_v2.png を保存")
+    except Exception as e:
+        print(f"  Coverage用量反応可視化失敗: {e}")
+else:
+    print("  Coverageデータなし、スキップ")
+
+# ===================================================================
 # [9] JSON 出力
 # ===================================================================
 results_dir = os.path.join(SCRIPT_DIR, "results")
@@ -1077,6 +1160,7 @@ results_json = {
         ),
         "coverage_growth_corr": _coverage_corr_r,
     },
+    "psm_covariates": cov_cols,
 }
 
 json_path = os.path.join(results_dir, "psm_growth_rate_v2.json")
