@@ -116,18 +116,38 @@ def _infer_unit(col_name):
 
 
 # QUINTILE系カテゴリ (H/L/M/VH/Z) の表示順
-_QUINTILE_ORDER = ["不明", "Z", "L", "M", "H", "VH"]
+# カテゴリ固定表示順序
+_QUINTILE_ORDER      = ["Z", "L", "M", "H", "VH", "不明"]  # 不明は末尾
+_BASELINE_ORDER      = ["0以下", "低", "中", "高"]
+_UHP_ORDER           = ["UHP-A", "UHP-B", "UHP-C", "非UHP", "不明"]
+_FACILITY_TYPE_ORDER = ["診療所", "病院", "大学病院", "特定機能病院", "地域医療支援病院", "不明"]
 
 
 def _sort_levels(levels):
-    """カテゴリレベルを適切な順に並べる。
-    QUINTILE値 (H/L/M/VH/Z) のみで構成される場合は 不明,Z,L,M,H,VH 順、
+    """カテゴリレベルを固定順序で並べる。
+    既知のカテゴリセット (Quintile/baseline/UHP/施設区分) は固定順、
     それ以外は文字列ソート。
     """
     str_levels = [str(v) for v in levels]
     non_missing = [v for v in str_levels if v not in ("nan", "None", "不明")]
+
+    # QUINTILE (H/L/M/VH/Z)
     if non_missing and all(v in ("H", "L", "M", "VH", "Z") for v in non_missing):
         return [v for v in _QUINTILE_ORDER if v in str_levels]
+
+    # ベースライン納入額カテゴリ
+    if non_missing and all(v in set(_BASELINE_ORDER) for v in non_missing):
+        return [v for v in _BASELINE_ORDER if v in str_levels]
+
+    # UHP区分名
+    if non_missing and all(v in {"UHP-A", "UHP-B", "UHP-C", "非UHP"} for v in non_missing):
+        return [v for v in _UHP_ORDER if v in str_levels]
+
+    # 施設区分名
+    _fac_vals = {v for v in _FACILITY_TYPE_ORDER if v != "不明"}
+    if non_missing and all(v in _fac_vals for v in non_missing):
+        return [v for v in _FACILITY_TYPE_ORDER if v in str_levels]
+
     return sorted(levels, key=str)  # 元の型を保持（int の 0/1 フラグも崩さない）
 
 
