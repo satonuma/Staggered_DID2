@@ -1029,6 +1029,51 @@ HTML_TEMPLATE = _jinja_env.from_string("""<!DOCTYPE html>
   </div>
 </div>
 
+<h3>1.4.1 使用共変量</h3>
+<p>各推定モデルで使用した共変量の一覧を以下に示す。施設レベルの事前属性のみを使用し、分析期間中の活動指標（MR面談・Web面談・説明会・全国講演会参加等）は共変量から除外している。これらの活動変数はデジタル視聴と相関する中間変数・ポスト処置変数となりうるため、含めると過制御バイアスが発生する可能性があるためである。</p>
+<table>
+  <tr>
+    <th>変数名</th>
+    <th>種別</th>
+    <th>前処理</th>
+    <th>内容</th>
+    <th>使用モデル</th>
+  </tr>
+  <tr>
+    <td>UHP区分名</td>
+    <td>カテゴリ</td>
+    <td>one-hot化</td>
+    <td>施設のUHPセグメント（UHP-A / UHP-B / UHP-C / 非UHP）</td>
+    <td>TWFE, CS-DR, PSM</td>
+  </tr>
+  <tr>
+    <td>施設区分名</td>
+    <td>カテゴリ</td>
+    <td>one-hot化</td>
+    <td>施設タイプ（診療所・一般病院・大学病院等）</td>
+    <td>TWFE, CS-DR, PSM</td>
+  </tr>
+  <tr>
+    <td>baseline_cat</td>
+    <td>カテゴリ</td>
+    <td>one-hot化</td>
+    <td>ウォッシュアウト前期間の平均納入額を3分位でカテゴリ化（低/中/高）</td>
+    <td>TWFE, CS-DR</td>
+  </tr>
+  <tr>
+    <td>n_docs</td>
+    <td>連続</td>
+    <td>z-score標準化</td>
+    <td>施設あたりの解析対象医師数</td>
+    <td>TWFE, CS-DR, PSM</td>
+  </tr>
+</table>
+<p style="font-size:0.85em; color:#666; margin-top:6px;">
+  ※ MR面談・Web面談・説明会・全国講演会参加等の活動変数は<strong>意図的に除外</strong>。
+  これらはデジタル視聴効果の中間経路となりうるポスト処置変数であり、共変量に含めると本来の効果が過小評価される（過制御バイアス）。
+  ロバストネスチェックとしてMR活動共変量追加モデルの結果もSection 5.5に別途掲載。
+</p>
+
 <h3>1.5 用語解説</h3>
 <table>
   <tr><th>用語</th><th>補足説明</th></tr>

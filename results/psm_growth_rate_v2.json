@@ -175,11 +175,6 @@
       "SMD_after": 0.0
     },
     {
-      "変数": "n_pre_viewed_docs",
-      "SMD_before": 0.0,
-      "SMD_after": 0.0
-    },
-    {
       "変数": "pre_mean",
       "SMD_before": 0.6659039422126721,
       "SMD_after": -0.05393779830065054
@@ -254,7 +249,6 @@
     "baseline_cat_中",
     "baseline_cat_高",
     "pre_mean_std",
-    "n_docs_std",
-    "n_pre_viewed_docs_std"
+    "n_docs_std"
   ]
 }

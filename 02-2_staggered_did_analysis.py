@@ -47,7 +47,7 @@ COV_CAT_COLS = [
     "baseline_cat",    # 施設: ベースライン売上カテゴリ
 ]
 # 連続共変量 (z-score 標準化)
-COV_CONT_COLS = ["n_docs", "n_pre_viewed_docs"]  # 施設あたり医師数 / 前処置期間の視聴医師数 (ver2追加)
+COV_CONT_COLS = ["n_docs"]  # 施設あたり医師数
 # ===================================================================
 
 # ファイル名
@@ -907,19 +907,6 @@ _cov.index.name = "facility_id"
 # 施設医師数 (n_docs)
 _cov["n_docs"] = pd.Series(n_docs_map).reindex(_cov.index, fill_value=1)
 print(f"  n_docs: 平均={_cov['n_docs'].mean():.1f}, 最大={_cov['n_docs'].max()}")
-
-# ウォッシュアウト期間（month_index < WASHOUT_MONTHS）の視聴医師数（施設別）
-_pre_viewed = (
-    viewing_all[
-        (viewing_all["month_index"] < WASHOUT_MONTHS) &
-        viewing_all["facility_id"].isin(analysis_fac_ids)
-    ]
-    .groupby("facility_id")["doctor_id"].nunique()
-    .reindex(_cov.index, fill_value=0)
-    .rename("n_pre_viewed_docs")
-)
-_cov["n_pre_viewed_docs"] = _pre_viewed
-print(f"  n_pre_viewed_docs: 平均={_cov['n_pre_viewed_docs'].mean():.1f}, 最大={_cov['n_pre_viewed_docs'].max()}")
 
 # 施設属性 (UHP区分名, 施設区分名)
 _fac_attr_idx = fac_df.drop_duplicates("fac_honin").set_index("fac_honin")

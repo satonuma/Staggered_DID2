@@ -51,7 +51,7 @@ COV_CAT_COLS = [
     "baseline_cat",    # 施設: ベースライン売上カテゴリ
 ]
 # 連続共変量 (z-score 標準化)
-COV_CONT_COLS = ["n_docs", "n_pre_viewed_docs"]  # 施設あたり医師数 / ウォッシュアウト前視聴医師数
+COV_CONT_COLS = ["n_docs"]  # 施設あたり医師数
 # ===================================================================
 
 FILE_RW_LIST           = "rw_list.csv"
@@ -518,17 +518,6 @@ if len(mr_pre_fac) > 0:
 else:
     unit_df["mr_pre"] = 0.0
 print(f"  mr_pre: WO期間施設別月平均MR活動 (非ゼロ: {unit_df['mr_pre'].gt(0).sum()}件)")
-
-# ウォッシュアウト期間の視聴医師数（施設別）を共変量として追加
-_pre_viewed = (
-    viewing_all[
-        (viewing_all["month_index"] < WASHOUT_MONTHS) &
-        viewing_all["facility_id"].isin(analysis_fac_ids)
-    ]
-    .groupby("facility_id")["doc"].nunique()
-)
-unit_df["n_pre_viewed_docs"] = unit_df["facility_id"].map(_pre_viewed).fillna(0).astype(int)
-print(f"  n_pre_viewed_docs: WO前視聴医師数 (非ゼロ施設: {unit_df['n_pre_viewed_docs'].gt(0).sum()}件)")
 
 # 解析期間（WASHOUT_MONTHS〜LAST_ELIGIBLE_MONTH）での最終Coverage（処置群の累積視聴率）
 _post_view = (
