@@ -60,7 +60,8 @@ ACTIVITY_CHANNEL_FILTER = "Web講演会"  # 活動データから抽出する活
 
 PRODUCTS = ["ENT", "CNS", "GI", "CV", "その他"]
 PRODUCT_BASE_RATIO = {"CNS": 0.65, "GI": 0.55, "CV": 0.45, "その他": 0.30}
-RW_FLAG_RATE = 0.85     # ENT医師のうちRW対象の割合
+RW_FLAG_RATE = 0.85     # ENT医師のうちR or W対象の割合
+R_RATE_IN_RW = 0.60     # RW対象のうちR医師の割合（残りはW医師）
 ENT_DOCTOR_RATE = 0.75  # 全医師のうちENT品目の割合
 
 # CATE用: 処置効果の異質性 (modifier を乗算)
@@ -221,7 +222,10 @@ doc_rw_flag = {}
 for d in unique_doc_ids:
     if np.random.random() < ENT_DOCTOR_RATE:
         doc_product[d] = "ENT"
-        doc_rw_flag[d] = "RW" if np.random.random() < RW_FLAG_RATE else ""
+        if np.random.random() < RW_FLAG_RATE:
+            doc_rw_flag[d] = "R" if np.random.random() < R_RATE_IN_RW else "W"
+        else:
+            doc_rw_flag[d] = ""
     else:
         doc_product[d] = np.random.choice(["CNS", "GI", "CV", "その他"])
         doc_rw_flag[d] = ""

@@ -8,49 +8,49 @@
     "mr_fte": 100
   },
   "current_status": {
-    "mr_count_per_facility_month": 1.420909090909091,
-    "digital_count_per_facility_month": 0.2884848484848485,
-    "sales_per_facility_month": 251.59469696969697,
+    "mr_count_per_facility_month": 1.395,
+    "digital_count_per_facility_month": 0.2596969696969697,
+    "sales_per_facility_month": 251.45848484848486,
     "n_facilities": 200,
     "n_months": 33,
     "mr_cost_annual": 100000
   },
   "marginal_effects": {
     "mr": {
-      "coefficient": 1.9970034582158445,
-      "se": 0.5480588550530683,
-      "p": 0.00027080695585590675,
+      "coefficient": 1.581975319369436,
+      "se": 0.46271415360675316,
+      "p": 0.0006326829745479934,
       "sig": "***"
     },
     "digital": {
-      "coefficient": 9.381534816727015,
-      "se": 1.7146664699369658,
-      "p": 4.6364743822024934e-08,
+      "coefficient": 10.609092966127887,
+      "se": 2.5809253710835804,
+      "p": 3.996321547794501e-05,
       "sig": "***"
     }
   },
   "breakeven_analysis": {
-    "mr_cost_efficiency": 0.9985017291079222,
-    "breakeven_digital_cost": 9.395611988682916,
-    "equivalence_ratio_mr_to_digital": 0.21286532504843908,
-    "interpretation": "デジタル視聴単価 < 9.396万円/視聴 であれば MR より費用対効果が高い。MR活動1回 = デジタル視聴0.2回分の売上インパクト(概算)。"
+    "mr_cost_efficiency": 0.790987659684718,
+    "breakeven_digital_cost": 13.412463312457486,
+    "equivalence_ratio_mr_to_digital": 0.14911503975130366,
+    "interpretation": "デジタル視聴単価 < 13.412円/視聴 であれば MR より費用対効果が高い。MR活動1回 = デジタル視聴0.1回分の売上インパクト(概算)。"
   },
   "revenue_neutral_costs": {
     "mr_reduction_10pct": {
       "mr_savings_annual": 10000.0,
-      "max_digital_cost_for_neutral": 137.75822653485827
+      "max_digital_cost_for_neutral": 200.3056050247534
     },
     "mr_reduction_20pct": {
       "mr_savings_annual": 20000.0,
-      "max_digital_cost_for_neutral": 137.75822653485827
+      "max_digital_cost_for_neutral": 200.3056050247534
     },
     "mr_reduction_30pct": {
       "mr_savings_annual": 30000.0,
-      "max_digital_cost_for_neutral": 137.7582265348583
+      "max_digital_cost_for_neutral": 200.30560502475336
     },
     "mr_reduction_50pct": {
       "mr_savings_annual": 50000.0,
-      "max_digital_cost_for_neutral": 137.7582265348583
+      "max_digital_cost_for_neutral": 200.3056050247534
     }
   },
   "sensitivity_grid": [
@@ -61,9 +61,9 @@
       "digital_cost_per_view": 0.05,
       "add_views_annual": 200000.0,
       "delta_digital_pm": 83.33333333333333,
-      "delta_mr_pm": -0.1420909090909091,
-      "delta_sales_pm": 781.5108120237489,
-      "delta_sales_pct": 310.6229270475749
+      "delta_mr_pm": -0.1395,
+      "delta_sales_pm": 883.8703949536051,
+      "delta_sales_pct": 351.4975426206744
     },
     {
       "mr_reduction_pct": 10.0,
@@ -72,9 +72,9 @@
       "digital_cost_per_view": 0.1,
       "add_views_annual": 100000.0,
       "delta_digital_pm": 41.666666666666664,
-      "delta_mr_pm": -0.1420909090909091,
-      "delta_sales_pm": 390.61352799345667,
-      "delta_sales_pct": 155.255072025824
+      "delta_mr_pm": -0.1395,
+      "delta_sales_pm": 441.82485469827657,
+      "delta_sales_pct": 175.70489019867279
     },
     {
       "mr_reduction_pct": 10.0,
@@ -83,9 +83,9 @@
       "digital_cost_per_view": 0.3,
       "add_views_annual": 33333.333333333336,
       "delta_digital_pm": 13.88888888888889,
-      "delta_mr_pm": -0.1420909090909091,
-      "delta_sales_pm": 130.01533863992853,
-      "delta_sales_pct": 51.67650201132342
+      "delta_mr_pm": -0.1395,
+      "delta_sales_pm": 147.12782786139084,
+      "delta_sales_pct": 58.50978858400504
     },
     {
       "mr_reduction_pct": 10.0,
@@ -94,9 +94,9 @@
       "digital_cost_per_view": 0.5,
       "add_views_annual": 20000.0,
       "delta_digital_pm": 8.333333333333334,
-      "delta_mr_pm": -0.1420909090909091,
-      "delta_sales_pm": 77.89570076922288,
-      "delta_sales_pct": 30.9607880084233
+      "delta_mr_pm": -0.1395,
+      "delta_sales_pm": 88.1884224940137,
+      "delta_sales_pct": 35.07076826107149
     },
     {
       "mr_reduction_pct": 10.0,
@@ -105,9 +105,9 @@
       "digital_cost_per_view": 1.0,
       "add_views_annual": 10000.0,
       "delta_digital_pm": 4.166666666666667,
-      "delta_mr_pm": -0.1420909090909091,
-      "delta_sales_pm": 38.80597236619366,
-      "delta_sales_pct": 15.424002506248213
+      "delta_mr_pm": -0.1395,
+      "delta_sales_pm": 43.98386846848083,
+      "delta_sales_pct": 17.491503018871327
     },
     {
       "mr_reduction_pct": 10.0,
@@ -116,9 +116,9 @@
       "digital_cost_per_view": 2.0,
       "add_views_annual": 5000.0,
       "delta_digital_pm": 2.0833333333333335,
-      "delta_mr_pm": -0.1420909090909091,
-      "delta_sales_pm": 19.261108164679037,
-      "delta_sales_pct": 7.655609755160666
+      "delta_mr_pm": -0.1395,
+      "delta_sales_pm": 21.881591455714396,
+      "delta_sales_pct": 8.701870397771245
     },
     {
       "mr_reduction_pct": 10.0,
@@ -127,9 +127,9 @@
       "digital_cost_per_view": 5.0,
       "add_views_annual": 2000.0,
       "delta_digital_pm": 0.8333333333333334,
-      "delta_mr_pm": -0.1420909090909091,
-      "delta_sales_pm": 7.534189643770268,
-      "delta_sales_pct": 2.9945741045081387
+      "delta_mr_pm": -0.1395,
+      "delta_sales_pm": 8.620225248054536,
+      "delta_sales_pct": 3.4280908251111963
     },
     {
       "mr_reduction_pct": 10.0,
@@ -138,9 +138,9 @@
       "digital_cost_per_view": 10.0,
       "add_views_annual": 1000.0,
       "delta_digital_pm": 0.4166666666666667,
-      "delta_mr_pm": -0.1420909090909091,
-      "delta_sales_pm": 3.6252168034673447,
-      "delta_sales_pct": 1.4408955542906294
+      "delta_mr_pm": -0.1395,
+      "delta_sales_pm": 4.19976984550125,
+      "delta_sales_pct": 1.6701643008911797
     },
     {
       "mr_reduction_pct": 20.0,
@@ -149,9 +149,9 @@
       "digital_cost_per_view": 0.05,
       "add_views_annual": 400000.0,
       "delta_digital_pm": 166.66666666666666,
-      "delta_mr_pm": -0.2841818181818182,
-      "delta_sales_pm": 1563.0216240474979,
-      "delta_sales_pct": 621.2458540951498
+      "delta_mr_pm": -0.279,
+      "delta_sales_pm": 1767.7407899072102,
+      "delta_sales_pct": 702.9950852413488
     },
     {
       "mr_reduction_pct": 20.0,
@@ -160,9 +160,9 @@
       "digital_cost_per_view": 0.1,
       "add_views_annual": 200000.0,
       "delta_digital_pm": 83.33333333333333,
-      "delta_mr_pm": -0.2841818181818182,
-      "delta_sales_pm": 781.2270559869133,
-      "delta_sales_pct": 310.510144051648
+      "delta_mr_pm": -0.279,
+      "delta_sales_pm": 883.6497093965531,
+      "delta_sales_pct": 351.40978039734557
     },
     {
       "mr_reduction_pct": 20.0,
@@ -171,9 +171,9 @@
       "digital_cost_per_view": 0.3,
       "add_views_annual": 66666.66666666667,
       "delta_digital_pm": 27.77777777777778,
-      "delta_mr_pm": -0.2841818181818182,
-      "delta_sales_pm": 260.03067727985706,
-      "delta_sales_pct": 103.35300402264684
+      "delta_mr_pm": -0.279,
+      "delta_sales_pm": 294.2556557227817,
+      "delta_sales_pct": 117.01957716801007
     },
     {
       "mr_reduction_pct": 20.0,
@@ -182,9 +182,9 @@
       "digital_cost_per_view": 0.5,
       "add_views_annual": 40000.0,
       "delta_digital_pm": 16.666666666666668,
-      "delta_mr_pm": -0.2841818181818182,
-      "delta_sales_pm": 155.79140153844577,
-      "delta_sales_pct": 61.9215760168466
+      "delta_mr_pm": -0.279,
+      "delta_sales_pm": 176.3768449880274,
+      "delta_sales_pct": 70.14153652214299
     },
     {
       "mr_reduction_pct": 20.0,
@@ -193,9 +193,9 @@
       "digital_cost_per_view": 1.0,
       "add_views_annual": 20000.0,
       "delta_digital_pm": 8.333333333333334,
-      "delta_mr_pm": -0.2841818181818182,
-      "delta_sales_pm": 77.61194473238731,
-      "delta_sales_pct": 30.848005012496426
+      "delta_mr_pm": -0.279,
+      "delta_sales_pm": 87.96773693696166,
+      "delta_sales_pct": 34.983006037742655
     },
     {
       "mr_reduction_pct": 20.0,
@@ -204,9 +204,9 @@
       "digital_cost_per_view": 2.0,
       "add_views_annual": 10000.0,
       "delta_digital_pm": 4.166666666666667,
-      "delta_mr_pm": -0.2841818181818182,
-      "delta_sales_pm": 38.52221632935807,
-      "delta_sales_pct": 15.311219510321331
+      "delta_mr_pm": -0.279,
+      "delta_sales_pm": 43.76318291142879,
+      "delta_sales_pct": 17.40374079554249
     },
     {
       "mr_reduction_pct": 20.0,
@@ -215,9 +215,9 @@
       "digital_cost_per_view": 5.0,
       "add_views_annual": 4000.0,
       "delta_digital_pm": 1.6666666666666667,
-      "delta_mr_pm": -0.2841818181818182,
-      "delta_sales_pm": 15.068379287540536,
-      "delta_sales_pct": 5.989148209016277
+      "delta_mr_pm": -0.279,
+      "delta_sales_pm": 17.240450496109073,
+      "delta_sales_pct": 6.856181650222393
     },
     {
       "mr_reduction_pct": 20.0,
@@ -226,9 +226,9 @@
       "digital_cost_per_view": 10.0,
       "add_views_annual": 2000.0,
       "delta_digital_pm": 0.8333333333333334,
-      "delta_mr_pm": -0.2841818181818182,
-      "delta_sales_pm": 7.250433606934689,
-      "delta_sales_pct": 2.881791108581259
+      "delta_mr_pm": -0.279,
+      "delta_sales_pm": 8.3995396910025,
+      "delta_sales_pct": 3.3403286017823595
     },
     {
       "mr_reduction_pct": 30.0,
@@ -237,9 +237,9 @@
       "digital_cost_per_view": 0.05,
       "add_views_annual": 600000.0,
       "delta_digital_pm": 250.0,
-      "delta_mr_pm": -0.42627272727272725,
-      "delta_sales_pm": 2344.532436071247,
-      "delta_sales_pct": 931.8687811427247
+      "delta_mr_pm": -0.4185,
+      "delta_sales_pm": 2651.6111848608157,
+      "delta_sales_pct": 1054.4926278620233
     },
     {
       "mr_reduction_pct": 30.0,
@@ -248,9 +248,9 @@
       "digital_cost_per_view": 0.1,
       "add_views_annual": 300000.0,
       "delta_digital_pm": 125.0,
-      "delta_mr_pm": -0.42627272727272725,
-      "delta_sales_pm": 1171.8405839803702,
-      "delta_sales_pct": 465.76521607747213
+      "delta_mr_pm": -0.4185,
+      "delta_sales_pm": 1325.47456409483,
+      "delta_sales_pct": 527.1146705960184
     },
     {
       "mr_reduction_pct": 30.0,
@@ -259,9 +259,9 @@
       "digital_cost_per_view": 0.3,
       "add_views_annual": 100000.0,
       "delta_digital_pm": 41.666666666666664,
-      "delta_mr_pm": -0.42627272727272725,
-      "delta_sales_pm": 390.04601591978553,
-      "delta_sales_pct": 155.02950603397025
+      "delta_mr_pm": -0.4185,
+      "delta_sales_pm": 441.3834835841725,
+      "delta_sales_pct": 175.5293657520151
     },
     {
       "mr_reduction_pct": 30.0,
@@ -270,9 +270,9 @@
       "digital_cost_per_view": 0.5,
       "add_views_annual": 60000.0,
       "delta_digital_pm": 25.0,
-      "delta_mr_pm": -0.42627272727272725,
-      "delta_sales_pm": 233.68710230766865,
-      "delta_sales_pct": 92.88236402526991
+      "delta_mr_pm": -0.4185,
+      "delta_sales_pm": 264.56526748204107,
+      "delta_sales_pct": 105.21230478321446
     },
     {
       "mr_reduction_pct": 30.0,
@@ -281,9 +281,9 @@
       "digital_cost_per_view": 1.0,
       "add_views_annual": 30000.0,
       "delta_digital_pm": 12.5,
-      "delta_mr_pm": -0.42627272727272725,
-      "delta_sales_pm": 116.41791709858096,
-      "delta_sales_pct": 46.27200751874464
+      "delta_mr_pm": -0.4185,
+      "delta_sales_pm": 131.95160540544248,
+      "delta_sales_pct": 52.47450905661398
     },
     {
       "mr_reduction_pct": 30.0,
@@ -292,9 +292,9 @@
       "digital_cost_per_view": 2.0,
       "add_views_annual": 15000.0,
       "delta_digital_pm": 6.25,
-      "delta_mr_pm": -0.42627272727272725,
-      "delta_sales_pm": 57.78332449403711,
-      "delta_sales_pct": 22.966829265481998
+      "delta_mr_pm": -0.4185,
+      "delta_sales_pm": 65.64477436714319,
+      "delta_sales_pct": 26.10561119331373
     },
     {
       "mr_reduction_pct": 30.0,
@@ -303,9 +303,9 @@
       "digital_cost_per_view": 5.0,
       "add_views_annual": 6000.0,
       "delta_digital_pm": 2.5,
-      "delta_mr_pm": -0.42627272727272725,
-      "delta_sales_pm": 22.6025689313108,
-      "delta_sales_pct": 8.983722313524414
+      "delta_mr_pm": -0.4185,
+      "delta_sales_pm": 25.86067574416361,
+      "delta_sales_pct": 10.284272475333589
     },
     {
       "mr_reduction_pct": 30.0,
@@ -314,9 +314,9 @@
       "digital_cost_per_view": 10.0,
       "add_views_annual": 3000.0,
       "delta_digital_pm": 1.25,
-      "delta_mr_pm": -0.42627272727272725,
-      "delta_sales_pm": 10.875650410402033,
-      "delta_sales_pct": 4.322686662871888
+      "delta_mr_pm": -0.4185,
+      "delta_sales_pm": 12.599309536503752,
+      "delta_sales_pct": 5.01049290267354
     },
     {
       "mr_reduction_pct": 50.0,
@@ -325,9 +325,9 @@
       "digital_cost_per_view": 0.05,
       "add_views_annual": 1000000.0,
       "delta_digital_pm": 416.6666666666667,
-      "delta_mr_pm": -0.7104545454545454,
-      "delta_sales_pm": 3907.554060118745,
-      "delta_sales_pct": 1553.1146352378746
+      "delta_mr_pm": -0.6975,
+      "delta_sales_pm": 4419.351974768027,
+      "delta_sales_pct": 1757.4877131033722
     },
     {
       "mr_reduction_pct": 50.0,
@@ -336,9 +336,9 @@
       "digital_cost_per_view": 0.1,
       "add_views_annual": 500000.0,
       "delta_digital_pm": 208.33333333333334,
-      "delta_mr_pm": -0.7104545454545454,
-      "delta_sales_pm": 1953.0676399672836,
-      "delta_sales_pct": 776.2753601291201
+      "delta_mr_pm": -0.6975,
+      "delta_sales_pm": 2209.1242734913835,
+      "delta_sales_pct": 878.5244509933642
     },
     {
       "mr_reduction_pct": 50.0,
@@ -347,9 +347,9 @@
       "digital_cost_per_view": 0.3,
       "add_views_annual": 166666.6666666667,
       "delta_digital_pm": 69.44444444444446,
-      "delta_mr_pm": -0.7104545454545454,
-      "delta_sales_pm": 650.0766931996427,
-      "delta_sales_pct": 258.38251005661715
+      "delta_mr_pm": -0.6975,
+      "delta_sales_pm": 735.6391393069543,
+      "delta_sales_pct": 292.54894292002524
     },
     {
       "mr_reduction_pct": 50.0,
@@ -358,9 +358,9 @@
       "digital_cost_per_view": 0.5,
       "add_views_annual": 100000.0,
       "delta_digital_pm": 41.666666666666664,
-      "delta_mr_pm": -0.7104545454545454,
-      "delta_sales_pm": 389.4785038461144,
-      "delta_sales_pct": 154.8039400421165
+      "delta_mr_pm": -0.6975,
+      "delta_sales_pm": 440.9421124700684,
+      "delta_sales_pct": 175.35384130535746
     },
     {
       "mr_reduction_pct": 50.0,
@@ -369,9 +369,9 @@
       "digital_cost_per_view": 1.0,
       "add_views_annual": 50000.0,
       "delta_digital_pm": 20.833333333333332,
-      "delta_mr_pm": -0.7104545454545454,
-      "delta_sales_pm": 194.02986183096823,
-      "delta_sales_pct": 77.12001253124104
+      "delta_mr_pm": -0.6975,
+      "delta_sales_pm": 219.91934234240412,
+      "delta_sales_pct": 87.45751509435664
     },
     {
       "mr_reduction_pct": 50.0,
@@ -380,9 +380,9 @@
       "digital_cost_per_view": 2.0,
       "add_views_annual": 25000.0,
       "delta_digital_pm": 10.416666666666666,
-      "delta_mr_pm": -0.7104545454545454,
-      "delta_sales_pm": 96.30554082339518,
-      "delta_sales_pct": 38.27804877580333
+      "delta_mr_pm": -0.6975,
+      "delta_sales_pm": 109.40795727857197,
+      "delta_sales_pct": 43.509351988856224
     },
     {
       "mr_reduction_pct": 50.0,
@@ -391,9 +391,9 @@
       "digital_cost_per_view": 5.0,
       "add_views_annual": 10000.0,
       "delta_digital_pm": 4.166666666666667,
-      "delta_mr_pm": -0.7104545454545454,
-      "delta_sales_pm": 37.67094821885134,
-      "delta_sales_pct": 14.972870522540694
+      "delta_mr_pm": -0.6975,
+      "delta_sales_pm": 43.101126240272684,
+      "delta_sales_pct": 17.140454125555983
     },
     {
       "mr_reduction_pct": 50.0,
@@ -402,9 +402,9 @@
       "digital_cost_per_view": 10.0,
       "add_views_annual": 5000.0,
       "delta_digital_pm": 2.0833333333333335,
-      "delta_mr_pm": -0.7104545454545454,
-      "delta_sales_pm": 18.126084017336723,
-      "delta_sales_pct": 7.2044777714531465
+      "delta_mr_pm": -0.6975,
+      "delta_sales_pm": 20.998849227506252,
+      "delta_sales_pct": 8.350821504455899
     }
   ],
   "subgroup_effects": [
@@ -413,72 +413,72 @@
       "group": "病院",
       "n_obs": 2013,
       "n_facilities": 61,
-      "beta_mr": 1.7789354072545662,
-      "beta_digital": 6.548483955521446,
-      "se_mr": 0.7026320518878569,
-      "se_digital": 2.6761259548469765,
-      "p_mr": 0.011426576969174818,
-      "p_digital": 0.014494205398194904
+      "beta_mr": 0.7154856511764676,
+      "beta_digital": 6.886474362710487,
+      "se_mr": 0.8593827365656307,
+      "se_digital": 1.6359938961387648,
+      "p_mr": 0.40519791707321806,
+      "p_digital": 2.6794019016174175e-05
     },
     {
       "group_col": "facility_type",
       "group": "診療所",
       "n_obs": 4587,
       "n_facilities": 139,
-      "beta_mr": 2.1754709078215435,
-      "beta_digital": 10.955971150840368,
-      "se_mr": 0.745132787653177,
-      "se_digital": 2.1740953230383577,
-      "p_mr": 0.003522826351254116,
-      "p_digital": 4.858612423497277e-07
+      "beta_mr": 2.066643034186767,
+      "beta_digital": 12.775971544153968,
+      "se_mr": 0.5461773379520397,
+      "se_digital": 3.7862818962033877,
+      "p_mr": 0.00015647945683516795,
+      "p_digital": 0.0007464744261143075
     },
     {
       "group_col": "uhp_tier",
       "group": "UHP-A",
-      "n_obs": 1188,
-      "n_facilities": 36,
-      "beta_mr": 2.1916366674803576,
-      "beta_digital": 18.675359996996146,
-      "se_mr": 1.4019940020266504,
-      "se_digital": 5.308574860680718,
-      "p_mr": 0.11828190888732015,
-      "p_digital": 0.0004523390549739936
+      "n_obs": 1452,
+      "n_facilities": 44,
+      "beta_mr": 2.700913735171145,
+      "beta_digital": 7.003342704410291,
+      "se_mr": 1.1597078083750767,
+      "se_digital": 2.2346624039541747,
+      "p_mr": 0.020005547374458255,
+      "p_digital": 0.0017611265571833012
     },
     {
       "group_col": "uhp_tier",
       "group": "UHP-B",
-      "n_obs": 1716,
-      "n_facilities": 52,
-      "beta_mr": 2.3746662855833245,
-      "beta_digital": 5.49781303289252,
-      "se_mr": 0.7347194349176063,
-      "se_digital": 2.2588328470840624,
-      "p_mr": 0.0012535053406776964,
-      "p_digital": 0.015043185718524255
+      "n_obs": 1551,
+      "n_facilities": 47,
+      "beta_mr": 1.1823857725601943,
+      "beta_digital": 20.405705973066205,
+      "se_mr": 0.6489722963746682,
+      "se_digital": 6.886385963569839,
+      "p_mr": 0.06866786746576392,
+      "p_digital": 0.00309359294785172
     },
     {
       "group_col": "uhp_tier",
       "group": "UHP-C",
-      "n_obs": 1716,
-      "n_facilities": 52,
-      "beta_mr": 0.8652300187544847,
-      "beta_digital": 9.728332917148544,
-      "se_mr": 1.0701821257482365,
-      "se_digital": 2.772149047232236,
-      "p_mr": 0.41892736396436137,
-      "p_digital": 0.00046148070000073815
+      "n_obs": 1782,
+      "n_facilities": 54,
+      "beta_mr": 1.8877788836455143,
+      "beta_digital": 10.830052199208422,
+      "se_mr": 0.9217613822955085,
+      "se_digital": 4.9620435733248325,
+      "p_mr": 0.04071265219890252,
+      "p_digital": 0.029203749397872736
     },
     {
       "group_col": "uhp_tier",
       "group": "非UHP",
-      "n_obs": 1980,
-      "n_facilities": 60,
-      "beta_mr": 3.218318965279306,
-      "beta_digital": 4.844131814833219,
-      "se_mr": 1.2172894232778528,
-      "se_digital": 1.3767678700968295,
-      "p_mr": 0.008265057903220852,
-      "p_digital": 0.00044430904796022297
+      "n_obs": 1815,
+      "n_facilities": 55,
+      "beta_mr": 0.9987754686179877,
+      "beta_digital": 4.255014109681017,
+      "se_mr": 1.0218269888742462,
+      "se_digital": 1.7985464831784403,
+      "p_mr": 0.3284879089937718,
+      "p_digital": 0.01810077060108073
     }
   ],
   "facility_master_source": {
@@ -489,10 +489,10 @@
       "病院": 61
     },
     "uhp_tiers": {
-      "非UHP": 60,
-      "UHP-B": 52,
-      "UHP-C": 52,
-      "UHP-A": 36
+      "非UHP": 55,
+      "UHP-C": 54,
+      "UHP-B": 47,
+      "UHP-A": 44
     }
   },
   "interpretation": {

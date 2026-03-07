@@ -298,9 +298,9 @@ print(f"  処置群: {len(treated_doc_ids)}, 対照群: {len(control_doc_ids)}, 
 print("\n[CONSORT フロー図生成]")
 
 def create_consort_diagram(flow):
-    fig, ax = plt.subplots(figsize=(10, 18))
+    fig, ax = plt.subplots(figsize=(11, 24))
     ax.set_xlim(0, 10)
-    ax.set_ylim(0, 20)
+    ax.set_ylim(0, 21)
     ax.axis("off")
     fig.suptitle("解析対象集団の選定", fontsize=14, fontweight="bold", y=0.98)
 
@@ -474,6 +474,52 @@ def create_consort_diagram(flow):
              f"処置群\n{n_treated}施設{_t_docs_str}", color="#FFF3E0", edge="#FF9800")
     draw_box(ax, cx + 2.0, y, 3.0, 0.9,
              f"対照群\n{n_control}施設{_c_docs_str}", color="#E3F2FD", edge="#1565C0")
+
+    # 1RW先 / 複数RW先 内訳
+    _t_s1 = flow.get("treated_single_rw", "-")
+    _t_sm = flow.get("treated_multi_rw", "-")
+    _c_s1 = flow.get("control_single_rw", "-")
+    _c_sm = flow.get("control_multi_rw", "-")
+    _t_s1d = flow.get("treated_single_rw_docs", "")
+    _t_smd = flow.get("treated_multi_rw_docs", "")
+    _c_s1d = flow.get("control_single_rw_docs", "")
+    _c_smd = flow.get("control_multi_rw_docs", "")
+    _t_bd = flow.get("rw_breakdown_treated", {})
+    _c_bd = flow.get("rw_breakdown_control", {})
+    if _t_bd:
+        def _bd_text(bd):
+            lines = []
+            _s1_rw  = bd.get("1RW先",  {"facs": 0, "docs": 0})
+            _s1_non = bd.get("1非RW先", {"facs": 0, "docs": 0})
+            # 1RW先・1非RW先が両方あるモードは1医師先(計)を合計表示
+            if "1RW先" in bd and "1非RW先" in bd:
+                _tot_f = _s1_rw["facs"] + _s1_non["facs"]
+                _tot_d = _s1_rw["docs"] + _s1_non["docs"]
+                lines.append(f"1医師先(計): {_tot_f}施設（{_tot_d}医師）")
+                lines.append(f"  うち1RW先: {_s1_rw['facs']}施設（{_s1_rw['docs']}医師）")
+                lines.append(f"  うち1非RW先: {_s1_non['facs']}施設（{_s1_non['docs']}医師）")
+            else:
+                for lbl in ["1RW先", "1非RW先"]:
+                    if lbl in bd:
+                        v = bd[lbl]
+                        lines.append(f"{lbl}: {v['facs']}施設（{v['docs']}医師）")
+            for lbl in ["RW非RW複数先", "RW複数先", "非RW複数先"]:
+                if lbl in bd:
+                    v = bd[lbl]
+                    lines.append(f"{lbl}: {v['facs']}施設（{v['docs']}医師）")
+            return "\n".join(lines)
+
+        _t_text  = _bd_text(_t_bd)
+        _c_text  = _bd_text(_c_bd)
+        _n_lines = max(len(_t_text.splitlines()), len(_c_text.splitlines()))
+        _box_h   = max(0.9, _n_lines * 0.45)
+        _gap     = 0.4  # 処置群/対照群ボックス下端との間隔
+        # ボックス下端 = y - 0.45、そこからgap空けてbreakdownボックスの上端
+        _y_bd = y - 0.45 - _gap - _box_h / 2  # breakdownボックスの中心y
+        draw_arrow(ax, cx - 2.0, y - 0.45, cx - 2.0, _y_bd + _box_h / 2)
+        draw_arrow(ax, cx + 2.0, y - 0.45, cx + 2.0, _y_bd + _box_h / 2)
+        draw_box(ax, cx - 2.0, _y_bd, 3.4, _box_h, _t_text, color="#FFF8E1", edge="#FFB300")
+        draw_box(ax, cx + 2.0, _y_bd, 3.4, _box_h, _c_text, color="#E8EAF6", edge="#3949AB")
 
     return fig
 

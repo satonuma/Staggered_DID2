@@ -4,175 +4,175 @@
     "pre_period": "month 0-11 (12ヶ月)",
     "post_period": "month 12-32 (21ヶ月)",
     "outcome": "後期月平均 - 前期月平均（円）",
-    "caliper": 0.07447883077561888,
+    "caliper": 0.1409986602578786,
     "matching": "1:1 nearest-neighbor within caliper (facility level)",
     "n_subgroup_dimensions": 4
   },
   "sample_sizes": {
-    "washout_excluded": 10,
-    "treated_raw": 100,
-    "control_raw": 81,
-    "matched_pairs": 74
+    "washout_excluded": 11,
+    "treated_raw": 94,
+    "control_raw": 86,
+    "matched_pairs": 61
   },
   "overall_att": {
-    "att": 30.238899613899616,
-    "se": 5.717205297963855,
-    "t_stat": 5.289105085077793,
-    "p_value": 1.2332324141883788e-06,
-    "ci_95_lower": 19.03317722989046,
-    "ci_95_upper": 41.44462199790877
+    "att": 32.59738485558158,
+    "se": 6.190423527241856,
+    "t_stat": 5.265776196430954,
+    "p_value": 1.9835430202785886e-06,
+    "ci_95_lower": 20.464154742187542,
+    "ci_95_upper": 44.730614968975615
   },
   "subgroup_att": [
     {
       "dimension": "ベースライン納入額",
       "level": "低",
-      "n_treated_raw": 31,
-      "n_control_raw": 29,
-      "n_matched": 27,
-      "att": 18.190476190476186,
-      "se": 6.712681161060243,
-      "p_value": 0.011756388117230898,
-      "ci_95_lower": 5.033621114798109,
-      "ci_95_upper": 31.347331266154264
+      "n_treated_raw": 18,
+      "n_control_raw": 42,
+      "n_matched": 17,
+      "att": 30.58473389355742,
+      "se": 9.232826552817704,
+      "p_value": 0.004400835801738667,
+      "ci_95_lower": 12.488393850034722,
+      "ci_95_upper": 48.681073937080114
     },
     {
       "dimension": "ベースライン納入額",
       "level": "中",
-      "n_treated_raw": 31,
-      "n_control_raw": 30,
-      "n_matched": 24,
-      "att": 32.004464285714285,
-      "se": 9.862827506353232,
-      "p_value": 0.0035727614636751337,
-      "ci_95_lower": 12.67332237326195,
-      "ci_95_upper": 51.335606198166616
+      "n_treated_raw": 33,
+      "n_control_raw": 27,
+      "n_matched": 27,
+      "att": 30.806878306878314,
+      "se": 11.773595756136192,
+      "p_value": 0.014599943810900129,
+      "ci_95_lower": 7.730630624851379,
+      "ci_95_upper": 53.88312598890525
     },
     {
       "dimension": "ベースライン納入額",
       "level": "高",
-      "n_treated_raw": 38,
-      "n_control_raw": 22,
-      "n_matched": 16,
-      "att": 55.94494047619047,
-      "se": 16.244101564284858,
-      "p_value": 0.0036159765959553614,
-      "ci_95_lower": 24.10650141019215,
-      "ci_95_upper": 87.78337954218878
+      "n_treated_raw": 43,
+      "n_control_raw": 17,
+      "n_matched": 17,
+      "att": 22.29481792717087,
+      "se": 11.00761286859548,
+      "p_value": 0.05984181727086435,
+      "ci_95_lower": 0.7198967047237304,
+      "ci_95_upper": 43.86973914961801
     },
     {
       "dimension": "UHP区分",
       "level": "UHP-A",
-      "n_treated_raw": 20,
-      "n_control_raw": 14,
+      "n_treated_raw": 17,
+      "n_control_raw": 22,
       "n_matched": 10,
-      "att": 18.100000000000005,
-      "se": 9.645215496441184,
-      "p_value": 0.09331444515581766,
-      "ci_95_lower": -0.8046223730247135,
-      "ci_95_upper": 37.00462237302472
+      "att": 12.726190476190474,
+      "se": 21.294086653745765,
+      "p_value": 0.5648128137888397,
+      "ci_95_lower": -29.010219365151222,
+      "ci_95_upper": 54.46260031753217
     },
     {
       "dimension": "UHP区分",
       "level": "UHP-B",
-      "n_treated_raw": 27,
-      "n_control_raw": 20,
+      "n_treated_raw": 23,
+      "n_control_raw": 19,
       "n_matched": 13,
-      "att": 32.130952380952394,
-      "se": 11.094326690642388,
-      "p_value": 0.013421681981143907,
-      "ci_95_lower": 10.386072067293313,
-      "ci_95_upper": 53.875832694611475
+      "att": 28.117216117216124,
+      "se": 10.613676596682634,
+      "p_value": 0.021212335754288603,
+      "ci_95_lower": 7.314409987718161,
+      "ci_95_upper": 48.92002224671408
     },
     {
       "dimension": "UHP区分",
       "level": "UHP-C",
-      "n_treated_raw": 24,
+      "n_treated_raw": 26,
       "n_control_raw": 22,
-      "n_matched": 15,
-      "att": 41.37222222222222,
-      "se": 13.460226792272246,
-      "p_value": 0.00825290288582825,
-      "ci_95_lower": 14.990177709368616,
-      "ci_95_upper": 67.75426673507582
+      "n_matched": 18,
+      "att": 40.57936507936509,
+      "se": 16.149694272693864,
+      "p_value": 0.022358525548267005,
+      "ci_95_lower": 8.925964304885117,
+      "ci_95_upper": 72.23276585384507
     },
     {
       "dimension": "UHP区分",
       "level": "非UHP",
-      "n_treated_raw": 29,
-      "n_control_raw": 25,
-      "n_matched": 20,
-      "att": 25.1922619047619,
-      "se": 11.209670983168003,
-      "p_value": 0.03668905290969415,
-      "ci_95_lower": 3.2213067777526128,
-      "ci_95_upper": 47.16321703177118
+      "n_treated_raw": 28,
+      "n_control_raw": 23,
+      "n_matched": 15,
+      "att": 33.087301587301596,
+      "se": 12.984490024161008,
+      "p_value": 0.023197451121470536,
+      "ci_95_lower": 7.637701139946021,
+      "ci_95_upper": 58.536902034657174
     },
     {
       "dimension": "施設区分",
       "level": "病院",
-      "n_treated_raw": 29,
+      "n_treated_raw": 32,
       "n_control_raw": 24,
-      "n_matched": 18,
-      "att": 29.369047619047617,
-      "se": 12.066625032640259,
-      "p_value": 0.026258348271855025,
-      "ci_95_lower": 5.718462555072712,
-      "ci_95_upper": 53.01963268302252
+      "n_matched": 19,
+      "att": 20.79949874686717,
+      "se": 10.45159312352418,
+      "p_value": 0.061991640886567945,
+      "ci_95_lower": 0.31437622475977633,
+      "ci_95_upper": 41.28462126897456
     },
     {
       "dimension": "施設区分",
       "level": "診療所",
-      "n_treated_raw": 71,
-      "n_control_raw": 57,
-      "n_matched": 49,
-      "att": 31.871477162293495,
-      "se": 7.047217291992236,
-      "p_value": 4.0102731636570965e-05,
-      "ci_95_lower": 18.05893126998871,
-      "ci_95_upper": 45.68402305459828
+      "n_treated_raw": 62,
+      "n_control_raw": 62,
+      "n_matched": 42,
+      "att": 39.78628117913833,
+      "se": 10.14374519544501,
+      "p_value": 0.00032699428567362077,
+      "ci_95_lower": 19.90454059606611,
+      "ci_95_upper": 59.66802176221054
     },
     {
       "dimension": "施設医師数区分",
       "level": "1名",
-      "n_treated_raw": 52,
-      "n_control_raw": 51,
-      "n_matched": 49,
-      "att": 23.005830903790088,
-      "se": 5.927841556125289,
-      "p_value": 0.0003169630260508871,
-      "ci_95_lower": 11.387261453784522,
-      "ci_95_upper": 34.62440035379565
+      "n_treated_raw": 40,
+      "n_control_raw": 64,
+      "n_matched": 39,
+      "att": 22.682539682539684,
+      "se": 5.876733741777338,
+      "p_value": 0.0004271610201509457,
+      "ci_95_lower": 11.1641415486561,
+      "ci_95_upper": 34.20093781642326
     },
     {
       "dimension": "施設医師数区分",
       "level": "2〜3名",
-      "n_treated_raw": 37,
-      "n_control_raw": 26,
+      "n_treated_raw": 41,
+      "n_control_raw": 20,
       "n_matched": 20,
-      "att": 53.521428571428565,
-      "se": 16.04472290879324,
-      "p_value": 0.003473666092664862,
-      "ci_95_lower": 22.073771670193814,
-      "ci_95_upper": 84.96908547266332
+      "att": 49.01547619047621,
+      "se": 17.832214606257,
+      "p_value": 0.01277080217422144,
+      "ci_95_lower": 14.064335562212484,
+      "ci_95_upper": 83.96661681873994
     },
     {
       "dimension": "施設医師数区分",
       "level": "4名以上",
-      "n_treated_raw": 11,
-      "n_control_raw": 4,
-      "n_matched": 4,
-      "att": 40.66071428571429,
-      "se": 24.283543867475462,
-      "p_value": 0.1926427161302795,
-      "ci_95_lower": -6.935031694537614,
-      "ci_95_upper": 88.2564602659662
+      "n_treated_raw": 13,
+      "n_control_raw": 2,
+      "n_matched": 0,
+      "att": null,
+      "se": null,
+      "p_value": null,
+      "ci_95_lower": null,
+      "ci_95_upper": null
     }
   ],
   "covariate_balance_smd": [
     {
       "変数": "n_docs",
-      "SMD_before": 0.3828994816279331,
-      "SMD_after": -0.016868179978975353
+      "SMD_before": 0.7309920948476597,
+      "SMD_after": 0.0
     },
     {
       "変数": "n_pre_viewed_docs",
@@ -181,53 +181,53 @@
     },
     {
       "変数": "pre_mean",
-      "SMD_before": 0.3837970317433786,
-      "SMD_after": 0.007597424145301905
+      "SMD_before": 0.6659039422126721,
+      "SMD_after": -0.05393779830065054
     },
     {
       "変数": "UHP区分名=UHP-A",
-      "SMD_before": 0.0697839752060372,
-      "SMD_after": 0.03499628184257085
+      "SMD_before": -0.18220948946238724,
+      "SMD_after": -0.25796014823540875
     },
     {
       "変数": "UHP区分名=UHP-B",
-      "SMD_before": 0.052752786290576524,
-      "SMD_after": 0.06302534916632539
+      "SMD_before": 0.05622080490592579,
+      "SMD_after": 0.0
     },
     {
       "変数": "UHP区分名=UHP-C",
-      "SMD_before": -0.07248422531517458,
-      "SMD_after": -0.12623888061956062
+      "SMD_before": 0.04703353645588769,
+      "SMD_after": 0.0708436346975814
     },
     {
       "変数": "UHP区分名=非UHP",
-      "SMD_before": -0.040714936518811744,
-      "SMD_after": 0.028718326344709465
+      "SMD_before": 0.06761818666103546,
+      "SMD_after": 0.14664711502135333
     },
     {
       "変数": "施設区分名=病院",
-      "SMD_before": -0.013832088721043008,
+      "SMD_before": 0.13298583159700897,
       "SMD_after": 0.0
     },
     {
       "変数": "施設区分名=診療所",
-      "SMD_before": 0.013832088721042884,
+      "SMD_before": -0.13298583159700897,
       "SMD_after": 0.0
     },
     {
       "変数": "baseline_cat=中",
-      "SMD_before": -0.12768455539564735,
-      "SMD_after": 0.05663654717885991
+      "SMD_before": 0.07883294714904361,
+      "SMD_after": -0.06633581268066589
     },
     {
       "変数": "baseline_cat=低",
-      "SMD_before": -0.10195624141284446,
-      "SMD_after": -0.027772420960106133
+      "SMD_before": -0.6599953206497647,
+      "SMD_after": 0.03624997167972072
     },
     {
       "変数": "baseline_cat=高",
-      "SMD_before": 0.2328424484112036,
-      "SMD_after": -0.030678599553894886
+      "SMD_before": 0.5760015750772852,
+      "SMD_after": 0.03624997167972072
     }
   ],
   "baseline_cat_levels": [
@@ -242,7 +242,19 @@
     "unit": "施設レベル (facility_id)。複数医師施設含む。主施設=平均納入額最大施設。"
   },
   "coverage_stats": {
-    "treated_mean_coverage": 0.777,
-    "coverage_growth_corr": -0.4120902332643513
-  }
+    "treated_mean_coverage": 0.725531914893617,
+    "coverage_growth_corr": 0.2728038392892578
+  },
+  "psm_covariates": [
+    "UHP区分名_UHP-B",
+    "UHP区分名_UHP-C",
+    "UHP区分名_非UHP",
+    "施設区分名_診療所",
+    "baseline_cat_低",
+    "baseline_cat_中",
+    "baseline_cat_高",
+    "pre_mean_std",
+    "n_docs_std",
+    "n_pre_viewed_docs_std"
+  ]
 }

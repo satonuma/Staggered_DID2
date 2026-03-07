@@ -62,7 +62,8 @@ FILE_DOCTOR_ATTR       = "doctor_attribute.csv"
 FILE_FACILITY_MASTER   = "facility_attribute_修正.csv"
 FILE_FAC_DOCTOR_LIST   = "施設医師リスト.csv"
 
-INCLUDE_ONLY_RW = False
+INCLUDE_ONLY_RW     = False   # True: RW医師のみ
+INCLUDE_ONLY_NON_RW = False  # True: 非RW医師のみ (INCLUDE_ONLY_RW=Falseのとき有効)
 EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入が0の施設を解析対象から除外
 UHP_RANK = {"UHP-A": 0, "UHP-B": 1, "UHP-C": 2}
 
@@ -376,12 +377,17 @@ for _doc in _zero_docs_set:
 
 doc_primary_fac = _doc_primary_all  # doc → fac_honin
 
-# RWフィルタ
+# 医師フィルタ
 rw_doc_ids = set(rw_list["doc"])
 if INCLUDE_ONLY_RW:
     analysis_docs_all = all_docs & rw_doc_ids
+    print(f"  [Step 3] RWフィルタ適用: {len(analysis_docs_all)} 名")
+elif INCLUDE_ONLY_NON_RW:
+    analysis_docs_all = all_docs - rw_doc_ids
+    print(f"  [Step 3] 非RWフィルタ適用: {len(analysis_docs_all)} 名")
 else:
     analysis_docs_all = all_docs
+    print(f"  [Step 3] スキップ (全医師): {len(analysis_docs_all)} 名")
 
 # 施設→医師リスト (1:N)
 fac_to_docs: dict = {}
@@ -462,6 +468,11 @@ unit_df = pd.DataFrame({
     "facility_id": sorted(analysis_fac_ids)
 }).set_index("facility_id").join(pre_avg).join(post_avg).reset_index()
 unit_df["growth"]  = unit_df["post_mean"] - unit_df["pre_mean"]
+unit_df["growth_rate"] = np.where(
+    unit_df["pre_mean"] > 0,
+    (unit_df["post_mean"] - unit_df["pre_mean"]) / unit_df["pre_mean"] * 100,
+    np.nan
+)
 unit_df["treated"] = unit_df["facility_id"].isin(treated_fac_ids).astype(int)
 unit_df["doctor_id"] = unit_df["facility_id"]  # alias for compatibility
 
@@ -806,11 +817,23 @@ _coverage_corr_r = None  # JSON出力用に外部スコープで保持
 _cov_treated = unit_df.loc[unit_df["treated"] == 1, "final_coverage"]
 if len(_cov_treated) > 0 and _cov_treated.max() > 0:
     try:
-        unit_df["coverage_cat"] = pd.qcut(
-            unit_df["final_coverage"].where(unit_df["treated"] == 1),
-            q=3, labels=["低Coverage", "中Coverage", "高Coverage"],
-            duplicates="drop"
-        )
+        _full_mask_t = (unit_df["treated"] == 1) & (unit_df["final_coverage"] >= 1.0)
+        _part_mask_t = (unit_df["treated"] == 1) & (unit_df["final_coverage"] < 1.0) & unit_df["final_coverage"].notna()
+        if _full_mask_t.sum() > 0 and _part_mask_t.sum() >= 4:
+            # coverage=1.0を「高Coverage」として確定し、残りをqcutで低・中に分割
+            unit_df["coverage_cat"] = pd.NA
+            unit_df.loc[_full_mask_t, "coverage_cat"] = "高Coverage"
+            _part_cats = pd.qcut(
+                unit_df.loc[_part_mask_t, "final_coverage"],
+                q=2, labels=["低Coverage", "中Coverage"], duplicates="drop"
+            )
+            unit_df.loc[_part_mask_t, "coverage_cat"] = _part_cats.astype(str)
+        else:
+            unit_df["coverage_cat"] = pd.qcut(
+                unit_df["final_coverage"].where(unit_df["treated"] == 1),
+                q=3, labels=["低Coverage", "中Coverage", "高Coverage"],
+                duplicates="drop"
+            )
     except Exception:
         _med = _cov_treated.median()
         unit_df["coverage_cat"] = pd.cut(
@@ -846,11 +869,11 @@ if len(_cov_treated) > 0 and _cov_treated.max() > 0:
         _, _p = stats.ttest_rel(_t_gr, _c_gr)
         print(f"  {cat}: ATT={_att:.2f} N処置={len(_t_gr)} N対照={len(_c_gr)} p={_p:.4f}")
 
-    # Coverage と伸長率の相関（処置群のみ）
-    _cov_growth = unit_df[unit_df["treated"] == 1][["final_coverage", "growth"]].dropna()
+    # Coverage と伸長率（前期比%）の相関（処置群のみ）
+    _cov_growth = unit_df[unit_df["treated"] == 1][["final_coverage", "growth_rate"]].dropna()
     if len(_cov_growth) > 3:
         try:
-            _r, _p_corr = stats.pearsonr(_cov_growth["final_coverage"], _cov_growth["growth"])
+            _r, _p_corr = stats.pearsonr(_cov_growth["final_coverage"], _cov_growth["growth_rate"])
             _coverage_corr_r = float(_r)
             print(f"\n  Coverage × 伸長率 相関係数: r={_r:.3f} (p={_p_corr:.4f})")
         except Exception:
@@ -1035,11 +1058,11 @@ if "final_coverage" in unit_df.columns:
             fontsize=11, fontweight="bold"
         )
 
-        # --- 左: Coverage vs 伸長率 散布図 + 回帰直線 ---
+        # --- 左: Coverage vs 伸長率（前期比%）散布図 + 回帰直線 ---
         ax_s = axes_dose[0]
-        _cov_data = unit_df[unit_df["treated"] == 1][["final_coverage", "growth"]].dropna()
+        _cov_data = unit_df[unit_df["treated"] == 1][["final_coverage", "growth_rate"]].dropna()
         _x = _cov_data["final_coverage"].values
-        _y = _cov_data["growth"].values
+        _y = _cov_data["growth_rate"].values
 
         ax_s.scatter(_x, _y, alpha=0.5, color="#1565C0", s=40, label="処置施設")
         if len(_x) > 3:
@@ -1050,20 +1073,23 @@ if "final_coverage" in unit_df.columns:
                       label=f"回帰直線 (r={_r_val:.3f}, p={_p_reg:.3f})")
         ax_s.axhline(0, color="gray", linestyle="--", alpha=0.5)
         ax_s.set_xlabel("最終視聴率 Coverage（0→1）")
-        ax_s.set_ylabel("売上伸長率（後期月平均 − 前期月平均, 円）")
+        ax_s.set_ylabel("売上伸長率（前期比, %）")
         ax_s.set_title(f"(a) 用量反応: Coverage × 売上伸長率\n処置施設のみ (N={len(_x)})")
         ax_s.legend(fontsize=9)
         ax_s.grid(True, alpha=0.3)
 
-        # --- 右: 対照群(マッチ後) + Coverage群別 処置群 平均伸長率 ---
+        # --- 右: 対照群(マッチ後) + Coverage群別 処置群 平均伸長率（前期比%）---
         ax_b = axes_dose[1]
 
-        _ctrl_g = mc_growth[valid_mask]
-        _ctrl_g = _ctrl_g[~np.isnan(_ctrl_g)]
+        # 対照群のgrowth_rateをunit_dfから取得
+        _fac_to_gr = dict(zip(unit_df["facility_id"], unit_df["growth_rate"]))
+        mc_gr = np.array([_fac_to_gr.get(c, np.nan) for c in matched_c_ids])
+        _ctrl_gr = mc_gr[valid_mask]
+        _ctrl_gr = _ctrl_gr[~np.isnan(_ctrl_gr)]
         _bar_labels = ["対照群\n(マッチ後)"]
-        _bar_means  = [float(np.mean(_ctrl_g))]
-        _bar_ses    = [float(np.std(_ctrl_g) / np.sqrt(len(_ctrl_g))) if len(_ctrl_g) > 1 else 0.0]
-        _bar_ns     = [int(len(_ctrl_g))]
+        _bar_means  = [float(np.mean(_ctrl_gr))]
+        _bar_ses    = [float(np.std(_ctrl_gr) / np.sqrt(len(_ctrl_gr))) if len(_ctrl_gr) > 1 else 0.0]
+        _bar_ns     = [int(len(_ctrl_gr))]
         _bar_colors = ["#FF8F00"]
 
         _cov_order_lbl = [lbl for lbl in ["低Coverage", "中Coverage", "高Coverage"]
@@ -1072,7 +1098,7 @@ if "final_coverage" in unit_df.columns:
         _cov_palette = {"低Coverage": "#90CAF9", "中Coverage": "#42A5F5", "高Coverage": "#1565C0"}
 
         for _cl in _cov_order_lbl:
-            _g_vals = unit_df.loc[unit_df["coverage_cat"].astype(str) == _cl, "growth"].dropna().values
+            _g_vals = unit_df.loc[unit_df["coverage_cat"].astype(str) == _cl, "growth_rate"].dropna().values
             if len(_g_vals) < 2:
                 continue
             _bar_labels.append(f"処置群\n{_cl}")
@@ -1090,7 +1116,7 @@ if "final_coverage" in unit_df.columns:
         ax_b.axhline(0, color="gray", linestyle="--", alpha=0.5)
         ax_b.set_xticks(_x_pos)
         ax_b.set_xticklabels(_bar_labels, fontsize=9)
-        ax_b.set_ylabel("平均売上伸長率（後期月平均 − 前期月平均, 円）")
+        ax_b.set_ylabel("平均売上伸長率（前期比, %）")
         ax_b.set_title("(b) Coverage群別 平均伸長率\n（対照群との比較）")
         ax_b.grid(True, alpha=0.3, axis="y")
 

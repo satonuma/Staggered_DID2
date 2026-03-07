@@ -61,7 +61,8 @@ FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 # 解析集団フィルタパラメータ
 FILTER_SINGLE_FAC_DOCTOR = True
 DOCTOR_HONIN_FAC_COUNT_COL = "所属施設数"
-INCLUDE_ONLY_RW = False           # True: RW医師のみ (Step 3適用), False: 全医師 (Step 3スキップ)
+INCLUDE_ONLY_RW     = False        # True: RW医師のみ (Step 3適用)
+INCLUDE_ONLY_NON_RW = False       # True: 非RW医師のみ (INCLUDE_ONLY_RW=Falseのとき有効)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "本番データ")
@@ -171,14 +172,19 @@ after_step1 = {d for d in all_docs if _doc_to_fac.get(d) in single_staff_fac}
 after_step2 = after_step1 & single_honin_docs
 if INCLUDE_ONLY_RW:
     after_step3 = after_step2 & rw_doc_ids
+    _step3_label = "RW医師のみ"
+elif INCLUDE_ONLY_NON_RW:
+    after_step3 = after_step2 - rw_doc_ids
+    _step3_label = "非RW医師のみ"
 else:
-    after_step3 = after_step2  # Step 3スキップ (全医師対象)
+    after_step3 = after_step2
+    _step3_label = "全医師"
 _honin_cnt: dict = {}
 for d in after_step3:
     h = _doc_to_honin[d]
     _honin_cnt[h] = _honin_cnt.get(h, 0) + 1
 candidate_docs = {d for d in after_step3 if _honin_cnt[_doc_to_honin[d]] == 1}
-print(f"  Step1通過:{len(after_step1)} → Step2通過:{len(after_step2)} → Step3通過:{len(after_step3)} ({'RW医師のみ' if INCLUDE_ONLY_RW else '全医師'}) → 1:1確認後:{len(candidate_docs)}")
+print(f"  Step1通過:{len(after_step1)} → Step2通過:{len(after_step2)} → Step3通過:{len(after_step3)} ({_step3_label}) → 1:1確認後:{len(candidate_docs)}")
 
 _pair_src = rw_list if INCLUDE_ONLY_RW else fac_doc_list
 clean_pairs = _pair_src[_pair_src["doc"].isin(candidate_docs)][["doc", "fac_honin"]].drop_duplicates()

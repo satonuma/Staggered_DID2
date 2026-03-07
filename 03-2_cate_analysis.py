@@ -37,7 +37,8 @@ FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 
 # 解析集団フィルタパラメータ
 FILTER_SINGLE_FAC_DOCTOR = False  # ver2: 複数医師施設を含める
-INCLUDE_ONLY_RW = False           # True: RW医師のみ (Step 3適用), False: 全医師 (Step 3スキップ)
+INCLUDE_ONLY_RW     = False        # True: RW医師のみ (Step 3適用)
+INCLUDE_ONLY_NON_RW = False       # True: 非RW医師のみ (INCLUDE_ONLY_RW=Falseのとき有効)
 EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入が0の施設を解析対象から除外
 UHP_RANK = {"UHP-A": 0, "UHP-B": 1, "UHP-C": 2}  # 数値小さいほど上位
 
@@ -579,11 +580,14 @@ for _doc in _zero_docs_set:
 
 doc_primary = _doc_primary_all  # doc → fac_honin (主施設)
 
-# Step 3: RW医師フィルタ (INCLUDE_ONLY_RW=False なら全医師)
+# Step 3: 医師フィルタ
 rw_doc_ids = set(rw_list["doc"])
 if INCLUDE_ONLY_RW:
     analysis_docs_all = all_docs & rw_doc_ids
     print(f"  [Step 3] RWフィルタ適用: {len(analysis_docs_all)} 名")
+elif INCLUDE_ONLY_NON_RW:
+    analysis_docs_all = all_docs - rw_doc_ids
+    print(f"  [Step 3] 非RWフィルタ適用: {len(analysis_docs_all)} 名")
 else:
     analysis_docs_all = all_docs
     print(f"  [Step 3] スキップ (全医師): {len(analysis_docs_all)} 名")

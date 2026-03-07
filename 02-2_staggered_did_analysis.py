@@ -60,7 +60,8 @@ FILE_DOCTOR_ATTR = "doctor_attribute.csv"
 FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 
 # 解析集団フィルタパラメータ
-INCLUDE_ONLY_RW = False
+INCLUDE_ONLY_RW     = False   # True: RW医師のみ / False: 制限なし or 非RWのみ
+INCLUDE_ONLY_NON_RW = False  # True: 非RW医師のみ (INCLUDE_ONLY_RW=Falseのときのみ有効)
 EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入が0の施設を解析対象から除外
 UHP_RANK = {"UHP-A": 0, "UHP-B": 1, "UHP-C": 2}  # 数値小さいほど上位
 
@@ -623,11 +624,14 @@ for _doc in _zero_docs_set:
 
 doc_primary_fac = _doc_primary_all  # doc → fac_honin (主施設)
 
-# Step 3: RW医師フィルタ (INCLUDE_ONLY_RW=False なら全医師)
+# Step 3: 医師フィルタ
 rw_doc_ids = set(rw_list["doc"])
 if INCLUDE_ONLY_RW:
     analysis_docs_all = all_docs & rw_doc_ids
     print(f"  [Step 3] RWフィルタ適用: {len(analysis_docs_all)} 名")
+elif INCLUDE_ONLY_NON_RW:
+    analysis_docs_all = all_docs - rw_doc_ids
+    print(f"  [Step 3] 非RWフィルタ適用: {len(analysis_docs_all)} 名")
 else:
     analysis_docs_all = all_docs
     print(f"  [Step 3] スキップ (全医師): {len(analysis_docs_all)} 名")
@@ -1454,6 +1458,9 @@ else:
     _month_labels = [m.strftime("%Y/%m") for m in months]
     _xticks_sparse = list(range(0, N_MONTHS, 6))
 
+    # 医師ごとのR/W区分マップ (seg="R" → R医師, "W" → W医師, それ以外 → -)
+    _rw_seg_map = dict(zip(rw_list["doc"], rw_list["seg"].fillna("")))
+
     for col_i, fac in enumerate(_sample_facs):
         ax_top = axes_cov[0, col_i]
         ax_bot = axes_cov[1, col_i]
@@ -1475,6 +1482,8 @@ else:
         # --- 各医師の初回視聴月（縦線） ---
         _colors_doc = plt.cm.Set2(np.linspace(0, 1, max(_n_total, 1)))
         _doc_labels = []
+        _n_r = sum(1 for d in _docs_in_fac if _rw_seg_map.get(d, "") == "R")
+        _n_w = sum(1 for d in _docs_in_fac if _rw_seg_map.get(d, "") == "W")
         for di, doc in enumerate(_docs_in_fac):
             _doc_rows = _first_view_per_doc[
                 (_first_view_per_doc["facility_id"] == fac) &
@@ -1484,10 +1493,11 @@ else:
                 continue
             _fvm = int(_doc_rows["first_view_month"].iloc[0])
             _c = _colors_doc[di]
+            _doc_type = _rw_seg_map.get(doc, "") or "-"
             ax_top.axvline(_fvm, color=_c, linestyle="--", alpha=0.8, linewidth=1.5)
             ax_top.text(_fvm + 0.2, 0.05 + 0.12 * di,
-                        f"医師{di+1}初回", fontsize=7, color=_c, va="bottom")
-            _doc_labels.append(f"医師{di+1}初回 (month={_fvm})")
+                        f"医師{di+1}({_doc_type})初回", fontsize=7, color=_c, va="bottom")
+            _doc_labels.append(f"医師{di+1}({_doc_type})初回 (month={_fvm})")
 
         # --- 施設コホート月（太い点線） ---
         if _cohort is not None:
@@ -1499,7 +1509,7 @@ else:
 
         ax_top.set_ylim(-0.05, 1.15)
         ax_top.set_ylabel("Coverage（視聴率）")
-        ax_top.set_title(f"施設 {str(fac)[:12]}\n医師数={_n_total}名", fontsize=10)
+        ax_top.set_title(f"施設 {str(fac)[:12]}\n医師数={_n_total}名 (R:{_n_r}, W:{_n_w})", fontsize=10)
         ax_top.legend(fontsize=7, loc="upper left")
         ax_top.set_xticks(_xticks_sparse)
         ax_top.set_xticklabels([_month_labels[i] for i in _xticks_sparse],
@@ -1596,6 +1606,64 @@ exclusion_flow = {
     "viewing_after_filter": len(viewing_all), # 施設ID付与済みの視聴データ行数
     "version": "v2",
 }
+
+# 施設内医師構成カテゴリ別集計（モードに応じて分類定義が変わる）
+_rw_doc_set_all = set(rw_list["doc"])
+
+def _get_rw_breakdowns(fac_ids):
+    """施設をRW/非RW構成でカテゴリ分けし、施設数・医師数を返す"""
+    if INCLUDE_ONLY_RW:
+        cats = ["1RW先", "複数RW先"]
+        counts = {k: {"facs": 0, "docs": 0} for k in cats}
+        for f in fac_ids:
+            docs = fac_to_docs.get(f, [])
+            key = "1RW先" if len(docs) == 1 else "複数RW先"
+            counts[key]["facs"] += 1
+            counts[key]["docs"] += len(docs)
+    elif INCLUDE_ONLY_NON_RW:
+        cats = ["1非RW先", "複数非RW先"]
+        counts = {k: {"facs": 0, "docs": 0} for k in cats}
+        for f in fac_ids:
+            docs = fac_to_docs.get(f, [])
+            key = "1非RW先" if len(docs) == 1 else "複数非RW先"
+            counts[key]["facs"] += 1
+            counts[key]["docs"] += len(docs)
+    else:
+        # RW＋非RW混在：施設の医師構成で5分類（1医師先は1RW先+1非RW先の合計）
+        cats = ["1RW先", "1非RW先", "RW非RW複数先", "RW複数先", "非RW複数先"]
+        counts = {k: {"facs": 0, "docs": 0} for k in cats}
+        for f in fac_ids:
+            docs = fac_to_docs.get(f, [])
+            n_rw  = sum(1 for d in docs if d in _rw_doc_set_all)
+            n_non = len(docs) - n_rw
+            if n_rw == 1 and n_non == 0:
+                key = "1RW先"
+            elif n_rw == 0 and n_non == 1:
+                key = "1非RW先"
+            elif n_rw >= 1 and n_non >= 1:
+                key = "RW非RW複数先"
+            elif n_rw >= 2 and n_non == 0:
+                key = "RW複数先"
+            else:  # n_rw == 0, n_non >= 2
+                key = "非RW複数先"
+            counts[key]["facs"] += 1
+            counts[key]["docs"] += len(docs)
+    return counts
+
+exclusion_flow["doc_filter_label"]      = ("RW先" if INCLUDE_ONLY_RW else "非RW先" if INCLUDE_ONLY_NON_RW else "医師先")
+exclusion_flow["rw_breakdown_treated"]  = _get_rw_breakdowns(treated_fac_ids)
+exclusion_flow["rw_breakdown_control"]  = _get_rw_breakdowns(control_fac_ids)
+# 後方互換キー（CONSORT図の旧参照用）
+_t_bd = exclusion_flow["rw_breakdown_treated"]
+_c_bd = exclusion_flow["rw_breakdown_control"]
+exclusion_flow["treated_single_rw"]      = sum(v["facs"] for k, v in _t_bd.items() if k.startswith("1"))
+exclusion_flow["treated_single_rw_docs"] = sum(v["docs"] for k, v in _t_bd.items() if k.startswith("1"))
+exclusion_flow["treated_multi_rw"]       = sum(v["facs"] for k, v in _t_bd.items() if not k.startswith("1"))
+exclusion_flow["treated_multi_rw_docs"]  = sum(v["docs"] for k, v in _t_bd.items() if not k.startswith("1"))
+exclusion_flow["control_single_rw"]      = sum(v["facs"] for k, v in _c_bd.items() if k.startswith("1"))
+exclusion_flow["control_single_rw_docs"] = sum(v["docs"] for k, v in _c_bd.items() if k.startswith("1"))
+exclusion_flow["control_multi_rw"]       = sum(v["facs"] for k, v in _c_bd.items() if not k.startswith("1"))
+exclusion_flow["control_multi_rw_docs"]  = sum(v["docs"] for k, v in _c_bd.items() if not k.startswith("1"))
 
 # 除外された施設ID一覧
 excluded_ids = {

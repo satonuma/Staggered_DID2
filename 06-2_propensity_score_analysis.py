@@ -64,7 +64,8 @@ FILE_FACILITY_MASTER = "facility_attribute_修正.csv"
 FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 
 # 解析集団フィルタパラメータ (ver2)
-INCLUDE_ONLY_RW = False
+INCLUDE_ONLY_RW     = False   # True: RW医師のみ
+INCLUDE_ONLY_NON_RW = False  # True: 非RW医師のみ (INCLUDE_ONLY_RW=Falseのとき有効)
 EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入が0の施設を解析対象から除外
 UHP_RANK = {"UHP-A": 0, "UHP-B": 1, "UHP-C": 2}
 
@@ -239,9 +240,17 @@ for _doc in set(_zero_sum[_zero_sum == 0].index):
 
 doc_primary_fac = _doc_primary_all
 
-# RWフィルタ
+# 医師フィルタ
 rw_doc_ids = set(rw_list["doc"])
-analysis_docs_all = all_docs & rw_doc_ids if INCLUDE_ONLY_RW else all_docs
+if INCLUDE_ONLY_RW:
+    analysis_docs_all = all_docs & rw_doc_ids
+    print(f"  [Step 3] RWフィルタ適用: {len(analysis_docs_all)} 名")
+elif INCLUDE_ONLY_NON_RW:
+    analysis_docs_all = all_docs - rw_doc_ids
+    print(f"  [Step 3] 非RWフィルタ適用: {len(analysis_docs_all)} 名")
+else:
+    analysis_docs_all = all_docs
+    print(f"  [Step 3] スキップ (全医師): {len(analysis_docs_all)} 名")
 
 # 施設→医師リスト (1:N)
 fac_to_docs: dict = {}
