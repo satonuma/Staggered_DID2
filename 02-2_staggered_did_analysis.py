@@ -65,6 +65,19 @@ INCLUDE_ONLY_NON_RW = False  # True: 非RW医師のみ (INCLUDE_ONLY_RW=Falseの
 EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入が0の施設を解析対象から除外
 UHP_RANK = {"UHP-A": 0, "UHP-B": 1, "UHP-C": 2}  # 数値小さいほど上位
 
+# 出力ファイル名サフィックス (フラグ設定に応じて自動生成)
+if INCLUDE_ONLY_RW:
+    _pop_sfx = "_rw"
+elif INCLUDE_ONLY_NON_RW:
+    _pop_sfx = "_nonrw"
+else:
+    _pop_sfx = "_all"
+if EXCLUDE_ZERO_SALES_FACILITIES:
+    _zero_sfx = "_nozero"
+else:
+    _zero_sfx = ""
+_suffix = _pop_sfx + _zero_sfx
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "本番データ")
 # 本番データ/ が存在しなければ data/ にフォールバック
@@ -1414,7 +1427,7 @@ ax.axhline(0, color="black", lw=0.5)
 ax.grid(True, alpha=0.3, axis="y")
 
 plt.tight_layout()
-out_path = os.path.join(SCRIPT_DIR, "staggered_did_results_v2.png")
+out_path = os.path.join(SCRIPT_DIR, f"staggered_did_results_v2{_suffix}.png")
 plt.savefig(out_path, dpi=150, bbox_inches="tight")
 plt.close(fig)
 print(f"\n  図を保存: {out_path}")
@@ -1530,7 +1543,7 @@ else:
         fontsize=10, y=1.01
     )
     plt.tight_layout()
-    _cov_sample_path = os.path.join(SCRIPT_DIR, "coverage_sample_v2.png")
+    _cov_sample_path = os.path.join(SCRIPT_DIR, f"coverage_sample_v2{_suffix}.png")
     fig_cov.savefig(_cov_sample_path, dpi=150, bbox_inches="tight")
     plt.close(fig_cov)
     print(f"  図保存: {_cov_sample_path}")
@@ -1788,7 +1801,7 @@ did_results_json = {
     "coverage_twfe": coverage_twfe,
 }
 
-json_path = os.path.join(results_dir, "did_results_v2.json")
+json_path = os.path.join(results_dir, f"did_results_v2{_suffix}.json")
 with open(json_path, "w", encoding="utf-8") as f:
     json.dump(did_results_json, f, ensure_ascii=False, indent=2)
 print(f"  結果をJSON保存: {json_path}")

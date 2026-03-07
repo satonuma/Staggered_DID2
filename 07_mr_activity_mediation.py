@@ -64,6 +64,14 @@ DOCTOR_HONIN_FAC_COUNT_COL = "所属施設数"
 INCLUDE_ONLY_RW     = False        # True: RW医師のみ (Step 3適用)
 INCLUDE_ONLY_NON_RW = False       # True: 非RW医師のみ (INCLUDE_ONLY_RW=Falseのとき有効)
 
+# 出力ファイル名サフィックス
+if INCLUDE_ONLY_RW:
+    _suffix = "_rw"
+elif INCLUDE_ONLY_NON_RW:
+    _suffix = "_nonrw"
+else:
+    _suffix = "_all"
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "本番データ")
 _required_07 = [FILE_SALES, FILE_DIGITAL, FILE_ACTIVITY, FILE_RW_LIST]
@@ -499,7 +507,7 @@ ax.legend(fontsize=8)
 ax.grid(True, alpha=0.3)
 
 plt.tight_layout()
-out_path = os.path.join(SCRIPT_DIR, "mr_activity_mediation.png")
+out_path = os.path.join(SCRIPT_DIR, f"mr_activity_mediation{_suffix}.png")
 plt.savefig(out_path, dpi=150, bbox_inches="tight")
 plt.close(fig)
 print(f"\n  図を保存: {out_path}")
@@ -538,7 +546,7 @@ results_json = {
     },
 }
 
-json_path = os.path.join(results_dir, "mr_activity_mediation.json")
+json_path = os.path.join(results_dir, f"mr_activity_mediation{_suffix}.json")
 with open(json_path, "w", encoding="utf-8") as f:
     json.dump(results_json, f, ensure_ascii=False, indent=2)
 print(f"\n  結果をJSON保存: {json_path}")

@@ -69,6 +69,19 @@ INCLUDE_ONLY_NON_RW = False  # True: 非RW医師のみ (INCLUDE_ONLY_RW=Falseの
 EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入が0の施設を解析対象から除外
 UHP_RANK = {"UHP-A": 0, "UHP-B": 1, "UHP-C": 2}
 
+# 出力ファイル名サフィックス
+if INCLUDE_ONLY_RW:
+    _pop_sfx = "_rw"
+elif INCLUDE_ONLY_NON_RW:
+    _pop_sfx = "_nonrw"
+else:
+    _pop_sfx = "_all"
+if EXCLUDE_ZERO_SALES_FACILITIES:
+    _zero_sfx = "_nozero"
+else:
+    _zero_sfx = ""
+_suffix = _pop_sfx + _zero_sfx
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "本番データ")
 _required_06 = [FILE_SALES, FILE_DIGITAL, FILE_ACTIVITY, FILE_RW_LIST]
@@ -605,7 +618,7 @@ ax.legend(fontsize=8)
 ax.grid(True, alpha=0.3)
 
 plt.tight_layout()
-out_path = os.path.join(SCRIPT_DIR, "propensity_score_analysis_v2.png")
+out_path = os.path.join(SCRIPT_DIR, f"propensity_score_analysis_v2{_suffix}.png")
 plt.savefig(out_path, dpi=150, bbox_inches="tight")
 plt.close(fig)
 print(f"\n  図を保存: {out_path}")
@@ -636,7 +649,7 @@ results_json = {
     },
 }
 
-json_path = os.path.join(results_dir, "propensity_score_analysis_v2.json")
+json_path = os.path.join(results_dir, f"propensity_score_analysis_v2{_suffix}.json")
 with open(json_path, "w", encoding="utf-8") as f:
     json.dump(results_json, f, ensure_ascii=False, indent=2)
 print(f"\n  結果をJSON保存: {json_path}")

@@ -53,7 +53,22 @@ FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 # 解析集団フィルタパラメータ (02と合わせること)
 FILTER_SINGLE_FAC_DOCTOR = True
 DOCTOR_HONIN_FAC_COUNT_COL = "所属施設数"
-INCLUDE_ONLY_RW = False           # True: RW医師のみ (Step 3適用), False: 全医師 (Step 3スキップ)
+INCLUDE_ONLY_RW     = False   # True: RW医師のみ (02と合わせること)
+INCLUDE_ONLY_NON_RW = False  # True: 非RW医師のみ
+EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入0の施設を除外
+
+# 出力ファイル名サフィックス (02〜09と同一ロジック)
+if INCLUDE_ONLY_RW:
+    _pop_sfx = "_rw"
+elif INCLUDE_ONLY_NON_RW:
+    _pop_sfx = "_nonrw"
+else:
+    _pop_sfx = "_all"
+if EXCLUDE_ZERO_SALES_FACILITIES:
+    _zero_sfx = "_nozero"
+else:
+    _zero_sfx = ""
+_suffix = _pop_sfx + _zero_sfx
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "本番データ")
@@ -156,17 +171,17 @@ print(f"  視聴データ結合 (ENT, Web講演会抽出): {n_viewing_combined:,
 
 # JSON結果読み込み
 print("\n[JSON結果読み込み]")
-with open(os.path.join(RESULTS_DIR, "did_results_v2.json"), "r", encoding="utf-8") as f:
+with open(os.path.join(RESULTS_DIR, f"did_results_v2{_suffix}.json"), "r", encoding="utf-8") as f:
     did_results = json.load(f)
-with open(os.path.join(RESULTS_DIR, "cate_results_v2.json"), "r", encoding="utf-8") as f:
+with open(os.path.join(RESULTS_DIR, f"cate_results_v2{_suffix}.json"), "r", encoding="utf-8") as f:
     cate_results = json.load(f)
 
 # 医師視聴パターン分析結果
-physician_viewing_path = os.path.join(RESULTS_DIR, "physician_viewing_analysis_v2.json")
-propensity_score_path = os.path.join(RESULTS_DIR, "propensity_score_analysis_v2.json")
-mr_mediation_path = os.path.join(RESULTS_DIR, "mr_activity_mediation.json")
+physician_viewing_path = os.path.join(RESULTS_DIR, f"physician_viewing_analysis_v2{_suffix}.json")
+propensity_score_path = os.path.join(RESULTS_DIR, f"propensity_score_analysis_v2{_suffix}.json")
+mr_mediation_path = os.path.join(RESULTS_DIR, f"mr_activity_mediation{_suffix}.json")
 mr_digital_balance_path = os.path.join(RESULTS_DIR, "mr_digital_balance.json")
-psm_growth_rate_path = os.path.join(RESULTS_DIR, "psm_growth_rate_v2.json")
+psm_growth_rate_path = os.path.join(RESULTS_DIR, f"psm_growth_rate_v2{_suffix}.json")
 
 physician_viewing_results = None
 propensity_score_results = None
@@ -684,26 +699,26 @@ print("\n[既存PNG読み込み]")
 
 existing_pngs = {}
 png_files = [
-    "staggered_did_results_v2.png",
-    "cate_results_v2.png",
-    "cate_dynamic_effects_v2.png",
-    "intensive_extensive_margin_v2.png",
-    "propensity_score_analysis_v2.png",
-    "mr_activity_mediation.png",
-    "mr_digital_balance.png",
-    "psm_growth_rate_v2.png",
-    "psm_subgroup_forest_v2.png",
-    "coverage_sample_v2.png",
-    "coverage_dose_response_v2.png"
+    (f"staggered_did_results_v2{_suffix}.png",   "staggered_did_results_v2.png"),
+    (f"cate_results_v2{_suffix}.png",             "cate_results_v2.png"),
+    (f"cate_dynamic_effects_v2{_suffix}.png",     "cate_dynamic_effects_v2.png"),
+    (f"intensive_extensive_margin_v2{_suffix}.png","intensive_extensive_margin_v2.png"),
+    (f"propensity_score_analysis_v2{_suffix}.png","propensity_score_analysis_v2.png"),
+    (f"mr_activity_mediation{_suffix}.png",       "mr_activity_mediation.png"),
+    ("mr_digital_balance.png",                    "mr_digital_balance.png"),
+    (f"psm_growth_rate_v2{_suffix}.png",          "psm_growth_rate_v2.png"),
+    (f"psm_subgroup_forest_v2{_suffix}.png",      "psm_subgroup_forest_v2.png"),
+    (f"coverage_sample_v2{_suffix}.png",          "coverage_sample_v2.png"),
+    (f"coverage_dose_response_v2{_suffix}.png",   "coverage_dose_response_v2.png"),
 ]
-for name in png_files:
-    path = os.path.join(SCRIPT_DIR, name)
+for actual_name, key_name in png_files:
+    path = os.path.join(SCRIPT_DIR, actual_name)
     if os.path.exists(path):
-        existing_pngs[name] = png_to_base64(path)
-        print(f"  {name} 読み込み完了")
+        existing_pngs[key_name] = png_to_base64(path)
+        print(f"  {actual_name} 読み込み完了")
     else:
-        print(f"  {name} が見つかりません")
-        existing_pngs[name] = ""
+        print(f"  {actual_name} が見つかりません")
+        existing_pngs[key_name] = ""
 
 
 # ================================================================
@@ -2741,7 +2756,7 @@ except Exception as _render_err:
         "</body></html>"
     )
 
-output_path = os.path.join(REPORTS_DIR, "analysis_report_v2.html")
+output_path = os.path.join(REPORTS_DIR, f"analysis_report_v2{_suffix}.html")
 with open(output_path, "w", encoding="utf-8") as f:
     f.write(html_content)
 

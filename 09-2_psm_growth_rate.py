@@ -67,6 +67,19 @@ INCLUDE_ONLY_NON_RW = False  # True: 非RW医師のみ (INCLUDE_ONLY_RW=Falseの
 EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入が0の施設を解析対象から除外
 UHP_RANK = {"UHP-A": 0, "UHP-B": 1, "UHP-C": 2}
 
+# 出力ファイル名サフィックス
+if INCLUDE_ONLY_RW:
+    _pop_sfx = "_rw"
+elif INCLUDE_ONLY_NON_RW:
+    _pop_sfx = "_nonrw"
+else:
+    _pop_sfx = "_all"
+if EXCLUDE_ZERO_SALES_FACILITIES:
+    _zero_sfx = "_nozero"
+else:
+    _zero_sfx = ""
+_suffix = _pop_sfx + _zero_sfx
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR   = os.path.join(SCRIPT_DIR, "本番データ")
 _required  = [FILE_SALES, FILE_DIGITAL, FILE_ACTIVITY, FILE_RW_LIST]
@@ -948,7 +961,7 @@ ax.set_ylim(bottom=min(0, min(means_bar) - max(ses_bar) * 2),
             top=_y_top * 1.20)
 
 plt.tight_layout()
-out_main = os.path.join(SCRIPT_DIR, "psm_growth_rate_v2.png")
+out_main = os.path.join(SCRIPT_DIR, f"psm_growth_rate_v2{_suffix}.png")
 plt.savefig(out_main, dpi=150, bbox_inches="tight")
 plt.close(fig_main)
 
@@ -1026,7 +1039,7 @@ legend_elements.append(Line2D([0], [0], marker="D", color="black",
 ax2.legend(handles=legend_elements, fontsize=8, loc="lower right")
 
 plt.tight_layout()
-out_forest = os.path.join(SCRIPT_DIR, "psm_subgroup_forest_v2.png")
+out_forest = os.path.join(SCRIPT_DIR, f"psm_subgroup_forest_v2{_suffix}.png")
 plt.savefig(out_forest, dpi=150, bbox_inches="tight")
 plt.close(fig2)
 
@@ -1110,7 +1123,7 @@ if "final_coverage" in unit_df.columns:
         ax_b.grid(True, alpha=0.3, axis="y")
 
         plt.tight_layout()
-        _dose_path = os.path.join(SCRIPT_DIR, "coverage_dose_response_v2.png")
+        _dose_path = os.path.join(SCRIPT_DIR, f"coverage_dose_response_v2{_suffix}.png")
         fig_dose.savefig(_dose_path, dpi=150, bbox_inches="tight")
         plt.close(fig_dose)
         print(f"  coverage_dose_response_v2.png を保存")
@@ -1178,7 +1191,7 @@ results_json = {
     "psm_covariates": cov_cols,
 }
 
-json_path = os.path.join(results_dir, "psm_growth_rate_v2.json")
+json_path = os.path.join(results_dir, f"psm_growth_rate_v2{_suffix}.json")
 with open(json_path, "w", encoding="utf-8") as f:
     json.dump(results_json, f, ensure_ascii=False, indent=2)
 print("  結果JSON: " + json_path)

@@ -1,0 +1,48 @@
+{
+  "session_classification": {
+    "gap_threshold_days": 30,
+    "pattern_distribution": {
+      "未視聴": 75,
+      "断続視聴型": 47,
+      "定期視聴型": 45,
+      "単発視聴": 9,
+      "短期集中型": 4
+    }
+  },
+  "propensity_score_model": {
+    "pseudo_r2": 0.1198731749101295,
+    "treated_mean": 0.6447583885592457,
+    "control_mean": 0.4973382560170558
+  },
+  "ipw_adjusted_means": [
+    {
+      "pattern": "断続視聴型",
+      "mean_ipw": 238.50584688408247,
+      "n": 47.0
+    },
+    {
+      "pattern": "未視聴",
+      "mean_ipw": 226.41329917105986,
+      "n": 75.0
+    },
+    {
+      "pattern": "定期視聴型",
+      "mean_ipw": 279.08579061191597,
+      "n": 45.0
+    },
+    {
+      "pattern": "単発視聴",
+      "mean_ipw": 263.0391975479547,
+      "n": 9.0
+    },
+    {
+      "pattern": "短期集中型",
+      "mean_ipw": 163.4695636227983,
+      "n": 4.0
+    }
+  ],
+  "interpretation": {
+    "warning": "視聴回数は内生変数（医師の自発的行動）であり、未観測の交絡は残る",
+    "recommendation": "結果は相関関係として解釈し、因果効果の上限値と考えるべき"
+  }
+}

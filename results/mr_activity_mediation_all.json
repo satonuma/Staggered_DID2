@@ -1,0 +1,26 @@
+{
+  "mr_viewing_correlation": 0.09247688416241438,
+  "stage1_mr_to_viewing": {
+    "coefficient": -0.017144584918754178,
+    "se": 0.0118458715391061,
+    "p": 0.14792049271701235,
+    "sig": "n.s."
+  },
+  "stage2_viewing_to_sales": {
+    "coefficient": -15.062639440749669,
+    "se": 28.79994643303437,
+    "p": 0.6010080381051135,
+    "sig": "n.s."
+  },
+  "mediation_effects": {
+    "direct_effect": 0.43085266597457467,
+    "indirect_effect": 0.2582427009925086,
+    "total_effect": 0.6890953669670833,
+    "indirect_percentage": 37.475611268308576
+  },
+  "interpretation": {
+    "warning": "MR活動自体も内生的（売上が良い施設にMRが多く訪問）な可能性あり",
+    "advantage": "視聴回数のみを使うよりは頑健な推定",
+    "recommendation": "MR活動は制御可能な変数として、意思決定に活用可能"
+  }
+}
