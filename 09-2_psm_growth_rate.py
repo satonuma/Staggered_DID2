@@ -51,6 +51,15 @@ COV_CAT_COLS = [
 ]
 # 連続共変量 (z-score 標準化)
 COV_CONT_COLS = ["n_docs"]  # 施設あたり医師数
+
+# 医師クインタイル → 施設平均スコア共変量
+# Z=0, L=1, M=2, H=3, VH=4 に変換して施設内医師の平均を連続共変量として使用
+# カラムが存在しない場合は自動スキップ
+QUINTILE_MAP = {"Z": 0, "L": 1, "M": 2, "H": 3, "VH": 4}
+DOCTOR_QUINTILE_COLS = [
+    "MR_VISIT_F2F_ER_QUINTILE_FINAL",   # MR面談関与度
+    "OWNED_MEDIA_ER_QUINTILE_FINAL",    # オウンドメディア関与度
+]
 # ===================================================================
 
 FILE_RW_LIST           = "rw_list.csv"
@@ -453,6 +462,20 @@ if FILTER_SINGLE_FAC_DOCTOR:
     n_docs_map  = {fac: len(docs) for fac, docs in fac_to_docs.items()}
     print(f"  [1施設1医師フィルタ] 複数医師施設を除外 → 残 {len(fac_to_docs)} 施設")
 
+# 医師クインタイル施設平均スコア計算 (fac_to_docs確定後)
+_fac_quintile_means: dict = {}
+for _qcol in DOCTOR_QUINTILE_COLS:
+    if _qcol in doc_attr_df.columns:
+        _qnum = doc_attr_df[["doc", _qcol]].copy()
+        _qnum[_qcol + "_num"] = _qnum[_qcol].map(QUINTILE_MAP)
+        _fac_q: dict = {}
+        for _fac, _docs in fac_to_docs.items():
+            _vals = _qnum[_qnum["doc"].isin(_docs)][_qcol + "_num"].dropna()
+            _fac_q[_fac] = float(_vals.mean()) if len(_vals) > 0 else float("nan")
+        _fac_quintile_means[_qcol] = _fac_q
+        _n_valid = sum(1 for v in _fac_q.values() if v == v)
+        print(f"  [{_qcol}] 施設平均スコア算出: 非欠損施設 {_n_valid}/{len(fac_to_docs)}")
+
 # 視聴データに主施設ID付与
 viewing_all = viewing.copy()
 viewing_all["facility_id"] = viewing_all["doc"].map(doc_primary_fac)
@@ -533,6 +556,17 @@ unit_df = unit_df.merge(fac_df2[["facility_id"] + fac_cols], on="facility_id", h
 # 施設医師数
 unit_df["n_docs"] = unit_df["facility_id"].map(n_docs_map).fillna(1).astype(int)
 print(f"  n_docs: 平均={unit_df['n_docs'].mean():.1f}, 最大={unit_df['n_docs'].max()}")
+
+# 医師クインタイル施設平均スコア (連続共変量)
+for _qcol in DOCTOR_QUINTILE_COLS:
+    if _qcol in _fac_quintile_means:
+        _cname = _qcol + "_mean"
+        unit_df[_cname] = unit_df["facility_id"].map(_fac_quintile_means[_qcol])
+        _gmean = unit_df[_cname].mean()
+        unit_df[_cname] = unit_df[_cname].fillna(_gmean if _gmean == _gmean else 2.0)
+        if _cname not in COV_CONT_COLS:
+            COV_CONT_COLS.append(_cname)
+        print(f"  {_cname}: 平均={unit_df[_cname].mean():.2f}, 欠損→平均補完")
 
 # 施設医師数区分 (n_docs_cat)
 _ndocs_cat = pd.cut(

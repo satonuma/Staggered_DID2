@@ -47,6 +47,15 @@ COV_CAT_COLS = [
 ]
 # 連続共変量 (z-score 標準化)
 COV_CONT_COLS = ["n_docs"]  # 施設あたり医師数
+
+# 医師クインタイル → 施設平均スコア共変量
+# Z=0, L=1, M=2, H=3, VH=4 に変換して施設内医師の平均を連続共変量として使用
+# カラムが存在しない場合は自動スキップ
+QUINTILE_MAP = {"Z": 0, "L": 1, "M": 2, "H": 3, "VH": 4}
+DOCTOR_QUINTILE_COLS = [
+    "MR_VISIT_F2F_ER_QUINTILE_FINAL",   # MR面談関与度
+    "OWNED_MEDIA_ER_QUINTILE_FINAL",    # オウンドメディア関与度
+]
 # ===================================================================
 
 # ファイル名
@@ -683,6 +692,20 @@ if EXCLUDE_ZERO_SALES_FACILITIES:
     n_docs_map  = {fac: len(docs) for fac, docs in fac_to_docs.items()}
     print(f"  [全期間0売上除外] {len(_exclude_zero)} 施設を除外 → 残 {len(fac_to_docs)} 施設")
 
+# 医師クインタイル施設平均スコア計算 (fac_to_docs確定後)
+_fac_quintile_means: dict = {}
+for _qcol in DOCTOR_QUINTILE_COLS:
+    if _qcol in doc_attr_df.columns:
+        _qnum = doc_attr_df[["doc", _qcol]].copy()
+        _qnum[_qcol + "_num"] = _qnum[_qcol].map(QUINTILE_MAP)
+        _fac_q: dict = {}
+        for _fac, _docs in fac_to_docs.items():
+            _vals = _qnum[_qnum["doc"].isin(_docs)][_qcol + "_num"].dropna()
+            _fac_q[_fac] = float(_vals.mean()) if len(_vals) > 0 else float("nan")
+        _fac_quintile_means[_qcol] = _fac_q
+        _n_valid = sum(1 for v in _fac_q.values() if v == v)  # notna count
+        print(f"  [{_qcol}] 施設平均スコア算出: 非欠損施設 {_n_valid}/{len(fac_to_docs)}")
+
 # --- 視聴データに主施設IDを付与 ---
 viewing_all = viewing.copy()  # viewing は既に digital + web_lecture を結合したもの
 viewing_all["facility_id"] = viewing_all["doctor_id"].map(doc_primary_fac)
@@ -927,6 +950,15 @@ _cov.index.name = "facility_id"
 # 施設医師数 (n_docs)
 _cov["n_docs"] = pd.Series(n_docs_map).reindex(_cov.index, fill_value=1)
 print(f"  n_docs: 平均={_cov['n_docs'].mean():.1f}, 最大={_cov['n_docs'].max()}")
+
+# 医師クインタイル施設平均スコア (連続共変量)
+for _qcol in DOCTOR_QUINTILE_COLS:
+    if _qcol in _fac_quintile_means:
+        _cname = _qcol + "_mean"
+        _cov[_cname] = pd.Series(_fac_quintile_means[_qcol]).reindex(_cov.index)
+        _gmean = _cov[_cname].mean()
+        _cov[_cname] = _cov[_cname].fillna(_gmean if _gmean == _gmean else 2.0)
+        print(f"  {_cname}: 平均={_cov[_cname].mean():.2f}, 欠損→平均補完")
 
 # 施設属性 (UHP区分名, 施設区分名)
 _fac_attr_idx = fac_df.drop_duplicates("fac_honin").set_index("fac_honin")

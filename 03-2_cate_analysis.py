@@ -76,6 +76,15 @@ CATE_DIMS = [
     ("baseline_cat", ["低", "中", "高"]),  # ベースライン（施設売上）
 ]
 
+# 医師クインタイル → 施設平均スコア → CATE次元設定
+# Z=0, L=1, M=2, H=3, VH=4 に変換 → 施設内医師の平均 → 低/中/高 に3分位
+# カラムが存在しない場合は自動スキップ
+QUINTILE_MAP = {"Z": 0, "L": 1, "M": 2, "H": 3, "VH": 4}
+DOCTOR_QUINTILE_COLS = [
+    "MR_VISIT_F2F_ER_QUINTILE_FINAL",   # MR面談関与度
+    "OWNED_MEDIA_ER_QUINTILE_FINAL",    # オウンドメディア関与度
+]
+
 # ===================================================================
 # 属性ファイル設定 ― 分析するカラムをリストで指定
 # ===================================================================
@@ -647,6 +656,20 @@ if FILTER_SINGLE_FAC_DOCTOR:
     n_docs_map  = {fac: len(docs) for fac, docs in fac_to_docs.items()}
     print(f"  [1施設1医師フィルタ] 複数医師施設を除外 → 残 {len(fac_to_docs)} 施設")
 
+# 医師クインタイル施設平均スコア計算 (fac_to_docs確定後)
+_fac_quintile_means: dict = {}
+for _qcol in DOCTOR_QUINTILE_COLS:
+    if _qcol in doc_attr_df.columns:
+        _qnum = doc_attr_df[["doc", _qcol]].copy()
+        _qnum[_qcol + "_num"] = _qnum[_qcol].map(QUINTILE_MAP)
+        _fac_q: dict = {}
+        for _fac, _docs in fac_to_docs.items():
+            _vals = _qnum[_qnum["doc"].isin(_docs)][_qcol + "_num"].dropna()
+            _fac_q[_fac] = float(_vals.mean()) if len(_vals) > 0 else float("nan")
+        _fac_quintile_means[_qcol] = _fac_q
+        _n_valid = sum(1 for v in _fac_q.values() if v == v)
+        print(f"  [{_qcol}] 施設平均スコア算出: 非欠損施設 {_n_valid}/{len(fac_to_docs)}")
+
 print(f"\n  主施設割り当て完了:")
 print(f"    解析対象医師数: {len(analysis_docs_all)}")
 print(f"    解析対象施設数: {len(fac_to_docs)}")
@@ -800,6 +823,25 @@ for _filepath, _id_col, _id_rename, _selected in _attr_configs:
     for _dim_name, _levels in _new_dims:
         CATE_DIMS.append((_dim_name, _levels))
         print(f"    CATE次元追加: {_dim_name} → {_levels}")
+
+# 医師クインタイル施設平均スコア → 低/中/高 3分位 → CATE次元追加
+_fac_id_ser = pd.Series(list(fac_to_docs.keys()), name="facility_id")
+_fac_quintile_df = pd.DataFrame({"facility_id": list(fac_to_docs.keys())})
+for _qcol in DOCTOR_QUINTILE_COLS:
+    if _qcol not in _fac_quintile_means:
+        continue
+    _cname = _qcol + "_mean"
+    _fac_quintile_df[_cname] = _fac_quintile_df["facility_id"].map(_fac_quintile_means[_qcol])
+    _valid = _fac_quintile_df[_cname].dropna()
+    if len(_valid) < 3:
+        print(f"  [{_qcol}] 有効施設数不足 → スキップ")
+        continue
+    _cat_col = _qcol + "_cat"
+    _qcat, _qlevels = _safe_qcut(_fac_quintile_df[_cname].fillna(_valid.mean()), q=3, labels=("低", "中", "高"))
+    _fac_quintile_df[_cat_col] = _qcat
+    panel = panel.merge(_fac_quintile_df[["facility_id", _cat_col]], on="facility_id", how="left")
+    CATE_DIMS.append((_cat_col, _qlevels))
+    print(f"  CATE次元追加: {_cat_col} → {_qlevels}")
 
 # 属性分布
 print("\n[属性分布]")
