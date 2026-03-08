@@ -37,7 +37,7 @@ FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 
 # 解析集団フィルタパラメータ
 FILTER_SINGLE_FAC_DOCTOR = False  # True: 1施設1医師の施設のみを対象（複数医師施設を除外）
-INCLUDE_ONLY_RW     = False        # True: RW医師のみ (Step 3適用)
+INCLUDE_ONLY_RW     = False# True: RW医師のみ (Step 3適用)
 INCLUDE_ONLY_NON_RW = False       # True: 非RW医師のみ (INCLUDE_ONLY_RW=Falseのとき有効)
 EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入が0の施設を解析対象から除外
 UHP_RANK = {"U": 0, "H": 1, "P": 2, "雑": 3}  # 数値小さいほど上位 (U>H>P>雑)

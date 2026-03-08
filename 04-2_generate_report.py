@@ -53,7 +53,7 @@ FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 # 解析集団フィルタパラメータ (02と合わせること)
 FILTER_SINGLE_FAC_DOCTOR = False
 DOCTOR_HONIN_FAC_COUNT_COL = "所属施設数"
-INCLUDE_ONLY_RW     = False   # True: RW医師のみ (02と合わせること)
+INCLUDE_ONLY_RW     = False# True: RW医師のみ (02と合わせること)
 INCLUDE_ONLY_NON_RW = False  # True: 非RW医師のみ
 EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入0の施設を除外
 

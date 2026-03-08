@@ -61,7 +61,7 @@ FILE_DOCTOR_ATTR       = "doctor_attribute.csv"
 FILE_FACILITY_MASTER   = "facility_attribute_修正.csv"
 FILE_FAC_DOCTOR_LIST   = "施設医師リスト.csv"
 
-INCLUDE_ONLY_RW     = False   # True: RW医師のみ
+INCLUDE_ONLY_RW     = False# True: RW医師のみ
 INCLUDE_ONLY_NON_RW = False  # True: 非RW医師のみ (INCLUDE_ONLY_RW=Falseのとき有効)
 EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入が0の施設を解析対象から除外
 FILTER_SINGLE_FAC_DOCTOR = False  # True: 1施設1医師の施設のみを対象（複数医師施設を除外）
