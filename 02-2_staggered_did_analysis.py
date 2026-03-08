@@ -546,6 +546,7 @@ daily = daily.rename(columns={
     "施設（本院に合算）コード": "facility_id",
     "実績": "amount",
 })
+daily["facility_id"] = daily["facility_id"].astype(str).str.strip()
 
 # 3. デジタル視聴データ
 digital_raw = pd.read_csv(os.path.join(DATA_DIR, FILE_DIGITAL))
@@ -595,9 +596,11 @@ print("=" * 70)
 
 # 施設医師リスト: 全医師の施設マッピング
 fac_doc_list = pd.read_csv(os.path.join(DATA_DIR, FILE_FAC_DOCTOR_LIST))
+fac_doc_list["fac_honin"] = fac_doc_list["fac_honin"].astype(str).str.strip()
 
 # [Step 1] facility_attribute_修正.csv 読み込み (施設属性用)
 fac_df = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
+fac_df["fac_honin"] = fac_df["fac_honin"].astype(str).str.strip()
 
 # [Step 2] doctor_attribute.csv 読み込み (医師属性用)
 doc_attr_df = pd.read_csv(os.path.join(DATA_DIR, FILE_DOCTOR_ATTR))

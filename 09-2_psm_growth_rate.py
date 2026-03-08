@@ -330,6 +330,7 @@ daily = daily.rename(columns={
     "施設（本院に合算）コード": "facility_id",
     "実績": "amount",
 })
+daily["facility_id"] = daily["facility_id"].astype(str).str.strip()
 daily["month_index"] = (
     (daily["delivery_date"].dt.year - 2023) * 12
     + daily["delivery_date"].dt.month - 4
@@ -391,7 +392,9 @@ print("  データ読み込み完了")
 print("\n[2] 除外フロー (ver2)")
 
 fac_doc_list = pd.read_csv(os.path.join(DATA_DIR, FILE_FAC_DOCTOR_LIST))
+fac_doc_list["fac_honin"] = fac_doc_list["fac_honin"].astype(str).str.strip()
 fac_df       = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
+fac_df["fac_honin"] = fac_df["fac_honin"].astype(str).str.strip()
 doc_attr_df  = pd.read_csv(os.path.join(DATA_DIR, FILE_DOCTOR_ATTR))
 
 _doc_to_fac   = dict(zip(fac_doc_list["doc"], fac_doc_list["fac"]))

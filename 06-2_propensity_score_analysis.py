@@ -191,6 +191,7 @@ daily = daily.rename(columns={
     "施設（本院に合算）コード": "facility_id",
     "実績": "amount",
 })
+daily["facility_id"] = daily["facility_id"].astype(str).str.strip()
 
 digital_raw = pd.read_csv(os.path.join(DATA_DIR, FILE_DIGITAL))
 digital_raw["品目コード"] = digital_raw["品目コード"].astype(str).str.strip().str.zfill(5)
@@ -221,9 +222,11 @@ print(f"\n[データ読み込み完了]")
 
 # 施設医師リスト: 全医師の施設対応マスター (母集団)
 fac_doc_list = pd.read_csv(os.path.join(DATA_DIR, FILE_FAC_DOCTOR_LIST))
+fac_doc_list["fac_honin"] = fac_doc_list["fac_honin"].astype(str).str.strip()
 
 # 施設マスタ読み込み
 fac_df = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
+fac_df["fac_honin"] = fac_df["fac_honin"].astype(str).str.strip()
 
 # ================================================================
 # 解析集団の絞り込み (ver2: 複数医師施設対応)
