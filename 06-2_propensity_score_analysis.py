@@ -184,8 +184,8 @@ rw_list = pd.read_csv(os.path.join(DATA_DIR, FILE_RW_LIST))
 
 sales_raw = pd.read_csv(os.path.join(DATA_DIR, FILE_SALES), dtype=str)
 sales_raw["実績"] = pd.to_numeric(sales_raw["実績"], errors="coerce").fillna(0)
-sales_raw["日付"] = pd.to_datetime(sales_raw["日付"], format="mixed")
 daily = sales_raw[sales_raw["品目コード"].str.strip() == ENT_PRODUCT_CODE].copy()
+daily["日付"] = pd.to_datetime(daily["日付"], format="mixed")
 daily = daily.rename(columns={
     "日付": "delivery_date",
     "施設（本院に合算）コード": "facility_id",
@@ -283,11 +283,9 @@ else:
     print(f"  [Step 3] スキップ (全医師): {len(analysis_docs_all)} 名")
 
 # 施設→医師リスト (1:N)
-fac_to_docs: dict = {}
-for doc in analysis_docs_all:
-    if doc in doc_primary_fac.index:
-        fac = doc_primary_fac[doc]
-        fac_to_docs.setdefault(fac, []).append(doc)
+_prim_filt = doc_primary_fac[doc_primary_fac.index.isin(analysis_docs_all)]
+_prim_df = pd.DataFrame({"doc": _prim_filt.index, "fac": _prim_filt.values})
+fac_to_docs = _prim_df.groupby("fac")["doc"].agg(list).to_dict()
 
 n_docs_map = {fac: len(docs) for fac, docs in fac_to_docs.items()}
 

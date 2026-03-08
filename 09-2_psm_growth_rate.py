@@ -323,8 +323,8 @@ rw_list    = pd.read_csv(os.path.join(DATA_DIR, FILE_RW_LIST))
 
 sales_raw  = pd.read_csv(os.path.join(DATA_DIR, FILE_SALES), dtype=str)
 sales_raw["実績"]  = pd.to_numeric(sales_raw["実績"], errors="coerce").fillna(0)
-sales_raw["日付"]  = pd.to_datetime(sales_raw["日付"], format="mixed")
 daily = sales_raw[sales_raw["品目コード"].str.strip() == ENT_PRODUCT_CODE].copy()
+daily["日付"]  = pd.to_datetime(daily["日付"], format="mixed")
 daily = daily.rename(columns={
     "日付": "delivery_date",
     "施設（本院に合算）コード": "facility_id",
@@ -428,11 +428,13 @@ _fac_uhp = fac_df.drop_duplicates("fac_honin").set_index("fac_honin")["UHP区分
     if "UHP区分名" in fac_df.columns else pd.Series(dtype=str)
 _zero_sum = _doc_fac_sales.groupby("doc")["avg_sales"].sum()
 _zero_docs_set = set(_zero_sum[_zero_sum == 0].index)
-for _doc in _zero_docs_set:
-    _doc_facs = _doc_fac_sales[_doc_fac_sales["doc"] == _doc]["fac_honin"].tolist()
-    if _doc_facs:
-        _ranked = sorted(_doc_facs, key=lambda f: UHP_RANK.get(str(_fac_uhp.get(f, "")), 99))
-        _multi_assign[_doc] = _ranked[0]
+if _zero_docs_set:
+    _zero_df = _doc_fac_sales[_doc_fac_sales["doc"].isin(_zero_docs_set)].copy()
+    _zero_df["_uhp_rank"] = _zero_df["fac_honin"].map(_fac_uhp).map(
+        lambda x: UHP_RANK.get(str(x), 99) if pd.notna(x) else 99
+    )
+    _zero_best = _zero_df.sort_values("_uhp_rank").groupby("doc")["fac_honin"].first()
+    _multi_assign.update(_zero_best)
 
 _doc_primary_all = pd.concat([_single_assign, _multi_assign])
 doc_primary_fac = _doc_primary_all  # doc → fac_honin
@@ -450,11 +452,9 @@ else:
     print(f"  [Step 3] スキップ (全医師): {len(analysis_docs_all)} 名")
 
 # 施設→医師リスト (1:N)
-fac_to_docs: dict = {}
-for doc in analysis_docs_all:
-    if doc in doc_primary_fac.index:
-        fac = doc_primary_fac[doc]
-        fac_to_docs.setdefault(fac, []).append(doc)
+_prim_filt = doc_primary_fac[doc_primary_fac.index.isin(analysis_docs_all)]
+_prim_df = pd.DataFrame({"doc": _prim_filt.index, "fac": _prim_filt.values})
+fac_to_docs = _prim_df.groupby("fac")["doc"].agg(list).to_dict()
 
 n_docs_map = {fac: len(docs) for fac, docs in fac_to_docs.items()}
 
