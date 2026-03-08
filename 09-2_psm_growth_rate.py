@@ -398,21 +398,32 @@ _doc_to_fac   = dict(zip(fac_doc_list["doc"], fac_doc_list["fac"]))
 _doc_to_honin = dict(zip(fac_doc_list["doc"], fac_doc_list["fac_honin"]))
 all_docs = set(fac_doc_list["doc"])
 
-# 主施設割り当て: 平均納入額最大の施設
+# 主施設割り当て (最適化版): 1施設所属は直接割り当て、複数施設所属のみ売上ベース
 _doc_fac_list = fac_doc_list[["doc", "fac_honin"]].drop_duplicates()
+_doc_fac_count = _doc_fac_list.groupby("doc")["fac_honin"].nunique()
+_single_fac_docs = set(_doc_fac_count[_doc_fac_count == 1].index)
+_multi_fac_docs  = set(_doc_fac_count[_doc_fac_count >  1].index)
+print(f"  1施設所属: {len(_single_fac_docs)}名, 複数施設所属: {len(_multi_fac_docs)}名")
+
+_single_assign = (
+    _doc_fac_list[_doc_fac_list["doc"].isin(_single_fac_docs)]
+    .drop_duplicates("doc")
+    .set_index("doc")["fac_honin"]
+)
+
+_doc_fac_list_multi = _doc_fac_list[_doc_fac_list["doc"].isin(_multi_fac_docs)]
 _sales_by_fac = (
     daily.groupby("facility_id")["amount"].mean()
     .reset_index().rename(columns={"facility_id": "fac_honin", "amount": "avg_sales"})
 )
-_doc_fac_sales = _doc_fac_list.merge(_sales_by_fac, on="fac_honin", how="left")
+_doc_fac_sales = _doc_fac_list_multi.merge(_sales_by_fac, on="fac_honin", how="left")
 _doc_fac_sales["avg_sales"] = _doc_fac_sales["avg_sales"].fillna(0)
 
-_doc_primary_all = (
+_multi_assign = (
     _doc_fac_sales.sort_values("avg_sales", ascending=False)
     .groupby("doc")["fac_honin"].first()
 )
 
-# 全施設0 → UHP最上位
 _fac_uhp = fac_df.drop_duplicates("fac_honin").set_index("fac_honin")["UHP区分名"] \
     if "UHP区分名" in fac_df.columns else pd.Series(dtype=str)
 _zero_sum = _doc_fac_sales.groupby("doc")["avg_sales"].sum()
@@ -421,8 +432,9 @@ for _doc in _zero_docs_set:
     _doc_facs = _doc_fac_sales[_doc_fac_sales["doc"] == _doc]["fac_honin"].tolist()
     if _doc_facs:
         _ranked = sorted(_doc_facs, key=lambda f: UHP_RANK.get(str(_fac_uhp.get(f, "")), 99))
-        _doc_primary_all[_doc] = _ranked[0]
+        _multi_assign[_doc] = _ranked[0]
 
+_doc_primary_all = pd.concat([_single_assign, _multi_assign])
 doc_primary_fac = _doc_primary_all  # doc → fac_honin
 
 # 医師フィルタ

@@ -606,44 +606,51 @@ _doc_to_fac   = dict(zip(fac_doc_list["doc"], fac_doc_list["fac"]))
 _doc_to_honin = dict(zip(fac_doc_list["doc"], fac_doc_list["fac_honin"]))
 all_docs = set(fac_doc_list["doc"])
 
-# --- 主施設割り当て: 医師ごとの平均納入額が最大の fac_honin を主施設とする ---
+# --- 主施設割り当て (最適化版): 1施設所属は直接割り当て、複数施設所属のみ売上ベース ---
 _doc_fac_list = fac_doc_list[["doc", "fac_honin"]].drop_duplicates()
-_daily_honin = daily.copy()
-_daily_honin["doc"] = _daily_honin["facility_id"].map(
-    {v: k for k, v in _doc_to_honin.items()}
-)  # 逆引き（近似）
+_doc_fac_count = _doc_fac_list.groupby("doc")["fac_honin"].nunique()
+_single_fac_docs = set(_doc_fac_count[_doc_fac_count == 1].index)
+_multi_fac_docs  = set(_doc_fac_count[_doc_fac_count >  1].index)
+print(f"  1施設所属: {len(_single_fac_docs)}名, 複数施設所属: {len(_multi_fac_docs)}名")
 
-# より正確な方法: fac_doc_list を使って doc→fac_honin の平均売上を計算
+# 1施設所属 → 直接割り当て（売上計算不要）
+_single_assign = (
+    _doc_fac_list[_doc_fac_list["doc"].isin(_single_fac_docs)]
+    .drop_duplicates("doc")
+    .set_index("doc")["fac_honin"]
+)
+
+# 複数施設所属 → 平均納入額最大の施設を主施設に
+_doc_fac_list_multi = _doc_fac_list[_doc_fac_list["doc"].isin(_multi_fac_docs)]
 _sales_by_fac = (
     daily.groupby("facility_id")["amount"].mean()
     .reset_index()
     .rename(columns={"facility_id": "fac_honin", "amount": "avg_sales"})
 )
-_doc_fac_sales = _doc_fac_list.merge(_sales_by_fac, on="fac_honin", how="left")
+_doc_fac_sales = _doc_fac_list_multi.merge(_sales_by_fac, on="fac_honin", how="left")
 _doc_fac_sales["avg_sales"] = _doc_fac_sales["avg_sales"].fillna(0)
 
-# 各医師: 最大平均売上の fac_honin を主施設に
-_doc_primary_all = (
+_multi_assign = (
     _doc_fac_sales.sort_values("avg_sales", ascending=False)
     .groupby("doc")["fac_honin"].first()
 )
 
-# 全施設0の場合: UHP区分最上位の施設を主施設に
+# 全施設0の場合: UHP区分最上位の施設を主施設に（複数施設所属のみ対象）
 _fac_uhp = fac_df.drop_duplicates("fac_honin").set_index("fac_honin")["UHP区分名"] \
     if "UHP区分名" in fac_df.columns else pd.Series(dtype=str)
-_zero_sum_docs = (
-    _doc_fac_sales.groupby("doc")["avg_sales"].sum()
-)
-_zero_docs_set = set(_zero_sum_docs[_zero_sum_docs == 0].index)
+_zero_sum = _doc_fac_sales.groupby("doc")["avg_sales"].sum()
+_zero_docs_set = set(_zero_sum[_zero_sum == 0].index)
 for _doc in _zero_docs_set:
     _doc_facs = _doc_fac_sales[_doc_fac_sales["doc"] == _doc]["fac_honin"].tolist()
-    if not _doc_facs:
-        continue
-    _ranked = sorted(
-        _doc_facs,
-        key=lambda f: UHP_RANK.get(str(_fac_uhp.get(f, "")), 99)
-    )
-    _doc_primary_all[_doc] = _ranked[0]
+    if _doc_facs:
+        _ranked = sorted(
+            _doc_facs,
+            key=lambda f: UHP_RANK.get(str(_fac_uhp.get(f, "")), 99)
+        )
+        _multi_assign[_doc] = _ranked[0]
+
+# 結合: 1施設所属 + 複数施設所属
+_doc_primary_all = pd.concat([_single_assign, _multi_assign])
 
 doc_primary_fac = _doc_primary_all  # doc → fac_honin (主施設)
 
