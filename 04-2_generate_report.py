@@ -51,7 +51,7 @@ FILE_DOCTOR_ATTR = "doctor_attribute.csv"
 FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 
 # 解析集団フィルタパラメータ (02と合わせること)
-FILTER_SINGLE_FAC_DOCTOR = True
+FILTER_SINGLE_FAC_DOCTOR = False
 DOCTOR_HONIN_FAC_COUNT_COL = "所属施設数"
 INCLUDE_ONLY_RW     = False   # True: RW医師のみ (02と合わせること)
 INCLUDE_ONLY_NON_RW = False  # True: 非RW医師のみ
@@ -68,7 +68,11 @@ if EXCLUDE_ZERO_SALES_FACILITIES:
     _zero_sfx = "_nozero"
 else:
     _zero_sfx = ""
-_suffix = _pop_sfx + _zero_sfx
+if FILTER_SINGLE_FAC_DOCTOR:
+    _single_sfx = "_single"
+else:
+    _single_sfx = ""
+_suffix = _pop_sfx + _zero_sfx + _single_sfx
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "本番データ")

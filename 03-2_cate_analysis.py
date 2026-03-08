@@ -36,7 +36,7 @@ FILE_DOCTOR_ATTR = "doctor_attribute.csv"
 FILE_FAC_DOCTOR_LIST = "施設医師リスト.csv"
 
 # 解析集団フィルタパラメータ
-FILTER_SINGLE_FAC_DOCTOR = False  # ver2: 複数医師施設を含める
+FILTER_SINGLE_FAC_DOCTOR = False  # True: 1施設1医師の施設のみを対象（複数医師施設を除外）
 INCLUDE_ONLY_RW     = False        # True: RW医師のみ (Step 3適用)
 INCLUDE_ONLY_NON_RW = False       # True: 非RW医師のみ (INCLUDE_ONLY_RW=Falseのとき有効)
 EXCLUDE_ZERO_SALES_FACILITIES = False  # True: 全期間納入が0の施設を解析対象から除外
@@ -53,7 +53,8 @@ if EXCLUDE_ZERO_SALES_FACILITIES:
     _zero_sfx = "_nozero"
 else:
     _zero_sfx = ""
-_suffix = _pop_sfx + _zero_sfx
+_single_sfx = "_single" if FILTER_SINGLE_FAC_DOCTOR else ""
+_suffix = _pop_sfx + _zero_sfx + _single_sfx
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "本番データ")
@@ -639,6 +640,12 @@ if EXCLUDE_ZERO_SALES_FACILITIES:
                    if fac not in _exclude_zero}
     n_docs_map  = {fac: len(docs) for fac, docs in fac_to_docs.items()}
     print(f"  [全期間0売上除外] {len(_exclude_zero)} 施設を除外 → 残 {len(fac_to_docs)} 施設")
+
+# 1施設1医師フィルタ（フラグで制御）
+if FILTER_SINGLE_FAC_DOCTOR:
+    fac_to_docs = {fac: docs for fac, docs in fac_to_docs.items() if len(docs) == 1}
+    n_docs_map  = {fac: len(docs) for fac, docs in fac_to_docs.items()}
+    print(f"  [1施設1医師フィルタ] 複数医師施設を除外 → 残 {len(fac_to_docs)} 施設")
 
 print(f"\n  主施設割り当て完了:")
 print(f"    解析対象医師数: {len(analysis_docs_all)}")

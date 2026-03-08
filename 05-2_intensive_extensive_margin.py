@@ -84,7 +84,11 @@ if EXCLUDE_ZERO_SALES_FACILITIES:
     _zero_sfx = "_nozero"
 else:
     _zero_sfx = ""
-_suffix = _pop_sfx + _zero_sfx
+if FILTER_SINGLE_FAC_DOCTOR:
+    _single_sfx = "_single"
+else:
+    _single_sfx = ""
+_suffix = _pop_sfx + _zero_sfx + _single_sfx
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "本番データ")
@@ -233,6 +237,11 @@ if EXCLUDE_ZERO_SALES_FACILITIES:
                    if fac not in _exclude_zero}
     n_docs_map  = {fac: len(docs) for fac, docs in fac_to_docs.items()}
     print(f"  [全期間0売上除外] {len(_exclude_zero)} 施設を除外 → 残 {len(fac_to_docs)} 施設")
+
+if FILTER_SINGLE_FAC_DOCTOR:
+    fac_to_docs = {fac: docs for fac, docs in fac_to_docs.items() if len(docs) == 1}
+    n_docs_map  = {fac: len(docs) for fac, docs in fac_to_docs.items()}
+    print(f"  [1施設1医師フィルタ] 複数医師施設を除外 → 残 {len(fac_to_docs)} 施設")
 
 print(f"\n  主施設割り当て完了:")
 print(f"    解析対象医師数: {len(analysis_docs_all)}")
