@@ -106,6 +106,41 @@ LAST_ELIGIBLE_MONTH = 29
 # 配信コスト仮定（08と同じ）
 COST_PER_DISTRIBUTION = 0.5  # 万円
 
+# 視聴回数ビン定義 (var, cumul_lo, cumul_hi, 表示ラベル)
+VIEW_BINS = [
+    ("view_1st",    0,    0,   "1回目"),
+    ("view_2nd",    1,    2,   "2回目"),
+    ("view_3rd",    3,    5,   "3回目"),
+    ("view_4th",    6,   10,   "4回目"),
+    ("view_5th",   11,   15,   "5回目"),
+    ("view_6th",   16,   20,   "6回目"),
+    ("view_7th",   21,   25,   "7回目"),
+    ("view_8th",   26,   30,   "8回目"),
+    ("view_9th",   31,   35,   "9回目"),
+    ("view_10plus", 36, 9999,  "10回以上"),
+]
+VIEW_VARS   = [b[0] for b in VIEW_BINS]
+VIEW_LABELS = [b[3] for b in VIEW_BINS]
+# 各ビンの期待効果計算に使う累積回数レンジ (None = initial_viewing_rate を使用)
+_BIN_CONT_RANGES = {
+    "view_1st":    None,
+    "view_2nd":    range(1, 3),
+    "view_3rd":    range(3, 6),
+    "view_4th":    range(6, 11),
+    "view_5th":    range(11, 16),
+    "view_6th":    range(16, 21),
+    "view_7th":    range(21, 26),
+    "view_8th":    range(26, 31),
+    "view_9th":    range(31, 36),
+    "view_10plus": range(36, 40),
+}
+
+CHANNEL_DISPLAY = {
+    "webiner":    "ウェビナー",
+    "e_contents": "eコンテンツ",
+    "Web講演会":  "Web講演会",
+}
+
 print("=" * 70)
 print(" 施設視聴パターン分析（ver2）: 視聴回数別限界効果 + 期待値")
 print("=" * 70)
@@ -358,18 +393,16 @@ print(f"  期間: {len(months)} ヶ月")
 # ================================================================
 print("\n[視聴回数別ダミー変数作成]")
 
-# 当月視聴があった場合、累積回数別にダミー作成
-facility_panel["view_1st"] = ((facility_panel["cumulative_views"] == 0) & (facility_panel["current_views"] > 0)).astype(int)
-facility_panel["view_2nd"] = ((facility_panel["cumulative_views"] >= 1) & (facility_panel["cumulative_views"] <= 2) & (facility_panel["current_views"] > 0)).astype(int)
-facility_panel["view_3rd"] = ((facility_panel["cumulative_views"] >= 3) & (facility_panel["cumulative_views"] <= 5) & (facility_panel["current_views"] > 0)).astype(int)
-facility_panel["view_4th"] = ((facility_panel["cumulative_views"] >= 6) & (facility_panel["cumulative_views"] <= 10) & (facility_panel["current_views"] > 0)).astype(int)
-facility_panel["view_5plus"] = ((facility_panel["cumulative_views"] > 10) & (facility_panel["current_views"] > 0)).astype(int)
+for var, lo, hi, label in VIEW_BINS:
+    facility_panel[var] = (
+        (facility_panel["cumulative_views"] >= lo) &
+        (facility_panel["cumulative_views"] <= hi) &
+        (facility_panel["current_views"] > 0)
+    ).astype(int)
 
-print(f"  1回目視聴: {facility_panel['view_1st'].sum():,} 回")
-print(f"  2回目視聴: {facility_panel['view_2nd'].sum():,} 回")
-print(f"  3回目視聴: {facility_panel['view_3rd'].sum():,} 回")
-print(f"  4回目視聴: {facility_panel['view_4th'].sum():,} 回")
-print(f"  5回目以上: {facility_panel['view_5plus'].sum():,} 回")
+for var, lo, hi, label in VIEW_BINS:
+    hi_str = "∞" if hi == 9999 else str(hi)
+    print(f"  {label} (累積{lo}〜{hi_str}回済): {facility_panel[var].sum():,} 回")
 
 # ================================================================
 # TWFE回帰: 視聴回数別の限界効果推定
@@ -383,44 +416,39 @@ panel_reg = facility_panel.copy()
 panel_reg = panel_reg[panel_reg["amount"] > 0].copy()  # 売上ゼロを除外
 panel_reg = panel_reg.set_index(["facility_id", "month_index"])
 
+# 観測数が5以上のビンのみ使用
+active_vars = [v for v in VIEW_VARS if facility_panel[v].sum() >= 5]
+print(f"  有効変数 ({len(active_vars)}個): {active_vars}")
+
+marginal_effects = {v: {"coefficient": np.nan, "se": np.nan, "p": np.nan, "sig": "n/a"}
+                   for v in VIEW_VARS}
+regression_success = False
+
 try:
+    if len(active_vars) < 2:
+        raise ValueError(f"有効な視聴回数ダミーが不足 ({len(active_vars)}変数)")
+
     model = PanelOLS(
         dependent=panel_reg["amount"],
-        exog=panel_reg[["view_1st", "view_2nd", "view_3rd", "view_4th", "view_5plus"]],
+        exog=panel_reg[active_vars],
         entity_effects=True,
         time_effects=True
     )
     result = model.fit(cov_type="clustered", cluster_entity=True)
 
-    marginal_effects = {}
-    for var in ["view_1st", "view_2nd", "view_3rd", "view_4th", "view_5plus"]:
-        coef = result.params[var]
-        se = result.std_errors[var]
-        p = result.pvalues[var]
-        sig = "***" if p < 0.001 else "**" if p < 0.01 else "*" if p < 0.05 else "n.s."
-
-        marginal_effects[var] = {
-            "coefficient": float(coef),
-            "se": float(se),
-            "p": float(p),
-            "sig": sig,
-        }
-
+    for var in active_vars:
+        coef = float(result.params[var])
+        se   = float(result.std_errors[var])
+        p    = float(result.pvalues[var])
+        sig  = "***" if p < 0.001 else "**" if p < 0.01 else "*" if p < 0.05 else "n.s."
+        marginal_effects[var] = {"coefficient": coef, "se": se, "p": p, "sig": sig}
         print(f"  {var}: {coef:.2f} (SE={se:.2f}, p={p:.4f}, {sig})")
 
     regression_success = True
 
 except Exception as e:
     print(f"  回帰エラー: {e}")
-    print("  デフォルト値を使用")
-    marginal_effects = {
-        "view_1st": {"coefficient": 30.0, "se": 5.0, "p": 0.001, "sig": "***"},
-        "view_2nd": {"coefficient": 25.0, "se": 5.0, "p": 0.001, "sig": "***"},
-        "view_3rd": {"coefficient": 20.0, "se": 5.0, "p": 0.001, "sig": "***"},
-        "view_4th": {"coefficient": 15.0, "se": 5.0, "p": 0.001, "sig": "**"},
-        "view_5plus": {"coefficient": 10.0, "se": 5.0, "p": 0.05, "sig": "*"},
-    }
-    regression_success = False
+    print("  NaN を設定")
 
 # ================================================================
 # 視聴確率（継続率）の推定
@@ -433,13 +461,13 @@ fp_sorted = facility_panel.sort_values(["facility_id", "month_index"]).copy()
 fp_sorted["next_views"] = fp_sorted.groupby("facility_id")["current_views"].shift(-1)
 
 continuation_rates = {}
-for n in range(0, 15):
+for n in range(0, 40):
     cohort = fp_sorted[fp_sorted["cumulative_views"] == n]
     valid = cohort["next_views"].dropna()
     continuation_rate = float((valid > 0).mean()) if len(valid) > 0 else 0.0
     continuation_rates[n] = continuation_rate
-    if n < 11:
-        print(f"  累積{n}回 → 次月視聴確率: {continuation_rate:.1%}")
+    if n < 36:
+        print(f"  累積{n:2d}回 → 次月視聴確率: {continuation_rate:.1%}")
 
 # 初回視聴確率（未視聴施設が視聴を始める確率）
 # 分母は「未視聴施設×月」のみ（cumulative_views == 0）
@@ -455,157 +483,139 @@ print(f"  計算根拠: 未視聴施設×月 {len(never_viewed_months):,}回 の
 # ================================================================
 print("\n[期待効果の計算]")
 
-# 各視聴回数の期待効果 = 視聴確率 × 限界効果
+# 各ビンの期待効果 = 視聴確率 × 限界効果
 expected_effects = {}
+bin_probs = {}
 
-# 1回目（新規）
-prob_1st = initial_viewing_rate
-effect_1st = marginal_effects["view_1st"]["coefficient"]
-expected_effects["1st"] = prob_1st * effect_1st
-
-# 2回目（累積1-2回の平均）
-prob_2nd = np.mean([continuation_rates.get(i, 0) for i in range(1, 3)])
-effect_2nd = marginal_effects["view_2nd"]["coefficient"]
-expected_effects["2nd"] = prob_2nd * effect_2nd
-
-# 3回目（累積3-5回の平均）
-prob_3rd = np.mean([continuation_rates.get(i, 0) for i in range(3, 6)])
-effect_3rd = marginal_effects["view_3rd"]["coefficient"]
-expected_effects["3rd"] = prob_3rd * effect_3rd
-
-# 4回目（累積6-10回の平均）
-prob_4th = np.mean([continuation_rates.get(i, 0) for i in range(6, 11)])
-effect_4th = marginal_effects["view_4th"]["coefficient"]
-expected_effects["4th"] = prob_4th * effect_4th
-
-# 5回目以上（累積11回以上の平均）
-prob_5plus = np.mean([continuation_rates.get(i, 0) for i in range(11, 15)])
-effect_5plus = marginal_effects["view_5plus"]["coefficient"]
-expected_effects["5plus"] = prob_5plus * effect_5plus
-
-print(f"  1回目期待効果: {expected_effects['1st']:.2f}万円 = {prob_1st:.1%} × {effect_1st:.2f}")
-print(f"  2回目期待効果: {expected_effects['2nd']:.2f}万円 = {prob_2nd:.1%} × {effect_2nd:.2f}")
-print(f"  3回目期待効果: {expected_effects['3rd']:.2f}万円 = {prob_3rd:.1%} × {effect_3rd:.2f}")
-print(f"  4回目期待効果: {expected_effects['4th']:.2f}万円 = {prob_4th:.1%} × {effect_4th:.2f}")
-print(f"  5回目以上期待効果: {expected_effects['5plus']:.2f}万円 = {prob_5plus:.1%} × {effect_5plus:.2f}")
+for var, lo, hi, label in VIEW_BINS:
+    me_val = marginal_effects[var]["coefficient"]
+    cr_range = _BIN_CONT_RANGES[var]
+    if cr_range is None:
+        prob = initial_viewing_rate
+    else:
+        vals = [continuation_rates.get(i, 0.0) for i in cr_range]
+        prob = float(np.mean(vals)) if vals else 0.0
+    bin_probs[var] = prob
+    if np.isnan(me_val):
+        expected_effects[var] = np.nan
+        print(f"  {label}: n/a (観測不足)")
+    else:
+        expected_effects[var] = prob * me_val
+        print(f"  {label}: {expected_effects[var]:.2f}万円 = {prob:.1%} × {me_val:.2f}")
 
 # ================================================================
 # 最適配信戦略の算出
 # ================================================================
 print("\n[最適配信戦略]")
 
-# 新規1回目の期待効果と既存N回目の期待効果を比較
-new_facility_expected = expected_effects["1st"]
+new_facility_expected = expected_effects["view_1st"]
 
 threshold_message = None
-for key in ["2nd", "3rd", "4th", "5plus"]:
-    if expected_effects[key] < new_facility_expected:
-        threshold_message = f"既存施設が{key}に該当する累積視聴回数に達したら、新規施設を優先すべき"
+for var, lo, hi, label in VIEW_BINS[1:]:
+    ee = expected_effects.get(var, np.nan)
+    if not np.isnan(ee) and not np.isnan(new_facility_expected) and ee < new_facility_expected:
+        threshold_message = f"既存施設が{label}相当（累積{lo}回以上）に達したら新規施設を優先すべき"
         break
 
 if threshold_message is None:
     threshold_message = "全ての視聴回数で既存施設の期待効果が高い（常に既存施設優先）"
 
 print(f"  {threshold_message}")
-print(f"  新規施設1回目: {new_facility_expected:.2f}万円")
-print(f"  既存施設2回目: {expected_effects['2nd']:.2f}万円")
-print(f"  既存施設3回目: {expected_effects['3rd']:.2f}万円")
-print(f"  既存施設4回目: {expected_effects['4th']:.2f}万円")
+for var, lo, hi, label in VIEW_BINS:
+    ee = expected_effects.get(var, np.nan)
+    if not np.isnan(ee):
+        print(f"  {label}: {ee:.2f}万円")
 
 # ================================================================
 # 可視化
 # ================================================================
 print("\n[可視化]")
 
-fig = plt.figure(figsize=(16, 10))
+# 有効ビン（NaN除外）
+valid_bins = [(var, lo, hi, label) for var, lo, hi, label in VIEW_BINS
+              if not np.isnan(marginal_effects[var]["coefficient"])]
+vv = [b[0] for b in valid_bins]
+vl = [b[3] for b in valid_bins]
 
-# (a) 視聴回数別の限界効果
-ax1 = fig.add_subplot(2, 3, 1)
-view_labels = ["1回目", "2回目", "3回目", "4回目", "5回以上"]
-effects = [marginal_effects[k]["coefficient"] for k in ["view_1st", "view_2nd", "view_3rd", "view_4th", "view_5plus"]]
-errors = [marginal_effects[k]["se"] for k in ["view_1st", "view_2nd", "view_3rd", "view_4th", "view_5plus"]]
+fig = plt.figure(figsize=(18, 11))
 
-ax1.bar(view_labels, effects, yerr=errors, color="#2196f3", alpha=0.7, capsize=5)
+# (a) 視聴回数別の限界効果（10ビン）
+ax1 = fig.add_subplot(2, 3, (1, 2))  # 2列分使用
+effects = [marginal_effects[v]["coefficient"] for v in vv]
+errors  = [marginal_effects[v]["se"] for v in vv]
+colors_me = ["#4caf50" if i == 0 else "#2196f3" for i in range(len(vv))]
+ax1.bar(vl, effects, yerr=errors, color=colors_me, alpha=0.7, capsize=4)
 ax1.set_ylabel("限界効果（万円）", fontsize=10)
-ax1.set_title("(a) 視聴回数別の限界効果", fontsize=11, fontweight="bold")
+ax1.set_title("(a) 視聴回数別の限界効果（TWFE推定）", fontsize=11, fontweight="bold")
+ax1.tick_params(axis="x", labelsize=9)
 ax1.grid(axis="y", alpha=0.3)
 ax1.axhline(0, color="black", linewidth=1)
 
-# (b) 視聴確率（継続率）
-ax2 = fig.add_subplot(2, 3, 2)
-cont_x = list(range(0, 11))
-cont_y = [continuation_rates.get(i, 0) * 100 for i in cont_x]
-ax2.plot(cont_x, cont_y, marker="o", color="#ff9800", linewidth=2)
-ax2.axhline(initial_viewing_rate * 100, color="red", linestyle="--", label=f"初回視聴率: {initial_viewing_rate:.1%}")
-ax2.set_xlabel("累積視聴回数", fontsize=10)
-ax2.set_ylabel("次月視聴確率（%）", fontsize=10)
-ax2.set_title("(b) 視聴確率（継続率）", fontsize=11, fontweight="bold")
-ax2.legend(fontsize=8)
-ax2.grid(alpha=0.3)
-
-# (c) 期待効果の比較
-ax3 = fig.add_subplot(2, 3, 3)
-exp_labels = ["1回目\n(新規)", "2回目", "3回目", "4回目", "5回以上"]
-exp_values = [expected_effects[k] for k in ["1st", "2nd", "3rd", "4th", "5plus"]]
-colors_exp = ["#4caf50" if i == 0 else "#2196f3" for i in range(len(exp_values))]
-ax3.bar(exp_labels, exp_values, color=colors_exp, alpha=0.7)
-ax3.set_ylabel("期待効果（万円）", fontsize=10)
-ax3.set_title("(c) 期待効果 = 視聴確率 × 限界効果", fontsize=11, fontweight="bold")
-ax3.grid(axis="y", alpha=0.3)
-ax3.axhline(0, color="black", linewidth=1)
-
-# (d) 期待ROI（期待効果/配信コスト）
-ax4 = fig.add_subplot(2, 3, 4)
-expected_roi = [e / COST_PER_DISTRIBUTION for e in exp_values]
-ax4.bar(exp_labels, expected_roi, color=colors_exp, alpha=0.7)
-ax4.set_ylabel("期待ROI（売上/コスト）", fontsize=10)
-ax4.set_title("(d) 期待ROI（配信コストあたりの期待効果）", fontsize=11, fontweight="bold")
-ax4.grid(axis="y", alpha=0.3)
-
-# (e) 配信優先順位（期待効果でソート）
-ax5 = fig.add_subplot(2, 3, 5)
-priority_data = [
-    ("新規1回目", expected_effects["1st"]),
-    ("既存2回目", expected_effects["2nd"]),
-    ("既存3回目", expected_effects["3rd"]),
-    ("既存4回目", expected_effects["4th"]),
-    ("既存5回以上", expected_effects["5plus"]),
-]
+# (b) 配信優先順位（期待効果でソート）
+ax5 = fig.add_subplot(2, 3, 3)
+priority_data = [(("新規" if var == "view_1st" else "既存") + label,
+                  expected_effects[var])
+                 for var, lo, hi, label in valid_bins
+                 if not np.isnan(expected_effects[var])]
 priority_data_sorted = sorted(priority_data, key=lambda x: x[1], reverse=True)
 priority_labels = [p[0] for p in priority_data_sorted]
 priority_values = [p[1] for p in priority_data_sorted]
-priority_colors = ["#4caf50" if "新規" in label else "#2196f3" for label in priority_labels]
-
+priority_colors = ["#4caf50" if "新規" in lbl else "#2196f3" for lbl in priority_labels]
 ax5.barh(priority_labels, priority_values, color=priority_colors, alpha=0.7)
 ax5.set_xlabel("期待効果（万円）", fontsize=10)
-ax5.set_title("(e) 配信優先順位（期待効果順）", fontsize=11, fontweight="bold")
+ax5.set_title("(b) 配信優先順位（期待効果順）", fontsize=11, fontweight="bold")
 ax5.grid(axis="x", alpha=0.3)
 
-# (f) 最適配分メッセージ
+# (c) 視聴確率（継続率）: 累積0〜35回まで
+ax2 = fig.add_subplot(2, 3, 4)
+cont_x = list(range(0, 36))
+cont_y = [continuation_rates.get(i, 0) * 100 for i in cont_x]
+ax2.plot(cont_x, cont_y, marker="o", markersize=4, color="#ff9800", linewidth=1.5)
+ax2.axhline(initial_viewing_rate * 100, color="red", linestyle="--",
+            label=f"初回視聴率: {initial_viewing_rate:.1%}")
+ax2.set_xlabel("累積視聴回数", fontsize=10)
+ax2.set_ylabel("次月視聴確率（%）", fontsize=10)
+ax2.set_title("(c) 視聴確率（継続率）", fontsize=11, fontweight="bold")
+ax2.legend(fontsize=8)
+ax2.grid(alpha=0.3)
+
+# (d) 期待効果の比較
+ax3 = fig.add_subplot(2, 3, 5)
+exp_labels_plot = [("新規\n" if var == "view_1st" else "") + label
+                   for var, lo, hi, label in valid_bins
+                   if not np.isnan(expected_effects[var])]
+exp_values_plot = [expected_effects[var] for var, lo, hi, label in valid_bins
+                   if not np.isnan(expected_effects[var])]
+colors_exp = ["#4caf50" if i == 0 else "#2196f3" for i in range(len(exp_values_plot))]
+ax3.bar(exp_labels_plot, exp_values_plot, color=colors_exp, alpha=0.7)
+ax3.set_ylabel("期待効果（万円）", fontsize=10)
+ax3.set_title("(d) 期待効果 = 視聴確率 × 限界効果", fontsize=11, fontweight="bold")
+ax3.tick_params(axis="x", labelsize=8)
+ax3.grid(axis="y", alpha=0.3)
+ax3.axhline(0, color="black", linewidth=1)
+
+# (e) 最適配分メッセージ
 ax6 = fig.add_subplot(2, 3, 6)
 ax6.axis("off")
-message = f"""
-【最適配信戦略】
+_top3 = "\n".join(f"  {lbl}: {val:.2f}万円" for lbl, val in priority_data_sorted[:5])
+message = f"""【最適配信戦略】
 
 {threshold_message}
 
-予算配分の意思決定：
-・新規施設1回目: {new_facility_expected:.2f}万円
-・既存施設2回目: {expected_effects['2nd']:.2f}万円
-・既存施設3回目: {expected_effects['3rd']:.2f}万円
-・既存施設4回目: {expected_effects['4th']:.2f}万円
+期待効果 上位5位:
+{_top3}
 
-注意: 視聴は施設内医師の自発的行動であり、
-結果は相関関係として解釈すべき
-"""
-ax6.text(0.1, 0.5, message, fontsize=10, verticalalignment="center",
+注意: 視聴は施設内医師の自発的行動
+結果は相関関係として解釈すべき"""
+ax6.text(0.05, 0.5, message, fontsize=9, verticalalignment="center",
          bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.3))
 
-plt.suptitle("視聴回数別限界効果 + 配信成功率を考慮した期待効果分析（施設レベル ver2）", fontsize=14, fontweight="bold")
+plt.suptitle("視聴回数別限界効果 + 配信成功率を考慮した期待効果分析（施設レベル ver2）",
+             fontsize=13, fontweight="bold")
 plt.tight_layout(rect=[0, 0, 1, 0.97])
 
 output_png = f"intensive_extensive_margin_v2{_suffix}.png"
-plt.savefig(output_png, dpi=300, bbox_inches="tight")
+plt.savefig(output_png, dpi=150, bbox_inches="tight")
 print(f"  可視化を保存: {output_png}")
 plt.close()
 
@@ -614,20 +624,28 @@ plt.close()
 # ================================================================
 print("\n[結果保存]")
 
+def _safe_float(v):
+    return float(v) if v is not None and not (isinstance(v, float) and np.isnan(v)) else None
+
 output_json = {
-    "marginal_effects": marginal_effects,
-    "continuation_rates": {str(k): v for k, v in continuation_rates.items() if k < 11},
+    "marginal_effects": {
+        v: {k2: _safe_float(vv2) if k2 != "sig" else vv2
+            for k2, vv2 in d.items()}
+        for v, d in marginal_effects.items()
+    },
+    "continuation_rates": {str(k): v for k, v in continuation_rates.items() if k < 40},
     "initial_viewing_rate": float(initial_viewing_rate),
-    "expected_effects": expected_effects,
-    "expected_roi": {k: float(v / COST_PER_DISTRIBUTION) for k, v in expected_effects.items()},
+    "expected_effects": {v: _safe_float(e) for v, e in expected_effects.items()},
+    "expected_roi": {v: _safe_float(e / COST_PER_DISTRIBUTION)
+                     for v, e in expected_effects.items() if not np.isnan(e)},
     "optimal_strategy": {
         "message": threshold_message,
-        "new_facility_expected": float(new_facility_expected),
-        "priority_ranking": [(label, float(value)) for label, value in priority_data_sorted],
+        "new_facility_expected": _safe_float(new_facility_expected),
+        "priority_ranking": [(lbl, _safe_float(val)) for lbl, val in priority_data_sorted],
     },
-    "cost_assumption": {
-        "cost_per_distribution": float(COST_PER_DISTRIBUTION),
-    },
+    "view_bins": [{"var": var, "cumul_lo": lo, "cumul_hi": hi if hi < 9999 else None,
+                   "label": label} for var, lo, hi, label in VIEW_BINS],
+    "cost_assumption": {"cost_per_distribution": float(COST_PER_DISTRIBUTION)},
     "analysis_info": {
         "version": "ver2",
         "unit": "facility",
@@ -641,7 +659,8 @@ output_json = {
     "interpretation": {
         "warning": "視聴は施設内医師の自発的行動（内生変数）であり、因果効果ではなく相関関係",
         "recommendation": "配信成功率を考慮すると、既存施設への配信効率が高い傾向。ただし新規施設獲得も重要",
-    }
+    },
+    "channel_marginal_effects": {},  # チャネル別分析で追記
 }
 
 output_path = os.path.join(SCRIPT_DIR, "results", f"physician_viewing_analysis_v2{_suffix}.json")
@@ -650,6 +669,130 @@ with open(output_path, "w", encoding="utf-8") as f:
     json.dump(output_json, f, ensure_ascii=False, indent=2)
 
 print(f"  結果を保存: {output_path}")
+
+# ================================================================
+# チャネル別 視聴回数別限界効果分析
+# ================================================================
+print("\n" + "=" * 70)
+print(" チャネル別 視聴回数別限界効果分析")
+print("=" * 70)
+
+channel_me_results = {}
+
+for _ch in CONTENT_TYPES:
+    _ch_disp = CHANNEL_DISPLAY.get(_ch, _ch)
+    print(f"\n[チャネル: {_ch_disp}]")
+
+    # チャネル限定の視聴データ
+    _ch_view = viewing_all[viewing_all["channel_category"] == _ch]
+
+    # 施設×月の視聴回数
+    _ch_monthly = (
+        _ch_view[_ch_view["facility_id"].isin(analysis_fac_ids)]
+        .groupby(["facility_id", "month_index"])
+        .size().reset_index(name="view_count")
+    )
+    _ch_s = (_ch_monthly
+             .set_index(["facility_id", "month_index"])["view_count"]
+             .reindex(full_idx, fill_value=0))
+    _ch_panel = _ch_s.reset_index().rename(columns={"view_count": "current_views"})
+    _ch_panel = _ch_panel.sort_values(["facility_id", "month_index"])
+    _ch_panel["cumulative_views"] = (
+        _ch_panel.groupby("facility_id")["current_views"]
+        .transform(lambda x: x.shift(1).fillna(0).cumsum().astype(int))
+    )
+    _ch_panel = _ch_panel.merge(
+        monthly_sales_fac[["facility_id", "month_index", "amount"]],
+        on=["facility_id", "month_index"], how="left"
+    )
+    _ch_panel["amount"] = _ch_panel["amount"].fillna(0.0)
+    _ch_panel["current_views"] = _ch_panel["current_views"].astype(int)
+
+    for _var, _lo, _hi, _lbl in VIEW_BINS:
+        _ch_panel[_var] = (
+            (_ch_panel["cumulative_views"] >= _lo) &
+            (_ch_panel["cumulative_views"] <= _hi) &
+            (_ch_panel["current_views"] > 0)
+        ).astype(int)
+
+    _active = [v for v in VIEW_VARS if _ch_panel[v].sum() >= 5]
+    print(f"  有効変数 ({len(_active)}個): {_active}")
+
+    _me = {v: {"coefficient": np.nan, "se": np.nan, "p": np.nan, "sig": "n/a"}
+           for v in VIEW_VARS}
+    if len(_active) >= 2:
+        try:
+            _pr = _ch_panel[_ch_panel["amount"] > 0].copy().set_index(["facility_id", "month_index"])
+            _model = PanelOLS(
+                dependent=_pr["amount"],
+                exog=_pr[_active],
+                entity_effects=True,
+                time_effects=True
+            )
+            _res = _model.fit(cov_type="clustered", cluster_entity=True)
+            for _v in _active:
+                _c = float(_res.params[_v])
+                _s = float(_res.std_errors[_v])
+                _p = float(_res.pvalues[_v])
+                _sig = "***" if _p < 0.001 else "**" if _p < 0.01 else "*" if _p < 0.05 else "n.s."
+                _me[_v] = {"coefficient": _c, "se": _s, "p": _p, "sig": _sig}
+                print(f"  {_v}: {_c:.2f} (SE={_s:.2f}, p={_p:.4f}, {_sig})")
+        except Exception as _e:
+            print(f"  回帰エラー: {_e}")
+    else:
+        print("  有効変数不足のためスキップ")
+
+    channel_me_results[_ch] = _me
+
+# ---- チャネル別 限界効果 比較グラフ ----
+_n_ch = len(CONTENT_TYPES)
+_fig_ch, _axes_ch = plt.subplots(1, _n_ch + 1, figsize=(5 * (_n_ch + 1), 5), sharey=True)
+_fig_ch.suptitle("チャネル別 視聴回数別限界効果（TWFE, 施設レベル ver2）",
+                 fontsize=12, fontweight="bold")
+
+# 全体
+_ax = _axes_ch[0]
+_eff = [marginal_effects[v]["coefficient"] for v in VIEW_VARS]
+_err = [marginal_effects[v]["se"] if not np.isnan(marginal_effects[v]["se"]) else 0.0
+        for v in VIEW_VARS]
+_eff_clean = [e if not np.isnan(e) else 0.0 for e in _eff]
+_ax.bar(VIEW_LABELS, _eff_clean, yerr=_err, color="#555555", alpha=0.7, capsize=3)
+_ax.axhline(0, color="black", linewidth=0.8)
+_ax.set_title("全体", fontsize=10, fontweight="bold")
+_ax.set_ylabel("限界効果（万円）", fontsize=9)
+_ax.tick_params(axis="x", rotation=45, labelsize=7)
+_ax.grid(axis="y", alpha=0.3)
+
+_ch_colors = ["#1565C0", "#43A047", "#FB8C00"]
+for _i, _ch in enumerate(CONTENT_TYPES):
+    _ax = _axes_ch[_i + 1]
+    _me_ch = channel_me_results[_ch]
+    _eff_ch = [_me_ch[v]["coefficient"] for v in VIEW_VARS]
+    _err_ch = [_me_ch[v]["se"] if not np.isnan(_me_ch[v]["se"]) else 0.0 for v in VIEW_VARS]
+    _eff_ch_c = [e if not np.isnan(e) else 0.0 for e in _eff_ch]
+    _ax.bar(VIEW_LABELS, _eff_ch_c, yerr=_err_ch,
+            color=_ch_colors[_i % len(_ch_colors)], alpha=0.7, capsize=3)
+    _ax.axhline(0, color="black", linewidth=0.8)
+    _ax.set_title(CHANNEL_DISPLAY.get(_ch, _ch), fontsize=10, fontweight="bold")
+    _ax.tick_params(axis="x", rotation=45, labelsize=7)
+    _ax.grid(axis="y", alpha=0.3)
+
+plt.tight_layout()
+_out_ch = os.path.join(SCRIPT_DIR, f"intensive_margin_channel_v2{_suffix}.png")
+plt.savefig(_out_ch, dpi=150, bbox_inches="tight")
+plt.close(_fig_ch)
+print(f"\n  チャネル別グラフを保存: {_out_ch}")
+
+# JSON にチャネル別結果を追記
+output_json["channel_marginal_effects"] = {
+    _ch: {v: {k2: _safe_float(vv2) if k2 != "sig" else vv2
+               for k2, vv2 in d.items()}
+           for v, d in _me.items()}
+    for _ch, _me in channel_me_results.items()
+}
+with open(output_path, "w", encoding="utf-8") as f:
+    json.dump(output_json, f, ensure_ascii=False, indent=2)
+print(f"  channel_marginal_effects を JSON に追記: {output_path}")
 
 print("\n" + "=" * 70)
 print(" 分析完了 (ver2: 施設レベル)")

@@ -707,6 +707,7 @@ png_files = [
     (f"cate_results_v2{_suffix}.png",             "cate_results_v2.png"),
     (f"cate_dynamic_effects_v2{_suffix}.png",     "cate_dynamic_effects_v2.png"),
     (f"intensive_extensive_margin_v2{_suffix}.png","intensive_extensive_margin_v2.png"),
+    (f"intensive_margin_channel_v2{_suffix}.png",  "intensive_margin_channel_v2.png"),
     (f"propensity_score_analysis_v2{_suffix}.png","propensity_score_analysis_v2.png"),
     (f"mr_activity_mediation{_suffix}.png",       "mr_activity_mediation.png"),
     ("mr_digital_balance.png",                    "mr_digital_balance.png"),
@@ -1849,11 +1850,21 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
   <img src="data:image/png;base64,{{ png_physician_viewing }}" alt="Physician Viewing Analysis">
 </div>
 <p style="font-size:0.9em; color:#616161; margin-top:8px;">
-  (a) 視聴回数別の限界効果 / (b) 視聴確率（継続率） / (c) 期待効果の比較 /
-  (d) 期待ROI / (e) 配信優先順位 / (f) 最適配分メッセージ
+  (a) 視聴回数別の限界効果（1〜10回以上の10ビン） / (b) 配信優先順位 /
+  (c) 視聴確率（継続率）/ (d) 期待効果 = 視聴確率 × 限界効果 / (e) 最適配分メッセージ
 </p>
 {% else %}
 <p>intensive_extensive_margin_v2.png が見つかりません。</p>
+{% endif %}
+
+{% if png_intensive_channel %}
+<h4 style="margin-top:24px;">チャネル別 視聴回数別限界効果</h4>
+<div class="img-container">
+  <img src="data:image/png;base64,{{ png_intensive_channel }}" alt="Channel Intensive Margin">
+</div>
+<p style="font-size:0.9em; color:#616161; margin-top:8px;">
+  全体・ウェビナー・eコンテンツ・Web講演会 それぞれの視聴回数別限界効果（TWFE推定）
+</p>
 {% endif %}
 
 {% else %}
@@ -2738,7 +2749,8 @@ template_data = {
     "png_did": existing_pngs.get("staggered_did_results_v2.png", ""),
     "png_cate": existing_pngs.get("cate_results_v2.png", ""),
     "png_cate_dyn": existing_pngs.get("cate_dynamic_effects_v2.png", ""),
-    "png_physician_viewing": existing_pngs.get("intensive_extensive_margin_v2.png", ""),
+    "png_physician_viewing":  existing_pngs.get("intensive_extensive_margin_v2.png", ""),
+    "png_intensive_channel":  existing_pngs.get("intensive_margin_channel_v2.png", ""),
     "png_propensity_score": existing_pngs.get("propensity_score_analysis_v2.png", ""),
     "png_mr_mediation": existing_pngs.get("mr_activity_mediation.png", ""),
     "png_mr_balance": existing_pngs.get("mr_digital_balance.png", ""),
