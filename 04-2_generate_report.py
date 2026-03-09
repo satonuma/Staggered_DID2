@@ -712,6 +712,7 @@ png_files = [
     ("mr_digital_balance.png",                    "mr_digital_balance.png"),
     (f"psm_growth_rate_v2{_suffix}.png",          "psm_growth_rate_v2.png"),
     (f"psm_subgroup_forest_v2{_suffix}.png",      "psm_subgroup_forest_v2.png"),
+    (f"psm_channel_att_v2{_suffix}.png",          "psm_channel_att_v2.png"),
     (f"coverage_sample_v2{_suffix}.png",          "coverage_sample_v2.png"),
     (f"coverage_dose_response_v2{_suffix}.png",   "coverage_dose_response_v2.png"),
 ]
@@ -2499,6 +2500,39 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
   <tr><td>Coverage × 伸長率 相関係数 r</td><td>{{ "%.3f"|format(psm_results.coverage_stats.coverage_growth_corr) if psm_results.coverage_stats.coverage_growth_corr is not none else "-" }}</td></tr>
 </table>
 {% endif %}
+
+{% if psm_results.channel_att %}
+<h3 style="margin-top:28px;">チャネル別 PSM 結果</h3>
+<p>デジタルチャネル別に処置群・対照群を定義して PSM を実施した結果。</p>
+{% if png_psm_channel %}
+<div style="text-align:center; margin:16px 0;">
+  <img src="data:image/png;base64,{{ png_psm_channel }}" alt="Channel ATT" style="max-width:100%;">
+</div>
+{% endif %}
+<table>
+  <tr><th>チャネル</th><th>処置群（生）</th><th>対照群（生）</th><th>マッチペア数</th><th>ATT（円/月）</th><th>SE</th><th>p値</th><th>95%CI</th></tr>
+  {% set ch_display = {"webiner": "ウェビナー", "e_contents": "eコンテンツ", "Web講演会": "Web講演会"} %}
+  {% for ch_key, ch_res in psm_results.channel_att.items() %}
+  {% if ch_res %}
+  <tr>
+    <td>{{ ch_display.get(ch_key, ch_key) }}</td>
+    <td>{{ ch_res.n_treated_raw }}</td>
+    <td>{{ ch_res.n_control_raw }}</td>
+    <td>{{ ch_res.n_matched }}</td>
+    <td>{{ "%.2f"|format(ch_res.att) }}</td>
+    <td>{{ "%.2f"|format(ch_res.se) }}</td>
+    <td>{{ "%.4f"|format(ch_res.p_value) }}{% if ch_res.p_value < 0.001 %} ***{% elif ch_res.p_value < 0.01 %} **{% elif ch_res.p_value < 0.05 %} *{% elif ch_res.p_value < 0.1 %} †{% endif %}</td>
+    <td>[{{ "%.2f"|format(ch_res.ci_95_lower) }}, {{ "%.2f"|format(ch_res.ci_95_upper) }}]</td>
+  </tr>
+  {% else %}
+  <tr>
+    <td>{{ ch_display.get(ch_key, ch_key) }}</td>
+    <td colspan="7" style="color:#999;">マッチング不成立（サンプル不足）</td>
+  </tr>
+  {% endif %}
+  {% endfor %}
+</table>
+{% endif %}
 {% endif %}
 
 <div class="highlight-box">
@@ -2728,8 +2762,9 @@ template_data = {
 
     # PSM 伸長率比較分析 (09)
     "psm_results": psm_growth_rate_results,
-    "png_psm_growth": existing_pngs.get("psm_growth_rate_v2.png", ""),
-    "png_psm_forest": existing_pngs.get("psm_subgroup_forest_v2.png", ""),
+    "png_psm_growth":   existing_pngs.get("psm_growth_rate_v2.png", ""),
+    "png_psm_forest":   existing_pngs.get("psm_subgroup_forest_v2.png", ""),
+    "png_psm_channel":  existing_pngs.get("psm_channel_att_v2.png", ""),
 
     # Coverage サンプル可視化 (02-2)
     "png_coverage_sample": existing_pngs.get("coverage_sample_v2.png", ""),
