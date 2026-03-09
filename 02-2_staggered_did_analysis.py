@@ -713,8 +713,8 @@ for _qcol in DOCTOR_QUINTILE_COLS:
         _n_valid = sum(1 for v in _fac_q.values() if v == v)  # notna count
         print(f"  [{_qcol}] 施設平均スコア算出: 非欠損施設 {_n_valid}/{len(fac_to_docs)}")
 
-# --- 視聴データに主施設IDを付与 ---
-viewing_all = viewing.copy()  # viewing は既に digital + web_lecture を結合したもの
+# --- 視聴データに主施設IDを付与 (解析対象医師のみ) ---
+viewing_all = viewing[viewing["doctor_id"].isin(analysis_docs_all)].copy()
 viewing_all["facility_id"] = viewing_all["doctor_id"].map(doc_primary_fac)
 
 # ウォッシュアウト除外: 施設内いずれかの医師が washout 期間(month 0,1)に視聴

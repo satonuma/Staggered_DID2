@@ -260,8 +260,8 @@ print(f"    解析対象施設数: {len(fac_to_docs)}")
 _multi = sum(1 for docs in fac_to_docs.values() if len(docs) > 1)
 print(f"    複数医師施設: {_multi} 施設")
 
-# --- 視聴データに主施設IDを付与 ---
-viewing_all = viewing.copy()
+# --- 視聴データに主施設IDを付与 (解析対象医師のみ) ---
+viewing_all = viewing[viewing["doctor_id"].isin(analysis_docs_all)].copy()
 viewing_all["facility_id"] = viewing_all["doctor_id"].map(doc_primary.to_dict())
 
 # month_index を付与
