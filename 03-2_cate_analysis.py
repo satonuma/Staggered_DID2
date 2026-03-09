@@ -1354,7 +1354,7 @@ cate_results_json = {
     "cate": cate_json,
     "diff_tests": diff_json,
     "attr_distribution": attr_dist_json,
-    "dimensions": [{"name": d, "levels": [str(lv) for lv in l]} for d, l in CATE_DIMS],
+    "dimensions": [{"name": _CATE_DISP.get(d, d), "levels": [str(lv) for lv in l]} for d, l in CATE_DIMS],
     "version": "v2",
     "note": "施設レベル分析 (複数医師施設対応)",
 }

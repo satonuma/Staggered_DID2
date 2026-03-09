@@ -59,7 +59,7 @@ COV_CONT_COLS = ["n_docs"]  # 施設あたり医師数
 QUINTILE_MAP = {"Z": 0, "L": 1, "M": 2, "H": 3, "VH": 4}
 DOCTOR_QUINTILE_COLS = [
     "MR_VISIT_F2F_ER_QUINTILE_FINAL",      # MR面談関与度
-    "OWNED_MEDIA_ER_QUINTILE_FINAL",       # オウンドメディア関与度
+    # OWNED_MEDIA_ER_QUINTILE_FINAL は e_contents直接集計ブロック（下部）で処理
     "MR_VISIT_REMOTE_ER_QUINTILE_FINAL",   # MRリモート訪問関与度
 ]
 _QUINTILE_DISP = {
