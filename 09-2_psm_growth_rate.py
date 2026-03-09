@@ -582,6 +582,15 @@ if "年齢" in doc_attr_df.columns:
     _n_age_valid = sum(1 for v in _fac_avg_age.values() if v == v)
     print(f"  [fac_avg_age] 施設平均年齢算出: 非欠損施設 {_n_age_valid}/{len(fac_to_docs)}")
 
+# 施設平均医師歴計算 (fac_to_docs確定後)
+_fac_avg_doc_exp: dict = {}
+if "医師歴" in doc_attr_df.columns:
+    for _fac, _docs in fac_to_docs.items():
+        _exps = doc_attr_df[doc_attr_df["doc"].isin(_docs)]["医師歴"].dropna()
+        _fac_avg_doc_exp[_fac] = float(_exps.mean()) if len(_exps) > 0 else float("nan")
+    _n_exp_valid = sum(1 for v in _fac_avg_doc_exp.values() if v == v)
+    print(f"  [fac_avg_doc_exp] 施設平均医師歴算出: 非欠損施設 {_n_exp_valid}/{len(fac_to_docs)}")
+
 # --- DOCTOR_SEGMENT 施設割り当て（全体構成比から最大正乖離セグメント）---
 _fac_doctor_segment: dict = {}
 if "DOCTOR_SEGMENT" in doc_attr_df.columns:
@@ -757,6 +766,16 @@ if _fac_avg_age:
         COV_CONT_COLS.append("fac_avg_age")
     print(f"  fac_avg_age: 平均={unit_df['fac_avg_age'].mean():.1f}歳, 欠損→平均補完")
 
+# 施設平均医師歴をマージ
+if _fac_avg_doc_exp:
+    unit_df["fac_avg_doc_exp"] = unit_df["facility_id"].map(_fac_avg_doc_exp)
+    _gmean_exp = unit_df["fac_avg_doc_exp"].mean()
+    unit_df["fac_avg_doc_exp"] = unit_df["fac_avg_doc_exp"].fillna(
+        _gmean_exp if _gmean_exp == _gmean_exp else 20.0)
+    if "fac_avg_doc_exp" not in COV_CONT_COLS:
+        COV_CONT_COLS.append("fac_avg_doc_exp")
+    print(f"  fac_avg_doc_exp: 平均={unit_df['fac_avg_doc_exp'].mean():.1f}年, 欠損→平均補完")
+
 # 新規施設レベル変数をunit_dfにマージ
 if _fac_doctor_segment:
     unit_df["fac_doctor_segment"] = unit_df["facility_id"].map(_fac_doctor_segment)
@@ -764,6 +783,28 @@ if _fac_doctor_segment:
 if _fac_digital_pref:
     unit_df["fac_digital_pref"] = unit_df["facility_id"].map(_fac_digital_pref)
     print(f"  fac_digital_pref: {unit_df['fac_digital_pref'].value_counts().to_dict()}")
+
+def _qcut_3cat(series_raw, label):
+    """非NaN値のみでqcut(低/中/高)し、元のindexに合わせたSeriesを返す。
+    成功時は (cat_series, levels_list)、失敗時は (None, None)。
+    """
+    valid = series_raw.dropna()
+    if len(valid) < 3 or valid.nunique() < 2:
+        print(f"  [{label}] 有効値不足 ({len(valid)}件, ユニーク{valid.nunique()}種) → スキップ")
+        return None, None
+    try:
+        cats = pd.qcut(valid, q=3, labels=["低", "中", "高"], duplicates="drop").astype(str)
+        result = pd.Series(np.nan, index=series_raw.index, dtype=object)
+        result.loc[cats.index] = cats.values
+        levels = [l for l in ["低", "中", "高"] if (result == l).any()]
+        if len(levels) < 2:
+            print(f"  [{label}] qcut後カテゴリ数{len(levels)}個 → スキップ")
+            return None, None
+        return result, levels
+    except Exception as _e:
+        print(f"  [{label}] qcut失敗: {_e}")
+        return None, None
+
 # 医師クインタイル施設平均スコア → 低/中/高 3分位 → SUBGROUP_SPECS
 for _qcol in DOCTOR_QUINTILE_COLS:
     _cname = _qcol + "_mean"
@@ -771,33 +812,32 @@ for _qcol in DOCTOR_QUINTILE_COLS:
     if _cname not in unit_df.columns:
         print(f"  [{_disp}] unit_df に {_cname} 列なし → スキップ")
         continue
-    _valid = unit_df[_cname].dropna()
-    _n_unique = _valid.nunique()
-    if len(_valid) < 3:
-        print(f"  [{_disp}] 有効施設数不足 ({len(_valid)}) → スキップ")
-        continue
-    if _n_unique < 2:
-        print(f"  [{_disp}] ユニーク値 {_n_unique}個（分散なし） → スキップ")
-        continue
+    # 補完前の生値（NaN補完済みのため，補完前に戻す）
+    _raw = unit_df["facility_id"].map(_fac_quintile_means.get(_qcol, {}))
     _cat_col = _qcol + "_cat"
-    try:
-        _qcat = pd.qcut(
-            unit_df[_cname].fillna(_valid.mean()),
-            q=3, labels=["低", "中", "高"], duplicates="drop"
-        )
-        unit_df[_cat_col] = _qcat.astype(str)
-        _qlevels = [l for l in ["低", "中", "高"] if (unit_df[_cat_col] == l).any()]
-        if len(_qlevels) < 2:
-            print(f"  [{_disp}] qcut後のカテゴリ数が{len(_qlevels)}個 → スキップ")
-            continue
+    _qcat_s, _qlevels = _qcut_3cat(_raw, _disp)
+    if _qcat_s is not None:
+        unit_df[_cat_col] = _qcat_s
         SUBGROUP_SPECS.append((_disp, _cat_col, False, ""))
         print(f"  [{_disp}] {_cat_col}: {unit_df[_cat_col].value_counts().to_dict()}")
-    except Exception as _qe:
-        print(f"  [{_disp}] qcut失敗: {_qe}")
+
+# 施設平均年齢 → 低/中/高
+_age_raw = unit_df["facility_id"].map(_fac_avg_age) if _fac_avg_age else pd.Series(dtype=float)
+_age_cat_s, _ = _qcut_3cat(_age_raw, "施設平均年齢")
+if _age_cat_s is not None:
+    unit_df["fac_age_cat"] = _age_cat_s
+    SUBGROUP_SPECS.append(("施設平均年齢", "fac_age_cat", False, ""))
+    print(f"  fac_age_cat: {unit_df['fac_age_cat'].value_counts().to_dict()}")
+
+# 施設平均医師歴 → 低/中/高
+_exp_raw = unit_df["facility_id"].map(_fac_avg_doc_exp) if _fac_avg_doc_exp else pd.Series(dtype=float)
+_exp_cat_s, _ = _qcut_3cat(_exp_raw, "施設平均医師歴")
+if _exp_cat_s is not None:
+    unit_df["fac_doc_exp_cat"] = _exp_cat_s
+    SUBGROUP_SPECS.append(("施設平均医師歴", "fac_doc_exp_cat", False, ""))
+    print(f"  fac_doc_exp_cat: {unit_df['fac_doc_exp_cat'].value_counts().to_dict()}")
 
 # SUBGROUP_SPECS を動的拡張（列が存在する場合のみ）
-if "fac_avg_age" in unit_df.columns:
-    SUBGROUP_SPECS.append(("施設平均年齢", "fac_avg_age", True, "歳"))
 if "fac_doctor_segment" in unit_df.columns:
     SUBGROUP_SPECS.append(("医師セグメント", "fac_doctor_segment", False, ""))
 if "fac_digital_pref" in unit_df.columns:
