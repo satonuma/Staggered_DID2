@@ -81,9 +81,23 @@ CATE_DIMS = [
 # カラムが存在しない場合は自動スキップ
 QUINTILE_MAP = {"Z": 0, "L": 1, "M": 2, "H": 3, "VH": 4}
 DOCTOR_QUINTILE_COLS = [
-    "MR_VISIT_F2F_ER_QUINTILE_FINAL",   # MR面談関与度
-    "OWNED_MEDIA_ER_QUINTILE_FINAL",    # オウンドメディア関与度
+    "MR_VISIT_F2F_ER_QUINTILE_FINAL",    # MR面談関与度
+    "OWNED_MEDIA_ER_QUINTILE_FINAL",     # オウンドメディア関与度
+    "MR_VISIT_REMOTE_ER_QUINTILE_FINAL", # MRリモート訪問関与度
 ]
+
+# CATE次元の表示名マッピング（09-2 SUBGROUP_SPECSと統一）
+_CATE_DISP: dict = {
+    "baseline_cat":                          "ベースライン納入額",
+    "UHP区分名称":                           "UHP区分",
+    "許可病床数_合計_cat":                   "許可病床数区分",
+    "MR_VISIT_F2F_ER_QUINTILE_FINAL_cat":    "MR面談関与度",
+    "OWNED_MEDIA_ER_QUINTILE_FINAL_cat":     "オウンドメディア親和性",
+    "MR_VISIT_REMOTE_ER_QUINTILE_FINAL_cat": "MRリモート訪問関与度",
+    "fac_age_cat":                           "施設平均年齢",
+    "fac_doctor_segment":                    "医師セグメント",
+    "fac_digital_pref":                      "デジタルch嗜好",
+}
 
 # ===================================================================
 # 属性ファイル設定 ― 分析するカラムをリストで指定
@@ -580,6 +594,57 @@ fac_df["fac_honin"] = fac_df["fac_honin"].astype(str).str.strip()
 
 # [Step 2] doctor_attribute.csv 読み込み (医師属性用)
 doc_attr_df = pd.read_csv(os.path.join(DATA_DIR, FILE_DOCTOR_ATTR))
+# カラム名スペルミス修正
+doc_attr_df = doc_attr_df.rename(columns={"DOCTOR_SEGEMNT": "DOCTOR_SEGMENT"})
+
+# 活動データから医師別MR面談・MR説明会クインタイル列を動的生成
+# （doctor_attribute.csvに存在しない場合のみ生成）
+def _activity_quintile(act_df, doc_ids, act_types, col_label):
+    """指定活動種別のカウントをZ/L/M/H/VH クインタイルに変換。
+    ゼロ = Z、非ゼロを4等分して L/M/H/VH を割り当てる。"""
+    counts = act_df[act_df["活動種別"].isin(act_types)].groupby("doc").size()
+    s = pd.Series(0.0, index=list(doc_ids))
+    for d, c in counts.items():
+        if d in s.index:
+            s[d] = float(c)
+    result = pd.Series("Z", index=s.index, dtype=object)
+    nonzero = s[s > 0]
+    if len(nonzero) >= 4:
+        try:
+            nz_q = pd.qcut(nonzero, q=4, labels=["L", "M", "H", "VH"], duplicates="drop")
+            result.loc[nz_q.index] = nz_q.astype(str)
+        except Exception:
+            med = nonzero.median()
+            result.loc[nonzero[nonzero <= med].index] = "L"
+            result.loc[nonzero[nonzero > med].index] = "H"
+    elif len(nonzero) > 0:
+        med = nonzero.median()
+        result.loc[nonzero[nonzero <= med].index] = "L"
+        result.loc[nonzero[nonzero > med].index] = "H"
+    dist = result.value_counts().to_dict()
+    print(f"  [{col_label}] 活動データから生成: {dist}")
+    return result
+
+_act_ent = activity_raw[
+    activity_raw["品目コード"].astype(str).str.strip().str.zfill(5) == ENT_PRODUCT_CODE
+].copy()
+_all_doc_ids = set(doc_attr_df["doc"])
+
+if "MR_VISIT_F2F_ER_QUINTILE_FINAL" not in doc_attr_df.columns:
+    _f2f_q = _activity_quintile(_act_ent, _all_doc_ids, ["面談", "面談_アポ"], "MR_VISIT_F2F")
+    doc_attr_df["MR_VISIT_F2F_ER_QUINTILE_FINAL"] = doc_attr_df["doc"].map(_f2f_q.to_dict())
+
+if "MR_VISIT_REMOTE_ER_QUINTILE_FINAL" not in doc_attr_df.columns:
+    _remote_q = _activity_quintile(_act_ent, _all_doc_ids, ["説明会"], "MR_VISIT_REMOTE")
+    doc_attr_df["MR_VISIT_REMOTE_ER_QUINTILE_FINAL"] = doc_attr_df["doc"].map(_remote_q.to_dict())
+
+if "OWNED_MEDIA_ER_QUINTILE_FINAL" not in doc_attr_df.columns:
+    # e_contentsの視聴数をオウンドメディア関与度の代理指標として使用
+    _dig_ent = digital_raw[
+        digital_raw["品目コード"].astype(str).str.strip().str.zfill(5) == ENT_PRODUCT_CODE
+    ].copy()
+    _econ_q = _activity_quintile(_dig_ent, _all_doc_ids, ["e_contents"], "OWNED_MEDIA")
+    doc_attr_df["OWNED_MEDIA_ER_QUINTILE_FINAL"] = doc_attr_df["doc"].map(_econ_q.to_dict())
 
 _doc_to_fac   = dict(zip(fac_doc_list["doc"], fac_doc_list["fac"]))
 _doc_to_honin = dict(zip(fac_doc_list["doc"], fac_doc_list["fac_honin"]))
@@ -693,7 +758,10 @@ if "DOCTOR_SEGMENT" in doc_attr_df.columns:
     _seg_all = doc_attr_df[doc_attr_df["doc"].isin(analysis_docs_all)][["doc", "DOCTOR_SEGMENT"]].dropna()
     _seg_overall_prop = _seg_all["DOCTOR_SEGMENT"].value_counts(normalize=True)
     for _fac, _docs in fac_to_docs.items():
-        _fac_seg_prop = _seg_all[_seg_all["doc"].isin(_docs)]["DOCTOR_SEGMENT"].value_counts(normalize=True)
+        _fac_seg_data = _seg_all[_seg_all["doc"].isin(_docs)]
+        if len(_fac_seg_data) == 0:
+            continue  # この施設はDOCTOR_SEGMENTデータなし → NaN
+        _fac_seg_prop = _fac_seg_data["DOCTOR_SEGMENT"].value_counts(normalize=True)
         _dev = {seg: _fac_seg_prop.get(seg, 0.0) - _seg_overall_prop.get(seg, 0.0)
                 for seg in _seg_overall_prop.index}
         _fac_doctor_segment[_fac] = max(_dev, key=_dev.get)
@@ -705,21 +773,14 @@ if "DIGITAL_CHANNEL_PREFERENCE" in doc_attr_df.columns:
     _dcp_all = doc_attr_df[doc_attr_df["doc"].isin(analysis_docs_all)][["doc", "DIGITAL_CHANNEL_PREFERENCE"]].dropna()
     _dcp_overall_prop = _dcp_all["DIGITAL_CHANNEL_PREFERENCE"].value_counts(normalize=True)
     for _fac, _docs in fac_to_docs.items():
-        _fac_dcp_prop = _dcp_all[_dcp_all["doc"].isin(_docs)]["DIGITAL_CHANNEL_PREFERENCE"].value_counts(normalize=True)
+        _fac_dcp_data = _dcp_all[_dcp_all["doc"].isin(_docs)]
+        if len(_fac_dcp_data) == 0:
+            continue  # この施設はDIGITAL_CHANNEL_PREFERENCEデータなし → NaN
+        _fac_dcp_prop = _fac_dcp_data["DIGITAL_CHANNEL_PREFERENCE"].value_counts(normalize=True)
         _dev = {seg: _fac_dcp_prop.get(seg, 0.0) - _dcp_overall_prop.get(seg, 0.0)
                 for seg in _dcp_overall_prop.index}
         _fac_digital_pref[_fac] = max(_dev, key=_dev.get)
     print(f"  [DIGITAL_CHANNEL_PREFERENCE] {len(_fac_digital_pref)} 施設割り当て完了")
-
-# --- MR_VISIT_REMOTE_ER_QUINTILE_FINAL 施設割り当て（施設内医師の最頻値）---
-_fac_mr_remote: dict = {}
-if "MR_VISIT_REMOTE_ER_QUINTILE_FINAL" in doc_attr_df.columns:
-    _mrr_all = doc_attr_df[doc_attr_df["doc"].isin(analysis_docs_all)][["doc", "MR_VISIT_REMOTE_ER_QUINTILE_FINAL"]].dropna()
-    for _fac, _docs in fac_to_docs.items():
-        _vals = _mrr_all[_mrr_all["doc"].isin(_docs)]["MR_VISIT_REMOTE_ER_QUINTILE_FINAL"]
-        if len(_vals) > 0:
-            _fac_mr_remote[_fac] = _vals.mode().iloc[0]
-    print(f"  [MR_VISIT_REMOTE_ER_QUINTILE_FINAL] {len(_fac_mr_remote)} 施設割り当て完了")
 
 print(f"\n  主施設割り当て完了:")
 print(f"    解析対象医師数: {len(analysis_docs_all)}")
@@ -929,18 +990,6 @@ if _fac_digital_pref:
     CATE_DIMS.append(("fac_digital_pref", _dcp_levels))
     print(f"  CATE次元追加: fac_digital_pref → {_dcp_levels}")
 
-# MR_VISIT_REMOTE_ER_QUINTILE_FINAL → CATE次元
-if _fac_mr_remote:
-    _mrr_df = pd.DataFrame({"facility_id": list(fac_to_docs.keys())})
-    _mrr_df["fac_mr_remote_quintile"] = _mrr_df["facility_id"].map(_fac_mr_remote)
-    _mrr_levels = [v for v in ["Z", "L", "M", "H", "VH"]
-                   if (_mrr_df["fac_mr_remote_quintile"] == v).any()]
-    if not _mrr_levels:
-        _mrr_levels = sorted(_mrr_df["fac_mr_remote_quintile"].dropna().unique().tolist(), key=str)
-    panel = panel.merge(_mrr_df[["facility_id", "fac_mr_remote_quintile"]], on="facility_id", how="left")
-    CATE_DIMS.append(("fac_mr_remote_quintile", _mrr_levels))
-    print(f"  CATE次元追加: fac_mr_remote_quintile → {_mrr_levels}")
-
 # 属性分布
 print("\n[属性分布]")
 for attr, levels in CATE_DIMS:
@@ -963,6 +1012,23 @@ print("=" * 70)
 
 N_BOOT = 150
 cate_results = {}
+
+# 処置施設が1件以下のレベルをCATEループ前に除去（N=0でATT=0/空欄になる問題対策）
+_treated_units = set(panel[panel["treated"] == 1]["unit_id"].unique())
+_cate_dims_filtered = []
+for _dn, _lvls in CATE_DIMS:
+    if _dn not in panel.columns:
+        _cate_dims_filtered.append((_dn, _lvls))
+        continue
+    _valid_lvls = [
+        l for l in _lvls
+        if panel[(panel["treated"] == 1) & (panel[_dn].astype(str) == str(l))]["unit_id"].nunique() >= 2
+    ]
+    if _valid_lvls:
+        _cate_dims_filtered.append((_dn, _valid_lvls))
+    else:
+        print(f"  [{_dn}] 処置施設が全レベルで2未満 → CATE次元スキップ")
+CATE_DIMS = _cate_dims_filtered
 
 for dim_name, levels in CATE_DIMS:
     print(f"\n{'='*50}")
@@ -1127,7 +1193,7 @@ for idx, (dim_name, levels) in enumerate(CATE_DIMS):
         bar_colors.append(colors_cycle[i % len(colors_cycle)])
 
     if not atts:
-        ax.set_title(dim_name)
+        ax.set_title(_CATE_DISP.get(dim_name, dim_name))
         continue
 
     ax.axvline(0, color="gray", lw=0.8, ls=":")
@@ -1139,7 +1205,7 @@ for idx, (dim_name, levels) in enumerate(CATE_DIMS):
     ax.set_yticks(y_positions)
     ax.set_yticklabels(y_labels)
     ax.set_xlabel("ATT")
-    ax.set_title(dim_name)
+    ax.set_title(_CATE_DISP.get(dim_name, dim_name))
     ax.grid(True, alpha=0.3, axis="x")
 
 # 未使用のaxesを非表示
@@ -1180,7 +1246,7 @@ if plot_dims:
                     color=col, ms=3, label=f"{level} (N={r['n']})", lw=1)
         ax.set_xlabel("イベント時間 (月)")
         ax.set_ylabel("ATT")
-        ax.set_title(dim_name)
+        ax.set_title(_CATE_DISP.get(dim_name, dim_name))
         ax.legend(fontsize=8)
         ax.grid(True, alpha=0.3)
 
@@ -1258,7 +1324,7 @@ for dim_name, levels in CATE_DIMS:
             dim_json[str(level)]["dynamic"] = r["dynamic"][
                 ["event_time", "att", "se", "ci_lo", "ci_hi"]
             ].to_dict("records")
-    cate_json[dim_name] = dim_json
+    cate_json[_CATE_DISP.get(dim_name, dim_name)] = dim_json
 
 # サブグループ間差の検定結果
 diff_json = {}
@@ -1271,7 +1337,7 @@ for dim_name, diffs in diff_results.items():
             "p": float(d["p"]) if not np.isnan(d["p"]) else None,
             "sig": d["sig"],
         }
-    diff_json[dim_name] = dim_diff
+    diff_json[_CATE_DISP.get(dim_name, dim_name)] = dim_diff
 
 # 属性分布テーブル
 attr_dist_json = {}

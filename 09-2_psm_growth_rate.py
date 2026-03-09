@@ -64,7 +64,7 @@ DOCTOR_QUINTILE_COLS = [
 ]
 _QUINTILE_DISP = {
     "MR_VISIT_F2F_ER_QUINTILE_FINAL":    "MR面談関与度",
-    "OWNED_MEDIA_ER_QUINTILE_FINAL":     "オウンドメディア関与度",
+    "OWNED_MEDIA_ER_QUINTILE_FINAL":     "オウンドメディア親和性",
     "MR_VISIT_REMOTE_ER_QUINTILE_FINAL": "MRリモート訪問関与度",
 }
 # ===================================================================
@@ -492,6 +492,57 @@ fac_doc_list["fac_honin"] = fac_doc_list["fac_honin"].astype(str).str.strip()
 fac_df       = pd.read_csv(os.path.join(DATA_DIR, FILE_FACILITY_MASTER))
 fac_df["fac_honin"] = fac_df["fac_honin"].astype(str).str.strip()
 doc_attr_df  = pd.read_csv(os.path.join(DATA_DIR, FILE_DOCTOR_ATTR))
+# カラム名スペルミス修正
+doc_attr_df = doc_attr_df.rename(columns={"DOCTOR_SEGEMNT": "DOCTOR_SEGMENT"})
+
+# 活動データから医師別MR面談・MR説明会クインタイル列を動的生成
+# （doctor_attribute.csvに存在しない場合のみ生成）
+def _activity_quintile(act_df, doc_ids, act_types, col_label):
+    """指定活動種別のカウントをZ/L/M/H/VH クインタイルに変換。
+    ゼロ = Z、非ゼロを4等分して L/M/H/VH を割り当てる。"""
+    counts = act_df[act_df["活動種別"].isin(act_types)].groupby("doc").size()
+    s = pd.Series(0.0, index=list(doc_ids))
+    for d, c in counts.items():
+        if d in s.index:
+            s[d] = float(c)
+    result = pd.Series("Z", index=s.index, dtype=object)
+    nonzero = s[s > 0]
+    if len(nonzero) >= 4:
+        try:
+            nz_q = pd.qcut(nonzero, q=4, labels=["L", "M", "H", "VH"], duplicates="drop")
+            result.loc[nz_q.index] = nz_q.astype(str)
+        except Exception:
+            med = nonzero.median()
+            result.loc[nonzero[nonzero <= med].index] = "L"
+            result.loc[nonzero[nonzero > med].index] = "H"
+    elif len(nonzero) > 0:
+        med = nonzero.median()
+        result.loc[nonzero[nonzero <= med].index] = "L"
+        result.loc[nonzero[nonzero > med].index] = "H"
+    dist = result.value_counts().to_dict()
+    print(f"  [{col_label}] 活動データから生成: {dist}")
+    return result
+
+_act_ent = activity_raw[
+    activity_raw["品目コード"].astype(str).str.strip().str.zfill(5) == ENT_PRODUCT_CODE
+].copy()
+_all_doc_ids = set(doc_attr_df["doc"])
+
+if "MR_VISIT_F2F_ER_QUINTILE_FINAL" not in doc_attr_df.columns:
+    _f2f_q = _activity_quintile(_act_ent, _all_doc_ids, ["面談", "面談_アポ"], "MR_VISIT_F2F")
+    doc_attr_df["MR_VISIT_F2F_ER_QUINTILE_FINAL"] = doc_attr_df["doc"].map(_f2f_q.to_dict())
+
+if "MR_VISIT_REMOTE_ER_QUINTILE_FINAL" not in doc_attr_df.columns:
+    _remote_q = _activity_quintile(_act_ent, _all_doc_ids, ["説明会"], "MR_VISIT_REMOTE")
+    doc_attr_df["MR_VISIT_REMOTE_ER_QUINTILE_FINAL"] = doc_attr_df["doc"].map(_remote_q.to_dict())
+
+if "OWNED_MEDIA_ER_QUINTILE_FINAL" not in doc_attr_df.columns:
+    # e_contentsの視聴数をオウンドメディア関与度の代理指標として使用
+    _dig_ent = digital_raw[
+        digital_raw["品目コード"].astype(str).str.strip().str.zfill(5) == ENT_PRODUCT_CODE
+    ].copy()
+    _econ_q = _activity_quintile(_dig_ent, _all_doc_ids, ["e_contents"], "OWNED_MEDIA")
+    doc_attr_df["OWNED_MEDIA_ER_QUINTILE_FINAL"] = doc_attr_df["doc"].map(_econ_q.to_dict())
 
 _doc_to_fac   = dict(zip(fac_doc_list["doc"], fac_doc_list["fac"]))
 _doc_to_honin = dict(zip(fac_doc_list["doc"], fac_doc_list["fac_honin"]))
@@ -597,7 +648,10 @@ if "DOCTOR_SEGMENT" in doc_attr_df.columns:
     _seg_all = doc_attr_df[doc_attr_df["doc"].isin(analysis_docs_all)][["doc", "DOCTOR_SEGMENT"]].dropna()
     _seg_overall_prop = _seg_all["DOCTOR_SEGMENT"].value_counts(normalize=True)
     for _fac, _docs in fac_to_docs.items():
-        _fac_seg_prop = _seg_all[_seg_all["doc"].isin(_docs)]["DOCTOR_SEGMENT"].value_counts(normalize=True)
+        _fac_seg_data = _seg_all[_seg_all["doc"].isin(_docs)]
+        if len(_fac_seg_data) == 0:
+            continue  # この施設はDOCTOR_SEGMENTデータなし → NaN
+        _fac_seg_prop = _fac_seg_data["DOCTOR_SEGMENT"].value_counts(normalize=True)
         _dev = {seg: _fac_seg_prop.get(seg, 0.0) - _seg_overall_prop.get(seg, 0.0)
                 for seg in _seg_overall_prop.index}
         _fac_doctor_segment[_fac] = max(_dev, key=_dev.get)
@@ -609,7 +663,10 @@ if "DIGITAL_CHANNEL_PREFERENCE" in doc_attr_df.columns:
     _dcp_all = doc_attr_df[doc_attr_df["doc"].isin(analysis_docs_all)][["doc", "DIGITAL_CHANNEL_PREFERENCE"]].dropna()
     _dcp_overall_prop = _dcp_all["DIGITAL_CHANNEL_PREFERENCE"].value_counts(normalize=True)
     for _fac, _docs in fac_to_docs.items():
-        _fac_dcp_prop = _dcp_all[_dcp_all["doc"].isin(_docs)]["DIGITAL_CHANNEL_PREFERENCE"].value_counts(normalize=True)
+        _fac_dcp_data = _dcp_all[_dcp_all["doc"].isin(_docs)]
+        if len(_fac_dcp_data) == 0:
+            continue  # この施設はDIGITAL_CHANNEL_PREFERENCEデータなし → NaN
+        _fac_dcp_prop = _fac_dcp_data["DIGITAL_CHANNEL_PREFERENCE"].value_counts(normalize=True)
         _dev = {seg: _fac_dcp_prop.get(seg, 0.0) - _dcp_overall_prop.get(seg, 0.0)
                 for seg in _dcp_overall_prop.index}
         _fac_digital_pref[_fac] = max(_dev, key=_dev.get)
@@ -836,6 +893,36 @@ if _exp_cat_s is not None:
     unit_df["fac_doc_exp_cat"] = _exp_cat_s
     SUBGROUP_SPECS.append(("施設平均医師歴", "fac_doc_exp_cat", False, ""))
     print(f"  fac_doc_exp_cat: {unit_df['fac_doc_exp_cat'].value_counts().to_dict()}")
+
+# オウンドメディア親和性: 施設別eコンテンツ視聴数（直接計算）
+# ゼロ多数のためqcutではなく: 0→「低」、非ゼロをmedianで「中」/「高」に分割
+_dig_ent_ec = digital_raw[
+    (digital_raw["品目コード"].astype(str).str.strip().str.zfill(5) == ENT_PRODUCT_CODE)
+    & (digital_raw["活動種別"] == "e_contents")
+]
+_ec_by_doc = _dig_ent_ec.groupby("doc").size()
+_fac_ec_cnt = {
+    fac: float(sum(_ec_by_doc.get(d, 0) for d in docs))
+    for fac, docs in fac_to_docs.items()
+}
+_ec_fac_raw = unit_df["facility_id"].map(_fac_ec_cnt).fillna(0.0)
+_ec_nonzero = _ec_fac_raw[_ec_fac_raw > 0]
+if len(_ec_nonzero) >= 4:
+    _ec_med = _ec_nonzero.median()
+    _ec_cat = pd.Series("低", index=_ec_fac_raw.index, dtype=object)
+    _ec_cat[(_ec_fac_raw > 0) & (_ec_fac_raw <= _ec_med)] = "中"
+    _ec_cat[_ec_fac_raw > _ec_med] = "高"
+    unit_df["fac_owned_media_cat"] = _ec_cat
+    SUBGROUP_SPECS.append(("オウンドメディア親和性", "fac_owned_media_cat", False, ""))
+    print(f"  fac_owned_media_cat (低/中/高): {unit_df['fac_owned_media_cat'].value_counts().to_dict()}")
+elif len(_ec_nonzero) >= 2:
+    _ec_cat = pd.Series("なし", index=_ec_fac_raw.index, dtype=object)
+    _ec_cat[_ec_fac_raw > 0] = "あり"
+    unit_df["fac_owned_media_cat"] = _ec_cat
+    SUBGROUP_SPECS.append(("オウンドメディア親和性", "fac_owned_media_cat", False, ""))
+    print(f"  fac_owned_media_cat (あり/なし): {unit_df['fac_owned_media_cat'].value_counts().to_dict()}")
+else:
+    print("  [オウンドメディア親和性] 視聴施設数不足 → スキップ")
 
 # SUBGROUP_SPECS を動的拡張（列が存在する場合のみ）
 if "fac_doctor_segment" in unit_df.columns:
