@@ -107,32 +107,42 @@ LAST_ELIGIBLE_MONTH = 29
 COST_PER_DISTRIBUTION = 0.5  # 万円
 
 # 視聴回数ビン定義 (var, cumul_lo, cumul_hi, 表示ラベル)
+# cumulative_views==N-1 のとき「N回目の視聴」に相当
+# 1〜9回目は個別、10回目以降は5刻みグループ
 VIEW_BINS = [
-    ("view_1st",    0,    0,   "1回目"),
-    ("view_2nd",    1,    2,   "2回目"),
-    ("view_3rd",    3,    5,   "3回目"),
-    ("view_4th",    6,   10,   "4回目"),
-    ("view_5th",   11,   15,   "5回目"),
-    ("view_6th",   16,   20,   "6回目"),
-    ("view_7th",   21,   25,   "7回目"),
-    ("view_8th",   26,   30,   "8回目"),
-    ("view_9th",   31,   35,   "9回目"),
-    ("view_10plus", 36, 9999,  "10回以上"),
+    ("view_1",      0,   0,   "1回目"),
+    ("view_2",      1,   1,   "2回目"),
+    ("view_3",      2,   2,   "3回目"),
+    ("view_4",      3,   3,   "4回目"),
+    ("view_5",      4,   4,   "5回目"),
+    ("view_6",      5,   5,   "6回目"),
+    ("view_7",      6,   6,   "7回目"),
+    ("view_8",      7,   7,   "8回目"),
+    ("view_9",      8,   8,   "9回目"),
+    ("view_10_14",  9,  13,   "10〜14回"),
+    ("view_15_19", 14,  18,   "15〜19回"),
+    ("view_20_24", 19,  23,   "20〜24回"),
+    ("view_25_29", 24,  28,   "25〜29回"),
+    ("view_30plus", 29, 9999, "30回以上"),
 ]
 VIEW_VARS   = [b[0] for b in VIEW_BINS]
 VIEW_LABELS = [b[3] for b in VIEW_BINS]
-# 各ビンの期待効果計算に使う累積回数レンジ (None = initial_viewing_rate を使用)
+# 各ビンの期待効果計算に使う継続率レンジ (None = initial_viewing_rate を使用)
 _BIN_CONT_RANGES = {
-    "view_1st":    None,
-    "view_2nd":    range(1, 3),
-    "view_3rd":    range(3, 6),
-    "view_4th":    range(6, 11),
-    "view_5th":    range(11, 16),
-    "view_6th":    range(16, 21),
-    "view_7th":    range(21, 26),
-    "view_8th":    range(26, 31),
-    "view_9th":    range(31, 36),
-    "view_10plus": range(36, 40),
+    "view_1":      None,
+    "view_2":      range(1, 2),
+    "view_3":      range(2, 3),
+    "view_4":      range(3, 4),
+    "view_5":      range(4, 5),
+    "view_6":      range(5, 6),
+    "view_7":      range(6, 7),
+    "view_8":      range(7, 8),
+    "view_9":      range(8, 9),
+    "view_10_14":  range(9, 14),
+    "view_15_19":  range(14, 19),
+    "view_20_24":  range(19, 24),
+    "view_25_29":  range(24, 29),
+    "view_30plus": range(29, 35),
 }
 
 CHANNEL_DISPLAY = {
@@ -508,7 +518,7 @@ for var, lo, hi, label in VIEW_BINS:
 # ================================================================
 print("\n[最適配信戦略]")
 
-new_facility_expected = expected_effects["view_1st"]
+new_facility_expected = expected_effects.get("view_1", np.nan)
 
 threshold_message = None
 for var, lo, hi, label in VIEW_BINS[1:]:
@@ -553,7 +563,7 @@ ax1.axhline(0, color="black", linewidth=1)
 
 # (b) 配信優先順位（期待効果でソート）
 ax5 = fig.add_subplot(2, 3, 3)
-priority_data = [(("新規" if var == "view_1st" else "既存") + label,
+priority_data = [(("新規" if var == "view_1" else "既存") + label,
                   expected_effects[var])
                  for var, lo, hi, label in valid_bins
                  if not np.isnan(expected_effects[var])]
@@ -581,7 +591,7 @@ ax2.grid(alpha=0.3)
 
 # (d) 期待効果の比較
 ax3 = fig.add_subplot(2, 3, 5)
-exp_labels_plot = [("新規\n" if var == "view_1st" else "") + label
+exp_labels_plot = [("新規\n" if var == "view_1" else "") + label
                    for var, lo, hi, label in valid_bins
                    if not np.isnan(expected_effects[var])]
 exp_values_plot = [expected_effects[var] for var, lo, hi, label in valid_bins
@@ -678,6 +688,7 @@ print(" チャネル別 視聴回数別限界効果分析")
 print("=" * 70)
 
 channel_me_results = {}
+channel_exp_results = {}
 
 for _ch in CONTENT_TYPES:
     _ch_disp = CHANNEL_DISPLAY.get(_ch, _ch)
@@ -744,6 +755,40 @@ for _ch in CONTENT_TYPES:
 
     channel_me_results[_ch] = _me
 
+    # チャネル別継続率
+    _ch_fp = _ch_panel.sort_values(["facility_id", "month_index"]).copy()
+    _ch_fp["next_views"] = _ch_fp.groupby("facility_id")["current_views"].shift(-1)
+    _ch_cont_rates = {}
+    for _n in range(0, 40):
+        _cohort = _ch_fp[_ch_fp["cumulative_views"] == _n]
+        _valid = _cohort["next_views"].dropna()
+        _ch_cont_rates[_n] = float((_valid > 0).mean()) if len(_valid) > 0 else 0.0
+
+    # チャネル別初回視聴率
+    _ch_never = _ch_panel[_ch_panel["cumulative_views"] == 0]
+    _ch_init_rate = (
+        float((_ch_never["current_views"] > 0).sum() / len(_ch_never))
+        if len(_ch_never) > 0 else 0.0
+    )
+
+    # チャネル別期待効果
+    _ch_exp = {}
+    for _var, _lo, _hi, _lbl in VIEW_BINS:
+        _me_val = _me[_var]["coefficient"]
+        _cr_range = _BIN_CONT_RANGES[_var]
+        if _cr_range is None:
+            _prob = _ch_init_rate
+        else:
+            _vals = [_ch_cont_rates.get(_i, 0.0) for _i in _cr_range]
+            _prob = float(np.mean(_vals)) if _vals else 0.0
+        _ch_exp[_var] = float(_prob * _me_val) if not np.isnan(_me_val) else np.nan
+
+    channel_exp_results[_ch] = _ch_exp
+    print(f"  初回視聴率: {_ch_init_rate:.1%}  期待効果(1回目): "
+          f"{_ch_exp.get('view_1', np.nan):.2f}万円"
+          if not np.isnan(_ch_exp.get("view_1", np.nan)) else
+          f"  初回視聴率: {_ch_init_rate:.1%}  期待効果(1回目): n/a")
+
 # ---- チャネル別 限界効果 比較グラフ ----
 _n_ch = len(CONTENT_TYPES)
 _fig_ch, _axes_ch = plt.subplots(1, _n_ch + 1, figsize=(5 * (_n_ch + 1), 5), sharey=True)
@@ -783,6 +828,48 @@ plt.savefig(_out_ch, dpi=150, bbox_inches="tight")
 plt.close(_fig_ch)
 print(f"\n  チャネル別グラフを保存: {_out_ch}")
 
+# ---- チャネル別 期待効果 比較グラフ ----
+_fig_ch_exp, _axes_ch_exp = plt.subplots(
+    1, _n_ch + 1, figsize=(5 * (_n_ch + 1), 5), sharey=True
+)
+_fig_ch_exp.suptitle(
+    "チャネル別 期待効果（視聴確率×限界効果, 施設レベル ver2）",
+    fontsize=12, fontweight="bold"
+)
+
+# 全体
+_ax_exp = _axes_ch_exp[0]
+_ee_all = [
+    expected_effects[v] if not np.isnan(expected_effects.get(v, np.nan)) else 0.0
+    for v in VIEW_VARS
+]
+_ax_exp.bar(VIEW_LABELS, _ee_all, color="#555555", alpha=0.7)
+_ax_exp.axhline(0, color="black", linewidth=0.8)
+_ax_exp.set_title("全体", fontsize=10, fontweight="bold")
+_ax_exp.set_ylabel("期待効果（万円）", fontsize=9)
+_ax_exp.tick_params(axis="x", rotation=45, labelsize=7)
+_ax_exp.grid(axis="y", alpha=0.3)
+
+for _i, _ch in enumerate(CONTENT_TYPES):
+    _ax_exp = _axes_ch_exp[_i + 1]
+    _exp_ch = channel_exp_results[_ch]
+    _ee_ch = [
+        _exp_ch[v] if not np.isnan(_exp_ch.get(v, np.nan)) else 0.0
+        for v in VIEW_VARS
+    ]
+    _ax_exp.bar(VIEW_LABELS, _ee_ch,
+                color=_ch_colors[_i % len(_ch_colors)], alpha=0.7)
+    _ax_exp.axhline(0, color="black", linewidth=0.8)
+    _ax_exp.set_title(CHANNEL_DISPLAY.get(_ch, _ch), fontsize=10, fontweight="bold")
+    _ax_exp.tick_params(axis="x", rotation=45, labelsize=7)
+    _ax_exp.grid(axis="y", alpha=0.3)
+
+plt.tight_layout()
+_out_ch_exp = os.path.join(SCRIPT_DIR, f"intensive_margin_channel_exp_v2{_suffix}.png")
+plt.savefig(_out_ch_exp, dpi=150, bbox_inches="tight")
+plt.close(_fig_ch_exp)
+print(f"\n  チャネル別期待効果グラフを保存: {_out_ch_exp}")
+
 # JSON にチャネル別結果を追記
 output_json["channel_marginal_effects"] = {
     _ch: {v: {k2: _safe_float(vv2) if k2 != "sig" else vv2
@@ -790,9 +877,13 @@ output_json["channel_marginal_effects"] = {
            for v, d in _me.items()}
     for _ch, _me in channel_me_results.items()
 }
+output_json["channel_expected_effects"] = {
+    _ch: {v: _safe_float(ee) for v, ee in _exp.items()}
+    for _ch, _exp in channel_exp_results.items()
+}
 with open(output_path, "w", encoding="utf-8") as f:
     json.dump(output_json, f, ensure_ascii=False, indent=2)
-print(f"  channel_marginal_effects を JSON に追記: {output_path}")
+print(f"  channel_marginal_effects / channel_expected_effects を JSON に追記: {output_path}")
 
 print("\n" + "=" * 70)
 print(" 分析完了 (ver2: 施設レベル)")

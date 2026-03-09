@@ -707,7 +707,8 @@ png_files = [
     (f"cate_results_v2{_suffix}.png",             "cate_results_v2.png"),
     (f"cate_dynamic_effects_v2{_suffix}.png",     "cate_dynamic_effects_v2.png"),
     (f"intensive_extensive_margin_v2{_suffix}.png","intensive_extensive_margin_v2.png"),
-    (f"intensive_margin_channel_v2{_suffix}.png",  "intensive_margin_channel_v2.png"),
+    (f"intensive_margin_channel_v2{_suffix}.png",      "intensive_margin_channel_v2.png"),
+    (f"intensive_margin_channel_exp_v2{_suffix}.png",  "intensive_margin_channel_exp_v2.png"),
     (f"propensity_score_analysis_v2{_suffix}.png","propensity_score_analysis_v2.png"),
     (f"mr_activity_mediation{_suffix}.png",       "mr_activity_mediation.png"),
     ("mr_digital_balance.png",                    "mr_digital_balance.png"),
@@ -1867,6 +1868,16 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 </p>
 {% endif %}
 
+{% if png_intensive_channel_exp %}
+<h4 style="margin-top:24px;">チャネル別 視聴回数別期待効果</h4>
+<div class="img-container">
+  <img src="data:image/png;base64,{{ png_intensive_channel_exp }}" alt="Channel Intensive Expected Effect">
+</div>
+<p style="font-size:0.9em; color:#616161; margin-top:8px;">
+  チャネル別の期待効果 = チャネル別視聴継続率 × チャネル別限界効果。1〜9回目は個別、10回目以降は5刻みグループ。
+</p>
+{% endif %}
+
 {% else %}
 <p>医師視聴パターン分析結果が見つかりません。<code>05_intensive_extensive_margin.py</code>を実行してください。</p>
 {% endif %}
@@ -2750,7 +2761,8 @@ template_data = {
     "png_cate": existing_pngs.get("cate_results_v2.png", ""),
     "png_cate_dyn": existing_pngs.get("cate_dynamic_effects_v2.png", ""),
     "png_physician_viewing":  existing_pngs.get("intensive_extensive_margin_v2.png", ""),
-    "png_intensive_channel":  existing_pngs.get("intensive_margin_channel_v2.png", ""),
+    "png_intensive_channel":     existing_pngs.get("intensive_margin_channel_v2.png", ""),
+    "png_intensive_channel_exp": existing_pngs.get("intensive_margin_channel_exp_v2.png", ""),
     "png_propensity_score": existing_pngs.get("propensity_score_analysis_v2.png", ""),
     "png_mr_mediation": existing_pngs.get("mr_activity_mediation.png", ""),
     "png_mr_balance": existing_pngs.get("mr_digital_balance.png", ""),
