@@ -609,16 +609,21 @@ if "DIGITAL_CHANNEL_PREFERENCE" in doc_attr_df.columns:
 # 医師クインタイル施設平均スコア計算 (fac_to_docs確定後)
 _fac_quintile_means: dict = {}
 for _qcol in DOCTOR_QUINTILE_COLS:
-    if _qcol in doc_attr_df.columns:
-        _qnum = doc_attr_df[["doc", _qcol]].copy()
-        _qnum[_qcol + "_num"] = _qnum[_qcol].map(QUINTILE_MAP)
-        _fac_q: dict = {}
-        for _fac, _docs in fac_to_docs.items():
-            _vals = _qnum[_qnum["doc"].isin(_docs)][_qcol + "_num"].dropna()
-            _fac_q[_fac] = float(_vals.mean()) if len(_vals) > 0 else float("nan")
-        _fac_quintile_means[_qcol] = _fac_q
-        _n_valid = sum(1 for v in _fac_q.values() if v == v)
-        print(f"  [{_qcol}] 施設平均スコア算出: 非欠損施設 {_n_valid}/{len(fac_to_docs)}")
+    if _qcol not in doc_attr_df.columns:
+        print(f"  [{_qcol}] 列が doctor_attribute.csv に存在しない → スキップ")
+        continue
+    _qnum = doc_attr_df[["doc", _qcol]].copy()
+    _n_raw_notna = _qnum[_qcol].notna().sum()
+    _qnum[_qcol + "_num"] = _qnum[_qcol].map(QUINTILE_MAP)
+    _n_mapped = _qnum[_qcol + "_num"].notna().sum()
+    _fac_q: dict = {}
+    for _fac, _docs in fac_to_docs.items():
+        _vals = _qnum[_qnum["doc"].isin(_docs)][_qcol + "_num"].dropna()
+        _fac_q[_fac] = float(_vals.mean()) if len(_vals) > 0 else float("nan")
+    _fac_quintile_means[_qcol] = _fac_q
+    _n_valid = sum(1 for v in _fac_q.values() if v == v)
+    print(f"  [{_qcol}] 列あり: 医師{_n_raw_notna}名非欠損, マップ成功{_n_mapped}名"
+          f" → 施設平均スコア: 非欠損施設 {_n_valid}/{len(fac_to_docs)}")
 
 # 視聴データに主施設ID付与 (解析対象医師のみ)
 viewing_all = viewing[viewing["doc"].isin(analysis_docs_all)].copy()
@@ -762,10 +767,17 @@ if _fac_digital_pref:
 # 医師クインタイル施設平均スコア → 低/中/高 3分位 → SUBGROUP_SPECS
 for _qcol in DOCTOR_QUINTILE_COLS:
     _cname = _qcol + "_mean"
+    _disp = _QUINTILE_DISP.get(_qcol, _qcol)
     if _cname not in unit_df.columns:
+        print(f"  [{_disp}] unit_df に {_cname} 列なし → スキップ")
         continue
     _valid = unit_df[_cname].dropna()
+    _n_unique = _valid.nunique()
     if len(_valid) < 3:
+        print(f"  [{_disp}] 有効施設数不足 ({len(_valid)}) → スキップ")
+        continue
+    if _n_unique < 2:
+        print(f"  [{_disp}] ユニーク値 {_n_unique}個（分散なし） → スキップ")
         continue
     _cat_col = _qcol + "_cat"
     try:
@@ -775,11 +787,13 @@ for _qcol in DOCTOR_QUINTILE_COLS:
         )
         unit_df[_cat_col] = _qcat.astype(str)
         _qlevels = [l for l in ["低", "中", "高"] if (unit_df[_cat_col] == l).any()]
-        _disp = _QUINTILE_DISP.get(_qcol, _qcol)
+        if len(_qlevels) < 2:
+            print(f"  [{_disp}] qcut後のカテゴリ数が{len(_qlevels)}個 → スキップ")
+            continue
         SUBGROUP_SPECS.append((_disp, _cat_col, False, ""))
-        print(f"  {_cat_col} ({_disp}): {unit_df[_cat_col].value_counts().to_dict()}")
+        print(f"  [{_disp}] {_cat_col}: {unit_df[_cat_col].value_counts().to_dict()}")
     except Exception as _qe:
-        print(f"  {_cname} qcut失敗: {_qe}")
+        print(f"  [{_disp}] qcut失敗: {_qe}")
 
 # SUBGROUP_SPECS を動的拡張（列が存在する場合のみ）
 if "fac_avg_age" in unit_df.columns:
