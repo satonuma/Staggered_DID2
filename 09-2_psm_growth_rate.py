@@ -58,9 +58,15 @@ COV_CONT_COLS = ["n_docs"]  # 施設あたり医師数
 # カラムが存在しない場合は自動スキップ
 QUINTILE_MAP = {"Z": 0, "L": 1, "M": 2, "H": 3, "VH": 4}
 DOCTOR_QUINTILE_COLS = [
-    "MR_VISIT_F2F_ER_QUINTILE_FINAL",   # MR面談関与度
-    "OWNED_MEDIA_ER_QUINTILE_FINAL",    # オウンドメディア関与度
+    "MR_VISIT_F2F_ER_QUINTILE_FINAL",      # MR面談関与度
+    "OWNED_MEDIA_ER_QUINTILE_FINAL",       # オウンドメディア関与度
+    "MR_VISIT_REMOTE_ER_QUINTILE_FINAL",   # MRリモート訪問関与度
 ]
+_QUINTILE_DISP = {
+    "MR_VISIT_F2F_ER_QUINTILE_FINAL":    "MR面談関与度",
+    "OWNED_MEDIA_ER_QUINTILE_FINAL":     "オウンドメディア関与度",
+    "MR_VISIT_REMOTE_ER_QUINTILE_FINAL": "MRリモート訪問関与度",
+}
 # ===================================================================
 
 FILE_RW_LIST           = "rw_list.csv"
@@ -600,16 +606,6 @@ if "DIGITAL_CHANNEL_PREFERENCE" in doc_attr_df.columns:
         _fac_digital_pref[_fac] = max(_dev, key=_dev.get)
     print(f"  [DIGITAL_CHANNEL_PREFERENCE] {len(_fac_digital_pref)} 施設割り当て完了")
 
-# --- MR_VISIT_REMOTE_ER_QUINTILE_FINAL 施設割り当て（施設内医師の最頻値）---
-_fac_mr_remote: dict = {}
-if "MR_VISIT_REMOTE_ER_QUINTILE_FINAL" in doc_attr_df.columns:
-    _mrr_all = doc_attr_df[doc_attr_df["doc"].isin(analysis_docs_all)][["doc", "MR_VISIT_REMOTE_ER_QUINTILE_FINAL"]].dropna()
-    for _fac, _docs in fac_to_docs.items():
-        _vals = _mrr_all[_mrr_all["doc"].isin(_docs)]["MR_VISIT_REMOTE_ER_QUINTILE_FINAL"]
-        if len(_vals) > 0:
-            _fac_mr_remote[_fac] = _vals.mode().iloc[0]
-    print(f"  [MR_VISIT_REMOTE_ER_QUINTILE_FINAL] {len(_fac_mr_remote)} 施設割り当て完了")
-
 # 医師クインタイル施設平均スコア計算 (fac_to_docs確定後)
 _fac_quintile_means: dict = {}
 for _qcol in DOCTOR_QUINTILE_COLS:
@@ -763,9 +759,27 @@ if _fac_doctor_segment:
 if _fac_digital_pref:
     unit_df["fac_digital_pref"] = unit_df["facility_id"].map(_fac_digital_pref)
     print(f"  fac_digital_pref: {unit_df['fac_digital_pref'].value_counts().to_dict()}")
-if _fac_mr_remote:
-    unit_df["fac_mr_remote_quintile"] = unit_df["facility_id"].map(_fac_mr_remote)
-    print(f"  fac_mr_remote_quintile: {unit_df['fac_mr_remote_quintile'].value_counts().to_dict()}")
+# 医師クインタイル施設平均スコア → 低/中/高 3分位 → SUBGROUP_SPECS
+for _qcol in DOCTOR_QUINTILE_COLS:
+    _cname = _qcol + "_mean"
+    if _cname not in unit_df.columns:
+        continue
+    _valid = unit_df[_cname].dropna()
+    if len(_valid) < 3:
+        continue
+    _cat_col = _qcol + "_cat"
+    try:
+        _qcat = pd.qcut(
+            unit_df[_cname].fillna(_valid.mean()),
+            q=3, labels=["低", "中", "高"], duplicates="drop"
+        )
+        unit_df[_cat_col] = _qcat.astype(str)
+        _qlevels = [l for l in ["低", "中", "高"] if (unit_df[_cat_col] == l).any()]
+        _disp = _QUINTILE_DISP.get(_qcol, _qcol)
+        SUBGROUP_SPECS.append((_disp, _cat_col, False, ""))
+        print(f"  {_cat_col} ({_disp}): {unit_df[_cat_col].value_counts().to_dict()}")
+    except Exception as _qe:
+        print(f"  {_cname} qcut失敗: {_qe}")
 
 # SUBGROUP_SPECS を動的拡張（列が存在する場合のみ）
 if "fac_avg_age" in unit_df.columns:
@@ -774,8 +788,6 @@ if "fac_doctor_segment" in unit_df.columns:
     SUBGROUP_SPECS.append(("医師セグメント", "fac_doctor_segment", False, ""))
 if "fac_digital_pref" in unit_df.columns:
     SUBGROUP_SPECS.append(("デジタルch嗜好", "fac_digital_pref", False, ""))
-if "fac_mr_remote_quintile" in unit_df.columns:
-    SUBGROUP_SPECS.append(("MRリモート訪問QT", "fac_mr_remote_quintile", False, ""))
 print(f"  SUBGROUP_SPECS 計 {len(SUBGROUP_SPECS)} 次元")
 
 # 解析期間（WASHOUT_MONTHS〜LAST_ELIGIBLE_MONTH）での最終Coverage（処置群の累積視聴率）
