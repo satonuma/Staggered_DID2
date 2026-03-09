@@ -714,8 +714,9 @@ png_files = [
     ("mr_digital_balance.png",                    "mr_digital_balance.png"),
     (f"psm_growth_rate_v2{_suffix}.png",          "psm_growth_rate_v2.png"),
     (f"psm_subgroup_forest_v2{_suffix}.png",      "psm_subgroup_forest_v2.png"),
-    (f"psm_channel_att_v2{_suffix}.png",          "psm_channel_att_v2.png"),
-    (f"coverage_sample_v2{_suffix}.png",          "coverage_sample_v2.png"),
+    (f"psm_channel_att_v2{_suffix}.png",              "psm_channel_att_v2.png"),
+    (f"psm_channel_coverage_growth_v2{_suffix}.png", "psm_channel_coverage_growth_v2.png"),
+    (f"coverage_sample_v2{_suffix}.png",             "coverage_sample_v2.png"),
     (f"coverage_dose_response_v2{_suffix}.png",   "coverage_dose_response_v2.png"),
 ]
 for actual_name, key_name in png_files:
@@ -2554,6 +2555,17 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
   {% endif %}
   {% endfor %}
 </table>
+
+{% if png_psm_channel_cov_growth %}
+<h4 style="margin-top:24px;">チャネル別 Coverage・平均伸長率</h4>
+<div style="text-align:center; margin:16px 0;">
+  <img src="data:image/png;base64,{{ png_psm_channel_cov_growth }}" alt="Channel Coverage Growth" style="max-width:100%;">
+</div>
+<p style="font-size:0.9em; color:#616161; margin-top:8px;">
+  左: チャネル別の処置群平均Coverage（施設内視聴率）。右: チャネル別の平均伸長率（視聴施設 vs マッチング後未視聴施設）。
+</p>
+{% endif %}
+
 {% endif %}
 {% endif %}
 
@@ -2788,7 +2800,8 @@ template_data = {
     "psm_results": psm_growth_rate_results,
     "png_psm_growth":   existing_pngs.get("psm_growth_rate_v2.png", ""),
     "png_psm_forest":   existing_pngs.get("psm_subgroup_forest_v2.png", ""),
-    "png_psm_channel":  existing_pngs.get("psm_channel_att_v2.png", ""),
+    "png_psm_channel":             existing_pngs.get("psm_channel_att_v2.png", ""),
+    "png_psm_channel_cov_growth":  existing_pngs.get("psm_channel_coverage_growth_v2.png", ""),
 
     # Coverage サンプル可視化 (02-2)
     "png_coverage_sample": existing_pngs.get("coverage_sample_v2.png", ""),

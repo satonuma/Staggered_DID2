@@ -393,6 +393,8 @@ def _run_ch_psm(ch_treat_ids, ch_ctrl_ids, base_df):
         "att": float(_a), "se": float(_se), "t_stat": float(_tv), "p_value": float(_pv),
         "ci_95_lower": float(_a - 1.96 * _se), "ci_95_upper": float(_a + 1.96 * _se),
         "n_matched": int(len(_d)), "n_treated_raw": n_t, "n_control_raw": n_c,
+        "treated_mean_growth": float(np.nanmean(_tg[_vm])),
+        "control_mean_growth": float(np.nanmean(_cg[_vm])),
     }, n_t, n_c
 
 
@@ -1451,7 +1453,9 @@ CHANNEL_DISPLAY = {
     "Web講演会":  "Web講演会",
 }
 
-channel_results = {}
+channel_results  = {}
+channel_coverage = {}
+
 for _ch in CONTENT_TYPES:
     _ch_view = viewing_all[viewing_all["活動種別"] == _ch]
     _ch_first = (
@@ -1478,6 +1482,22 @@ for _ch in CONTENT_TYPES:
               f"  95%CI[{_res['ci_95_lower']:.2f}, {_res['ci_95_upper']:.2f}]")
     else:
         print(f"    マッチング不成立 (処置群={_nt}施設, 対照群={_nc}施設)")
+
+    # チャネル別 Coverage（処置群施設の医師視聴率）
+    _ch_post_view = (
+        _ch_view[
+            _ch_view["month_index"].between(WASHOUT_MONTHS, LAST_ELIGIBLE_MONTH)
+            & _ch_view["facility_id"].isin(_ch_treat)
+        ]
+        .groupby("facility_id")["doc"].nunique()
+    )
+    _ch_total_docs = pd.Series(
+        {fac: len(fac_to_docs[fac]) for fac in _ch_treat if fac in fac_to_docs}
+    )
+    _ch_cov_ser = (_ch_post_view / _ch_total_docs).clip(0, 1)
+    _ch_cov_mean = float(_ch_cov_ser.mean()) if len(_ch_cov_ser) > 0 else 0.0
+    channel_coverage[_ch] = _ch_cov_mean
+    print(f"    Coverage={_ch_cov_mean:.1%}")
 
 # ---- チャネル別 ATT 比較棒グラフ ----
 _ch_valid = [(CHANNEL_DISPLAY.get(ch, ch), r) for ch, r in channel_results.items() if r is not None]
@@ -1515,18 +1535,79 @@ if _ch_valid:
     plt.close(fig_ch)
     print(f"  psm_channel_att_v2.png を保存")
 
+# ---- チャネル別 Coverage + 平均伸長率 比較グラフ ----
+_overall_cov = (
+    float(unit_df.loc[unit_df["treated"] == 1, "final_coverage"].mean())
+    if "final_coverage" in unit_df.columns else 0.0
+)
+_overall_t_growth = float(np.nanmean(mt_growth[valid_mask]))
+_overall_c_growth = float(np.nanmean(mc_growth[valid_mask]))
+
+_cg_ch_labels  = ["全体"] + [CHANNEL_DISPLAY.get(ch, ch) for ch in CONTENT_TYPES]
+_cg_coverages  = [_overall_cov] + [channel_coverage.get(ch, 0.0) for ch in CONTENT_TYPES]
+_cg_t_growths  = [_overall_t_growth] + [
+    channel_results[ch]["treated_mean_growth"] if channel_results.get(ch) else float("nan")
+    for ch in CONTENT_TYPES
+]
+_cg_c_growths  = [_overall_c_growth] + [
+    channel_results[ch]["control_mean_growth"] if channel_results.get(ch) else float("nan")
+    for ch in CONTENT_TYPES
+]
+_cg_colors = ["#555555", "#1565C0", "#43A047", "#FB8C00"]
+
+fig_cg, (ax_cov, ax_gr) = plt.subplots(1, 2, figsize=(14, 5))
+fig_cg.suptitle("09-2: チャネル別 Coverage・平均伸長率比較 [ver2]",
+                fontsize=12, fontweight="bold")
+
+# (a) Coverage
+_xs = np.arange(len(_cg_ch_labels))
+ax_cov.bar(_xs, [v * 100 for v in _cg_coverages],
+           color=_cg_colors[:len(_cg_ch_labels)], alpha=0.75, width=0.55)
+ax_cov.set_xticks(_xs)
+ax_cov.set_xticklabels(_cg_ch_labels, fontsize=10)
+ax_cov.set_ylabel("平均 Coverage（%）")
+ax_cov.set_title("(a) チャネル別 平均Coverage（処置群）", fontsize=10)
+ax_cov.grid(True, alpha=0.3, axis="y")
+for xi, v in enumerate(_cg_coverages):
+    ax_cov.text(xi, v * 100 + 0.5, f"{v:.1%}", ha="center", fontsize=9)
+
+# (b) 平均伸長率（視聴施設 vs マッチング後対照群）
+_w = 0.35
+ax_gr.bar(_xs - _w / 2, _cg_c_growths, width=_w,
+          color="#FF8F00", alpha=0.75, label="未視聴施設（マッチ後対照）")
+ax_gr.bar(_xs + _w / 2, _cg_t_growths, width=_w,
+          color="#1565C0", alpha=0.75, label="視聴施設（処置群）")
+ax_gr.axhline(0, color="gray", linestyle="--", linewidth=0.8)
+ax_gr.set_xticks(_xs)
+ax_gr.set_xticklabels(_cg_ch_labels, fontsize=10)
+ax_gr.set_ylabel("平均伸長率（円/月）")
+ax_gr.set_title("(b) チャネル別 平均伸長率（視聴 vs 未視聴, マッチ後）", fontsize=10)
+ax_gr.legend(fontsize=9)
+ax_gr.grid(True, alpha=0.3, axis="y")
+
+plt.tight_layout()
+_out_cg = os.path.join(SCRIPT_DIR, f"psm_channel_coverage_growth_v2{_suffix}.png")
+plt.savefig(_out_cg, dpi=150, bbox_inches="tight")
+plt.close(fig_cg)
+print(f"  psm_channel_coverage_growth_v2.png を保存")
+
 # JSON にチャネル別結果を追記
 results_json["channel_att"] = {
     ch: ({"att": r["att"], "se": r["se"], "p_value": r["p_value"],
           "ci_95_lower": r["ci_95_lower"], "ci_95_upper": r["ci_95_upper"],
           "n_matched": r["n_matched"], "n_treated_raw": r["n_treated_raw"],
-          "n_control_raw": r["n_control_raw"]}
+          "n_control_raw": r["n_control_raw"],
+          "treated_mean_growth": r["treated_mean_growth"],
+          "control_mean_growth": r["control_mean_growth"]}
          if r is not None else None)
     for ch, r in channel_results.items()
 }
+results_json["channel_coverage"] = {
+    ch: float(cov) for ch, cov in channel_coverage.items()
+}
 with open(json_path, "w", encoding="utf-8") as f:
     json.dump(results_json, f, ensure_ascii=False, indent=2)
-print("  channel_att を JSON に追記")
+print("  channel_att / channel_coverage を JSON に追記")
 
 # ===================================================================
 print("\n" + "=" * 70)
