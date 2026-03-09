@@ -678,6 +678,49 @@ for _qcol in DOCTOR_QUINTILE_COLS:
         _n_valid = sum(1 for v in _fac_q.values() if v == v)
         print(f"  [{_qcol}] 施設平均スコア算出: 非欠損施設 {_n_valid}/{len(fac_to_docs)}")
 
+# --- 施設平均年齢 ---
+_fac_avg_age: dict = {}
+if "年齢" in doc_attr_df.columns:
+    for _fac, _docs in fac_to_docs.items():
+        _ages = doc_attr_df[doc_attr_df["doc"].isin(_docs)]["年齢"].dropna()
+        _fac_avg_age[_fac] = float(_ages.mean()) if len(_ages) > 0 else float("nan")
+    _n_age_valid = sum(1 for v in _fac_avg_age.values() if v == v)
+    print(f"  [fac_avg_age] 非欠損施設: {_n_age_valid}/{len(fac_to_docs)}")
+
+# --- DOCTOR_SEGMENT 施設割り当て（全体構成比から最大正乖離セグメント）---
+_fac_doctor_segment: dict = {}
+if "DOCTOR_SEGMENT" in doc_attr_df.columns:
+    _seg_all = doc_attr_df[doc_attr_df["doc"].isin(analysis_docs_all)][["doc", "DOCTOR_SEGMENT"]].dropna()
+    _seg_overall_prop = _seg_all["DOCTOR_SEGMENT"].value_counts(normalize=True)
+    for _fac, _docs in fac_to_docs.items():
+        _fac_seg_prop = _seg_all[_seg_all["doc"].isin(_docs)]["DOCTOR_SEGMENT"].value_counts(normalize=True)
+        _dev = {seg: _fac_seg_prop.get(seg, 0.0) - _seg_overall_prop.get(seg, 0.0)
+                for seg in _seg_overall_prop.index}
+        _fac_doctor_segment[_fac] = max(_dev, key=_dev.get)
+    print(f"  [DOCTOR_SEGMENT] {len(_fac_doctor_segment)} 施設割り当て完了")
+
+# --- DIGITAL_CHANNEL_PREFERENCE 施設割り当て（全体構成比から最大正乖離側）---
+_fac_digital_pref: dict = {}
+if "DIGITAL_CHANNEL_PREFERENCE" in doc_attr_df.columns:
+    _dcp_all = doc_attr_df[doc_attr_df["doc"].isin(analysis_docs_all)][["doc", "DIGITAL_CHANNEL_PREFERENCE"]].dropna()
+    _dcp_overall_prop = _dcp_all["DIGITAL_CHANNEL_PREFERENCE"].value_counts(normalize=True)
+    for _fac, _docs in fac_to_docs.items():
+        _fac_dcp_prop = _dcp_all[_dcp_all["doc"].isin(_docs)]["DIGITAL_CHANNEL_PREFERENCE"].value_counts(normalize=True)
+        _dev = {seg: _fac_dcp_prop.get(seg, 0.0) - _dcp_overall_prop.get(seg, 0.0)
+                for seg in _dcp_overall_prop.index}
+        _fac_digital_pref[_fac] = max(_dev, key=_dev.get)
+    print(f"  [DIGITAL_CHANNEL_PREFERENCE] {len(_fac_digital_pref)} 施設割り当て完了")
+
+# --- MR_VISIT_REMOTE_ER_QUINTILE_FINAL 施設割り当て（施設内医師の最頻値）---
+_fac_mr_remote: dict = {}
+if "MR_VISIT_REMOTE_ER_QUINTILE_FINAL" in doc_attr_df.columns:
+    _mrr_all = doc_attr_df[doc_attr_df["doc"].isin(analysis_docs_all)][["doc", "MR_VISIT_REMOTE_ER_QUINTILE_FINAL"]].dropna()
+    for _fac, _docs in fac_to_docs.items():
+        _vals = _mrr_all[_mrr_all["doc"].isin(_docs)]["MR_VISIT_REMOTE_ER_QUINTILE_FINAL"]
+        if len(_vals) > 0:
+            _fac_mr_remote[_fac] = _vals.mode().iloc[0]
+    print(f"  [MR_VISIT_REMOTE_ER_QUINTILE_FINAL] {len(_fac_mr_remote)} 施設割り当て完了")
+
 print(f"\n  主施設割り当て完了:")
 print(f"    解析対象医師数: {len(analysis_docs_all)}")
 print(f"    解析対象施設数: {len(fac_to_docs)}")
@@ -850,6 +893,53 @@ for _qcol in DOCTOR_QUINTILE_COLS:
     panel = panel.merge(_fac_quintile_df[["facility_id", _cat_col]], on="facility_id", how="left")
     CATE_DIMS.append((_cat_col, _qlevels))
     print(f"  CATE次元追加: {_cat_col} → {_qlevels}")
+
+# 施設平均年齢 → 10歳刻みカテゴリ → CATE次元
+_AGE_BINS   = [19, 29, 39, 49, 59, np.inf]
+_AGE_LABELS = ["20代", "30代", "40代", "50代", "60代以上"]
+if _fac_avg_age:
+    _fac_age_df = pd.DataFrame({"facility_id": list(fac_to_docs.keys())})
+    _fac_age_df["fac_avg_age"] = _fac_age_df["facility_id"].map(_fac_avg_age)
+    _age_valid = _fac_age_df["fac_avg_age"].dropna()
+    if len(_age_valid) >= 3:
+        _age_filled = _fac_age_df["fac_avg_age"].fillna(_age_valid.mean())
+        _fac_age_df["fac_age_cat"] = pd.cut(_age_filled, bins=_AGE_BINS, labels=_AGE_LABELS)
+        _age_levels = [l for l in _AGE_LABELS if (_fac_age_df["fac_age_cat"] == l).any()]
+        panel = panel.merge(_fac_age_df[["facility_id", "fac_age_cat"]], on="facility_id", how="left")
+        CATE_DIMS.append(("fac_age_cat", _age_levels))
+        print(f"  CATE次元追加: fac_age_cat → {_age_levels}")
+
+# DOCTOR_SEGMENT → CATE次元
+if _fac_doctor_segment:
+    _seg_df = pd.DataFrame({"facility_id": list(fac_to_docs.keys())})
+    _seg_df["fac_doctor_segment"] = _seg_df["facility_id"].map(_fac_doctor_segment)
+    _seg_levels = sorted(_seg_df["fac_doctor_segment"].dropna().unique().tolist(), key=str)
+    panel = panel.merge(_seg_df[["facility_id", "fac_doctor_segment"]], on="facility_id", how="left")
+    CATE_DIMS.append(("fac_doctor_segment", _seg_levels))
+    print(f"  CATE次元追加: fac_doctor_segment → {_seg_levels}")
+
+# DIGITAL_CHANNEL_PREFERENCE → CATE次元
+if _fac_digital_pref:
+    _dcp_df = pd.DataFrame({"facility_id": list(fac_to_docs.keys())})
+    _dcp_df["fac_digital_pref"] = _dcp_df["facility_id"].map(_fac_digital_pref)
+    _dcp_levels = [v for v in ["Low", "High"] if (_dcp_df["fac_digital_pref"] == v).any()]
+    if not _dcp_levels:
+        _dcp_levels = sorted(_dcp_df["fac_digital_pref"].dropna().unique().tolist(), key=str)
+    panel = panel.merge(_dcp_df[["facility_id", "fac_digital_pref"]], on="facility_id", how="left")
+    CATE_DIMS.append(("fac_digital_pref", _dcp_levels))
+    print(f"  CATE次元追加: fac_digital_pref → {_dcp_levels}")
+
+# MR_VISIT_REMOTE_ER_QUINTILE_FINAL → CATE次元
+if _fac_mr_remote:
+    _mrr_df = pd.DataFrame({"facility_id": list(fac_to_docs.keys())})
+    _mrr_df["fac_mr_remote_quintile"] = _mrr_df["facility_id"].map(_fac_mr_remote)
+    _mrr_levels = [v for v in ["Z", "L", "M", "H", "VH"]
+                   if (_mrr_df["fac_mr_remote_quintile"] == v).any()]
+    if not _mrr_levels:
+        _mrr_levels = sorted(_mrr_df["fac_mr_remote_quintile"].dropna().unique().tolist(), key=str)
+    panel = panel.merge(_mrr_df[["facility_id", "fac_mr_remote_quintile"]], on="facility_id", how="left")
+    CATE_DIMS.append(("fac_mr_remote_quintile", _mrr_levels))
+    print(f"  CATE次元追加: fac_mr_remote_quintile → {_mrr_levels}")
 
 # 属性分布
 print("\n[属性分布]")

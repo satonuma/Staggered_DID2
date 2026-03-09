@@ -119,6 +119,7 @@ N_BINS_CONTINUOUS  = 4   # 連続変数の自動ビン数（FIXED_BINS 未指定
 FIXED_BINS: dict = {
     "医師歴": {"bins": [0, 9, 19, 29, 39, np.inf], "labels": ["1~9年",  "10~19年", "20~29年", "30~39年", "40年以上"]},
     "年齢":   {"bins": [19, 29, 39, 49, 59, np.inf], "labels": ["20~29歳", "30~39歳", "40~49歳", "50~59歳", "60歳以上"]},
+    "fac_avg_age": {"bins": [19, 29, 39, 49, 59, np.inf], "labels": ["20代", "30代", "40代", "50代", "60代以上"]},
 }
 
 # ===================================================================
@@ -573,6 +574,40 @@ if "年齢" in doc_attr_df.columns:
     _n_age_valid = sum(1 for v in _fac_avg_age.values() if v == v)
     print(f"  [fac_avg_age] 施設平均年齢算出: 非欠損施設 {_n_age_valid}/{len(fac_to_docs)}")
 
+# --- DOCTOR_SEGMENT 施設割り当て（全体構成比から最大正乖離セグメント）---
+_fac_doctor_segment: dict = {}
+if "DOCTOR_SEGMENT" in doc_attr_df.columns:
+    _seg_all = doc_attr_df[doc_attr_df["doc"].isin(analysis_docs_all)][["doc", "DOCTOR_SEGMENT"]].dropna()
+    _seg_overall_prop = _seg_all["DOCTOR_SEGMENT"].value_counts(normalize=True)
+    for _fac, _docs in fac_to_docs.items():
+        _fac_seg_prop = _seg_all[_seg_all["doc"].isin(_docs)]["DOCTOR_SEGMENT"].value_counts(normalize=True)
+        _dev = {seg: _fac_seg_prop.get(seg, 0.0) - _seg_overall_prop.get(seg, 0.0)
+                for seg in _seg_overall_prop.index}
+        _fac_doctor_segment[_fac] = max(_dev, key=_dev.get)
+    print(f"  [DOCTOR_SEGMENT] {len(_fac_doctor_segment)} 施設割り当て完了")
+
+# --- DIGITAL_CHANNEL_PREFERENCE 施設割り当て（全体構成比から最大正乖離側）---
+_fac_digital_pref: dict = {}
+if "DIGITAL_CHANNEL_PREFERENCE" in doc_attr_df.columns:
+    _dcp_all = doc_attr_df[doc_attr_df["doc"].isin(analysis_docs_all)][["doc", "DIGITAL_CHANNEL_PREFERENCE"]].dropna()
+    _dcp_overall_prop = _dcp_all["DIGITAL_CHANNEL_PREFERENCE"].value_counts(normalize=True)
+    for _fac, _docs in fac_to_docs.items():
+        _fac_dcp_prop = _dcp_all[_dcp_all["doc"].isin(_docs)]["DIGITAL_CHANNEL_PREFERENCE"].value_counts(normalize=True)
+        _dev = {seg: _fac_dcp_prop.get(seg, 0.0) - _dcp_overall_prop.get(seg, 0.0)
+                for seg in _dcp_overall_prop.index}
+        _fac_digital_pref[_fac] = max(_dev, key=_dev.get)
+    print(f"  [DIGITAL_CHANNEL_PREFERENCE] {len(_fac_digital_pref)} 施設割り当て完了")
+
+# --- MR_VISIT_REMOTE_ER_QUINTILE_FINAL 施設割り当て（施設内医師の最頻値）---
+_fac_mr_remote: dict = {}
+if "MR_VISIT_REMOTE_ER_QUINTILE_FINAL" in doc_attr_df.columns:
+    _mrr_all = doc_attr_df[doc_attr_df["doc"].isin(analysis_docs_all)][["doc", "MR_VISIT_REMOTE_ER_QUINTILE_FINAL"]].dropna()
+    for _fac, _docs in fac_to_docs.items():
+        _vals = _mrr_all[_mrr_all["doc"].isin(_docs)]["MR_VISIT_REMOTE_ER_QUINTILE_FINAL"]
+        if len(_vals) > 0:
+            _fac_mr_remote[_fac] = _vals.mode().iloc[0]
+    print(f"  [MR_VISIT_REMOTE_ER_QUINTILE_FINAL] {len(_fac_mr_remote)} 施設割り当て完了")
+
 # 医師クインタイル施設平均スコア計算 (fac_to_docs確定後)
 _fac_quintile_means: dict = {}
 for _qcol in DOCTOR_QUINTILE_COLS:
@@ -718,6 +753,28 @@ if _fac_avg_age:
     if "fac_avg_age" not in COV_CONT_COLS:
         COV_CONT_COLS.append("fac_avg_age")
     print(f"  fac_avg_age: 平均={unit_df['fac_avg_age'].mean():.1f}歳, 欠損→平均補完")
+
+# 新規施設レベル変数をunit_dfにマージ
+if _fac_doctor_segment:
+    unit_df["fac_doctor_segment"] = unit_df["facility_id"].map(_fac_doctor_segment)
+    print(f"  fac_doctor_segment: {unit_df['fac_doctor_segment'].value_counts().to_dict()}")
+if _fac_digital_pref:
+    unit_df["fac_digital_pref"] = unit_df["facility_id"].map(_fac_digital_pref)
+    print(f"  fac_digital_pref: {unit_df['fac_digital_pref'].value_counts().to_dict()}")
+if _fac_mr_remote:
+    unit_df["fac_mr_remote_quintile"] = unit_df["facility_id"].map(_fac_mr_remote)
+    print(f"  fac_mr_remote_quintile: {unit_df['fac_mr_remote_quintile'].value_counts().to_dict()}")
+
+# SUBGROUP_SPECS を動的拡張（列が存在する場合のみ）
+if "fac_avg_age" in unit_df.columns:
+    SUBGROUP_SPECS.append(("施設平均年齢", "fac_avg_age", True, "歳"))
+if "fac_doctor_segment" in unit_df.columns:
+    SUBGROUP_SPECS.append(("医師セグメント", "fac_doctor_segment", False, ""))
+if "fac_digital_pref" in unit_df.columns:
+    SUBGROUP_SPECS.append(("デジタルch嗜好", "fac_digital_pref", False, ""))
+if "fac_mr_remote_quintile" in unit_df.columns:
+    SUBGROUP_SPECS.append(("MRリモート訪問QT", "fac_mr_remote_quintile", False, ""))
+print(f"  SUBGROUP_SPECS 計 {len(SUBGROUP_SPECS)} 次元")
 
 # 解析期間（WASHOUT_MONTHS〜LAST_ELIGIBLE_MONTH）での最終Coverage（処置群の累積視聴率）
 _post_view = (
