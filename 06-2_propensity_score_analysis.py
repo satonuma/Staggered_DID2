@@ -261,8 +261,8 @@ _multi_assign = (
     .groupby("doc")["fac_honin"].first()
 )
 
-_fac_uhp = fac_df.drop_duplicates("fac_honin").set_index("fac_honin")["UHP区分名"] \
-    if "UHP区分名" in fac_df.columns else pd.Series(dtype=str)
+_fac_uhp = fac_df.drop_duplicates("fac_honin").set_index("fac_honin")["UHP区分名称"] \
+    if "UHP区分名称" in fac_df.columns else pd.Series(dtype=str)
 _zero_sum = _doc_fac_sales.groupby("doc")["avg_sales"].sum()
 for _doc in set(_zero_sum[_zero_sum == 0].index):
     _doc_facs = _doc_fac_sales[_doc_fac_sales["doc"] == _doc]["fac_honin"].tolist()
@@ -418,7 +418,7 @@ print("=" * 70)
 # 施設属性マージ (ver2: 施設レベル属性のみ、医師レベル属性は不使用)
 fac_attrs2 = fac_df.rename(columns={"fac_honin": "facility_id"})
 fac_session = fac_session.merge(
-    fac_attrs2[["facility_id", "施設区分名", "UHP区分名"]],
+    fac_attrs2[["facility_id", "施設区分名", "UHP区分名称"]],
     on="facility_id", how="left"
 )
 
@@ -434,10 +434,10 @@ print(" Part 3: 視聴傾向スコア推定")
 print("=" * 70)
 
 # PS推定用共変量 (ver2: UHP区分名, n_docs)
-ps_data = fac_session.dropna(subset=["UHP区分名"]).copy()
+ps_data = fac_session.dropna(subset=["UHP区分名称"]).copy()
 ps_dummies = pd.get_dummies(
     ps_data,
-    columns=["UHP区分名"],
+    columns=["UHP区分名称"],
     drop_first=True
 )
 _n_docs_std = (ps_dummies["n_docs"] - ps_dummies["n_docs"].mean()) / (ps_dummies["n_docs"].std() + 1e-9)

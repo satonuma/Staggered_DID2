@@ -524,7 +524,7 @@ facility_attribute_out = pd.DataFrame({
     "fac_honin":      facility_ids,
     "fac_honin_name": [fac_honin_name_map[f] for f in facility_ids],
     "施設区分名":     [fac_kubun_map[fac_type_map[f]] for f in facility_ids],
-    "UHP区分名":      np.random.choice(uhp_options, N_FACILITIES, p=[0.20, 0.25, 0.25, 0.30]),
+    "UHP区分名称":    np.random.choice(uhp_options, N_FACILITIES, p=[0.20, 0.25, 0.25, 0.30]),
     "経営体名":       management_orgs,
     "許可病床数_合計": [_gen_beds(fac_type_map[f]) for f in facility_ids],
     "施設内医師数":   [facility_doc_counts_dict.get(f, 0) for f in facility_ids],
@@ -687,7 +687,7 @@ print(f"  デジタル視聴データ.csv    : {n_digital_views:>8,} 行 (webine
 print(f"  活動データ.csv            : {n_activity_views:>8,} 行 (Web講演会 + 面談 + 面談_アポ + 説明会 + その他)")
 print(f"\nカラム名:")
 print(f"  rw_list            : doc, doc_name, fac_honin, fac_honin_name, fac, fac_name, seg")
-print(f"  facility_attribute : fac, fac_honin, fac_honin_name, 施設区分名, UHP区分名, 経営体名, 許可病床数_合計, 施設内医師数")
+print(f"  facility_attribute : fac, fac_honin, fac_honin_name, 施設区分名, UHP区分名称, 経営体名, 許可病床数_合計, 施設内医師数")
 print(f"  doctor_attribute   : doc, DCF医師コード, doc_name, 年齢, 卒業時年齢, 医師歴, DIGITAL_CHANNEL_PREFERENCE, DOCTOR_SEGEMNT")
 print(f"  sales              : 日付, 施設（本院に合算）コード, DCF施設コード, 品目コード, 実績")
 print(f"  デジタル視聴        : 活動日_dt, 品目コード, 活動種別, 活動種別コード, fac_honin, fac, doc, doc_name")

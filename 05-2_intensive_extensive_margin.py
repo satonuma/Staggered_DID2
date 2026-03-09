@@ -204,8 +204,8 @@ _multi_assign = (
     .groupby("doc")["fac_honin"].first()
 )
 
-_fac_uhp = fac_df.drop_duplicates("fac_honin").set_index("fac_honin")["UHP区分名"] \
-    if "UHP区分名" in fac_df.columns else pd.Series(dtype=str)
+_fac_uhp = fac_df.drop_duplicates("fac_honin").set_index("fac_honin")["UHP区分名称"] \
+    if "UHP区分名称" in fac_df.columns else pd.Series(dtype=str)
 _zero_sum = _doc_fac_sales.groupby("doc")["avg_sales"].sum()
 _zero_docs_set = set(_zero_sum[_zero_sum == 0].index)
 if _zero_docs_set:

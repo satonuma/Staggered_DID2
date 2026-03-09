@@ -97,7 +97,7 @@ DOCTOR_ATTR_SELECTED: list = []  # ver2: 施設属性のみ
 FILE_FACILITY_ATTR = "facility_attribute_修正.csv"
 FACILITY_ATTR_ID_COL = "fac_honin"
 FACILITY_ATTR_SELECTED: list = [    # ← 分析したいカラム名をここに列挙
-    "UHP区分名",
+    "UHP区分名称",
     "許可病床数_合計",
 ]
 
@@ -612,8 +612,8 @@ _multi_assign = (
     .groupby("doc")["fac_honin"].first()
 )
 
-_fac_uhp = fac_df.drop_duplicates("fac_honin").set_index("fac_honin")["UHP区分名"] \
-    if "UHP区分名" in fac_df.columns else pd.Series(dtype=str)
+_fac_uhp = fac_df.drop_duplicates("fac_honin").set_index("fac_honin")["UHP区分名称"] \
+    if "UHP区分名称" in fac_df.columns else pd.Series(dtype=str)
 _zero_sum = _doc_fac_sales.groupby("doc")["avg_sales"].sum()
 _zero_docs_set = set(_zero_sum[_zero_sum == 0].index)
 if _zero_docs_set:
