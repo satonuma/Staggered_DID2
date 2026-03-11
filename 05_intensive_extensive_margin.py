@@ -1,3 +1,4 @@
+# %%
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -71,6 +72,7 @@ if not all(os.path.exists(os.path.join(DATA_DIR, f)) for f in _required):
     _alt = os.path.join(SCRIPT_DIR, "data")
     if all(os.path.exists(os.path.join(_alt, f)) for f in _required):
         DATA_DIR = _alt
+
 
 START_DATE = "2023-04-01"
 N_MONTHS = 33

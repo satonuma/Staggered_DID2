@@ -1,0 +1,140 @@
+{
+  "params": {
+    "INCLUDE_ONLY_RW": true,
+    "FILTER_SINGLE_FAC_DOCTOR": true,
+    "N_BINS": 5,
+    "actual_n_bins": 5,
+    "ENT_PRODUCT_CODE": "00001",
+    "COST_PER_DISTRIBUTION": 0.5,
+    "param_suffix": "RW_1fac1doc_5bins"
+  },
+  "bin_info": {
+    "view_bin_1": {
+      "display_name": "累積0-2回→視聴\n（1-3回目）",
+      "lo_cumulative": 0,
+      "hi_cumulative": 2,
+      "sample_count": 106
+    },
+    "view_bin_2": {
+      "display_name": "累積3-5回→視聴\n（4-6回目）",
+      "lo_cumulative": 3,
+      "hi_cumulative": 5,
+      "sample_count": 66
+    },
+    "view_bin_3": {
+      "display_name": "累積6-10回→視聴\n（7-11回目）",
+      "lo_cumulative": 6,
+      "hi_cumulative": 10,
+      "sample_count": 86
+    },
+    "view_bin_4": {
+      "display_name": "累積11-19回→視聴\n（12-20回目）",
+      "lo_cumulative": 11,
+      "hi_cumulative": 19,
+      "sample_count": 81
+    },
+    "view_bin_5": {
+      "display_name": "累積20-54回→視聴\n（21-55回目）",
+      "lo_cumulative": 20,
+      "hi_cumulative": 54,
+      "sample_count": 79
+    }
+  },
+  "marginal_effects": {
+    "view_bin_1": {
+      "coefficient": 4.123470994888915,
+      "se": 2.9617506775160347,
+      "p": 0.16398595407587213,
+      "sig": "n.s."
+    },
+    "view_bin_2": {
+      "coefficient": 8.609751157482938,
+      "se": 3.7540936596952617,
+      "p": 0.021914374540017878,
+      "sig": "*"
+    },
+    "view_bin_3": {
+      "coefficient": 13.92308857281991,
+      "se": 3.157586121434158,
+      "p": 1.0849383598410256e-05,
+      "sig": "***"
+    },
+    "view_bin_4": {
+      "coefficient": 31.686837970049467,
+      "se": 7.515060031096056,
+      "p": 2.579263741964155e-05,
+      "sig": "***"
+    },
+    "view_bin_5": {
+      "coefficient": 55.69624356365736,
+      "se": 9.334621105386267,
+      "p": 2.802810206148365e-09,
+      "sig": "***"
+    }
+  },
+  "continuation_rates": {
+    "0": 0.04411764705882353,
+    "1": 0.3979591836734694,
+    "2": 0.3235294117647059,
+    "3": 0.26582278481012656,
+    "4": 0.37142857142857144,
+    "5": 0.37777777777777777,
+    "6": 0.42,
+    "7": 0.4,
+    "8": 0.22448979591836735,
+    "9": 0.39473684210526316,
+    "10": 0.6774193548387096
+  },
+  "initial_viewing_rate": 0.029492455418381344,
+  "viewing_probs": {
+    "view_bin_1": 0.029492455418381344,
+    "view_bin_2": 0.33834304467215864,
+    "view_bin_3": 0.423329198572468,
+    "view_bin_4": 0.2039232697127434,
+    "view_bin_5": 0.0
+  },
+  "expected_effects": {
+    "view_bin_1": 0.12161128448574991,
+    "view_bin_2": 2.913049420492419,
+    "view_bin_3": 5.89404992718534,
+    "view_bin_4": 6.461683605710396,
+    "view_bin_5": 0.0
+  },
+  "expected_roi": {
+    "view_bin_1": 0.24322256897149983,
+    "view_bin_2": 5.826098840984838,
+    "view_bin_3": 11.78809985437068,
+    "view_bin_4": 12.923367211420793,
+    "view_bin_5": 0.0
+  },
+  "optimal_strategy": {
+    "message": "累積20回視聴済みの既存医師への配信より新規医師への初回配信が有効",
+    "new_doctor_expected": 0.12161128448574991,
+    "priority_ranking": [
+      [
+        "累積11-19回→視聴\n（12-20回目）",
+        6.461683605710396
+      ],
+      [
+        "累積6-10回→視聴\n（7-11回目）",
+        5.89404992718534
+      ],
+      [
+        "累積3-5回→視聴\n（4-6回目）",
+        2.913049420492419
+      ],
+      [
+        "累積0-2回→視聴\n（1-3回目）",
+        0.12161128448574991
+      ],
+      [
+        "累積20-54回→視聴\n（21-55回目）",
+        0.0
+      ]
+    ]
+  },
+  "interpretation": {
+    "binning_method": "qcut（均等サンプル数ビニング）",
+    "warning": "視聴は医師の自発的行動（内生変数）であり、因果効果ではなく相関関係"
+  }
+}
