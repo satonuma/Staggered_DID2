@@ -697,10 +697,13 @@ n_ch = len(channels_list)
 _slots_above_summary = 4 + n_ch          # a, b, c, d + 各チャネル
 _n_content_rows = (_slots_above_summary + 1) // 2
 _total_rows = _n_content_rows + 1        # +1 はサマリー行
-_fig_h = max(24, _total_rows * 7)
+_fig_h = max(18, _total_rows * 5)        # 行あたり5インチ（コンパクト化）
 
 fig = plt.figure(figsize=(20, _fig_h))
-gs = GridSpec(_total_rows, 2, figure=fig, hspace=0.55, wspace=0.35)
+# サマリー行は内容行の1/3の高さ、hspaceを小さめに
+_height_ratios = [3] * _n_content_rows + [1]
+gs = GridSpec(_total_rows, 2, figure=fig, hspace=0.5, wspace=0.35,
+              height_ratios=_height_ratios)
 
 x_ticks  = list(range(actual_n_bins))
 x_labels = [bin_display_names[i] for i in range(actual_n_bins)]
@@ -724,11 +727,18 @@ def _setup_bar_ax(ax, vals, title, ylabel, colors=None, errs=None, n_labels=None
     if n_labels is not None:
         y_min, y_max = ax.get_ylim()
         y_range = y_max - y_min
-        for bar, n in zip(bars, n_labels):
+        label_y_tops = []
+        for i, (bar, n) in enumerate(zip(bars, n_labels)):
             bar_top = bar.get_height()
-            y_pos = bar_top + y_range * 0.02 if bar_top >= 0 else bar_top - y_range * 0.06
+            # エラーバーがある場合はエラーバー上端の上にラベルを配置（上空白を防ぐ）
+            err_i = float(errs[i]) if (errs is not None and i < len(errs)) else 0.0
+            label_base = (bar_top + err_i) if bar_top >= 0 else bar_top
+            y_pos = label_base + y_range * 0.02 if bar_top >= 0 else bar_top - y_range * 0.06
             ax.text(bar.get_x() + bar.get_width() / 2, y_pos,
                     f"N={n:,}", ha="center", va="bottom", fontsize=7, color="#444444")
+            label_y_tops.append(y_pos + y_range * 0.02)
+        # y軸をラベルが収まるよう拡張
+        ax.set_ylim(y_min, max(y_max, max(label_y_tops)))
 
 # スロットのインデックスから (row, col) を返すヘルパー
 def _slot(i):

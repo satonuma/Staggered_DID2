@@ -39,7 +39,8 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 # ===================================================================
 ENT_PRODUCT_CODE = "00001"
 ACTIVITY_CHANNEL_FILTER = "Web講演会"
-CONTENT_TYPES = ["webiner", "e_contents", "Web講演会"]  # MR活動量計算で除外するデジタル種別
+CONTENT_TYPES = ["webiner", "e_contents", "Web講演会"]  # デジタルチャネル種別
+MR_ACTIVITY_TYPES = ["面談", "面談_アポ", "説明会"]  # MR活動種別（非デジタル対面活動）
 
 # ===================================================================
 # 共変量設定 (ver2: 施設レベル分析)
@@ -445,10 +446,10 @@ web_lecture = activity_raw[
 ].copy()
 web_lecture = web_lecture[web_lecture["fac_honin"].notna() & (web_lecture["fac_honin"].astype(str).str.strip() != "")].copy()
 
-# MR前処置期間活動量: 非デジタル活動を施設別に集計 (washout期間内の月平均)
+# MR前処置期間活動量: 面談・面談_アポ・説明会を施設別に集計 (washout期間内の月平均)
 _mr_raw = activity_raw[
     (activity_raw["品目コード"] == ENT_PRODUCT_CODE)
-    & (~activity_raw["活動種別"].isin(CONTENT_TYPES))
+    & (activity_raw["活動種別"].isin(MR_ACTIVITY_TYPES))
     & activity_raw["fac_honin"].notna()
 ].copy()
 if len(_mr_raw) > 0:
