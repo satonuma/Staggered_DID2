@@ -571,6 +571,45 @@ for var in bin_var_names:
     print(f"  {var}: {expected_effects[var]:.2f}万円")
 
 # ================================================================
+# 解析対象集団の視聴数分布とピーク閾値以上割合
+# ================================================================
+print("\n[解析対象集団の視聴数分布]")
+
+# 施設ごとの最終累積視聴回数（観測期間中の最大値 = 分析終了時点の累積）
+fac_final_cum = (
+    doctor_panel.groupby("facility_id")["cumulative_views"]
+    .max().reset_index(name="final_cum_views")
+)
+
+# 期待効果のピーク bin を特定
+_peak_var   = max(expected_effects, key=lambda v: expected_effects[v])
+_peak_idx   = bin_var_names.index(_peak_var)
+_peak_lo    = int(np.floor(bin_edges[_peak_idx])) + 1   # ピークビン累積下限
+_peak_hi    = int(np.floor(bin_edges[_peak_idx + 1]))   # ピークビン累積上限
+_peak_label = bin_display_names[_peak_idx].replace("\n", " ")
+
+# ピーク下限以上の施設割合
+_n_total_fac  = len(fac_final_cum)
+_n_above_peak = int((fac_final_cum["final_cum_views"] >= _peak_lo).sum())
+_pct_above    = _n_above_peak / _n_total_fac if _n_total_fac > 0 else 0.0
+
+# 段階別集計（各ビンの下限ごと）
+_threshold_stats = []
+for i, var in enumerate(bin_var_names):
+    _lo = int(np.floor(bin_edges[i])) + 1
+    _n  = int((fac_final_cum["final_cum_views"] >= _lo).sum())
+    _threshold_stats.append({"bin": var, "threshold": _lo,
+                              "n_above": _n, "pct_above": _n / _n_total_fac if _n_total_fac > 0 else 0.0})
+
+print(f"  解析対象施設数（総計）: {_n_total_fac}")
+print(f"  ピーク期待効果ビン: {_peak_label} (期待効果={expected_effects[_peak_var]:.2f}万円)")
+print(f"  ピーク閾値（累積{_peak_lo}回以上）の施設: {_n_above_peak} / {_n_total_fac} ({_pct_above:.1%})")
+print(f"\n  各ビン閾値以上の施設割合:")
+for ts in _threshold_stats:
+    _mark = " ← ピーク" if ts["bin"] == _peak_var else ""
+    print(f"    累積{ts['threshold']}回以上: {ts['n_above']:,} / {_n_total_fac} ({ts['pct_above']:.1%}){_mark}")
+
+# ================================================================
 # チャネル別期待効果の計算
 # ================================================================
 print("\n[チャネル別期待効果]")
@@ -624,10 +663,10 @@ print("\n[可視化]")
 
 from matplotlib.gridspec import GridSpec
 
-# レイアウト: 上3スロット（a,b,c）+ チャネル別各1スロット + サマリー（2列スパン）
-# スロット配置: [a,b], [c, ch1], [ch2, ch3], ..., [summary(span)]
+# レイアウト: 上4スロット（a,b,c,d）+ チャネル別各1スロット + サマリー（2列スパン）
+# スロット配置: [a,b], [c,d], [ch1,ch2], ..., [summary(span)]
 n_ch = len(channels_list)
-_slots_above_summary = 3 + n_ch          # a, b, c + 各チャネル
+_slots_above_summary = 4 + n_ch          # a, b, c, d + 各チャネル
 _n_content_rows = (_slots_above_summary + 1) // 2
 _total_rows = _n_content_rows + 1        # +1 はサマリー行
 _fig_h = max(24, _total_rows * 7)
@@ -694,14 +733,33 @@ _r, _c = _slot(2)
 ax_c = fig.add_subplot(gs[_r, _c])
 _setup_bar_ax(ax_c, exp_values, "(c) 期待効果 = 視聴確率 × 限界効果", "期待効果（万円）", colors=colors_exp, n_labels=bin_sample_counts)
 
-# (d〜) チャネル別期待効果（チャネルごとに個別棒グラフ）
+# (d) 解析対象集団の視聴数分布とピーク閾値
+_r, _c = _slot(3)
+ax_d = fig.add_subplot(gs[_r, _c])
+_hist_vals = fac_final_cum["final_cum_views"]
+_hist_max  = min(int(_hist_vals.quantile(0.99)) + 2, int(_hist_vals.max()) + 1)
+ax_d.hist(_hist_vals.clip(upper=_hist_max), bins=min(40, _hist_max + 1),
+          color="#78909c", alpha=0.7, edgecolor="white")
+ax_d.axvline(_peak_lo - 0.5, color="red", linestyle="--", linewidth=2,
+             label=f"ピーク閾値: 累積{_peak_lo}回以上\n{_n_above_peak}/{_n_total_fac} ({_pct_above:.1%})")
+ax_d.set_xlabel("最終累積視聴回数", fontsize=11)
+ax_d.set_ylabel("施設数", fontsize=11)
+ax_d.set_title("(d) 視聴数分布とピーク閾値以上割合", fontsize=12, fontweight="bold")
+ax_d.legend(fontsize=9)
+ax_d.grid(axis="y", alpha=0.3)
+# 閾値以上の領域を塗りつぶし
+_ylim = ax_d.get_ylim()
+ax_d.axvspan(_peak_lo - 0.5, _hist_max + 1, alpha=0.12, color="red")
+ax_d.set_ylim(_ylim)
+
+# (e〜) チャネル別期待効果（チャネルごとに個別棒グラフ）
 for ci, ch in enumerate(channels_list):
-    _r, _c = _slot(3 + ci)
+    _r, _c = _slot(4 + ci)
     ax_ch = fig.add_subplot(gs[_r, _c])
     ch_vals = channel_bin_expected[ch]
     _setup_bar_ax(
         ax_ch, ch_vals,
-        f"({chr(100+ci)}) チャネル別期待効果: {ch}",
+        f"({chr(101+ci)}) チャネル別期待効果: {ch}",
         "期待効果（万円）",
         colors=[channel_palette[ci % len(channel_palette)]] * actual_n_bins,
         n_labels=bin_sample_counts,
@@ -777,6 +835,18 @@ output_json = {
     "channel_bin_expected": {
         ch: {bin_var_names[i]: float(v) for i, v in enumerate(vals)}
         for ch, vals in channel_bin_expected.items()
+    },
+    "viewing_distribution": {
+        "peak_bin": _peak_var,
+        "peak_threshold_lo": _peak_lo,
+        "peak_threshold_hi": _peak_hi,
+        "n_total_facilities": _n_total_fac,
+        "n_above_peak": _n_above_peak,
+        "pct_above_peak": float(_pct_above),
+        "threshold_stats": _threshold_stats,
+        "final_cum_views_describe": {
+            k: float(v) for k, v in fac_final_cum["final_cum_views"].describe().items()
+        },
     },
     "interpretation": {
         "binning_method": "qcut（均等サンプル数ビニング）",
