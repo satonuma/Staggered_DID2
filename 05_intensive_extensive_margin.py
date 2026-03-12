@@ -34,6 +34,7 @@ import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 from scipy import stats
+from linearmodels import PanelOLS
 
 warnings.filterwarnings("ignore")
 
@@ -162,6 +163,7 @@ print(f"  [Step 2] 所属施設数==1: {len(single_honin_docs)} 名 (doctor_attr
 rw_doc_ids = set(rw_list["doc"])
 
 # 3ステップを順序付きで適用 + 中間カウント + 1:1確認
+# 注意: dict(zip)は重複docがある場合に最後の行のみ残るため、1:1マッピング前提の用途に限定
 _doc_to_fac   = dict(zip(fac_doc_list["doc"], fac_doc_list["fac"]))
 _doc_to_honin = dict(zip(fac_doc_list["doc"], fac_doc_list["fac_honin"]))
 all_docs = set(fac_doc_list["doc"])  # 全医師は施設医師リスト.csv
@@ -171,11 +173,17 @@ if INCLUDE_ONLY_RW:
     after_step3 = after_step2 & rw_doc_ids
 else:
     after_step3 = after_step2  # Step 3スキップ (全医師対象)
-_honin_cnt: dict = {}
-for d in after_step3:
-    h = _doc_to_honin[d]
-    _honin_cnt[h] = _honin_cnt.get(h, 0) + 1
-candidate_docs = {d for d in after_step3 if _honin_cnt[_doc_to_honin[d]] == 1}
+
+# 1:1確認: fac_doc_list 全体（非RW含む）でfac_honinごとの総医師数をカウント
+# ★ after_step3 だけでカウントすると非RW医師が無視され、
+#    1RW+1非RW施設が誤って1:1とみなされてしまう
+_honin_all_cnt: dict = {}
+for _, _row in fac_doc_list.iterrows():
+    h = _row["fac_honin"]
+    if pd.notna(h) and str(h).strip() not in ("", "nan"):
+        _honin_all_cnt[h] = _honin_all_cnt.get(h, 0) + 1
+candidate_docs = {d for d in after_step3
+                  if _honin_all_cnt.get(_doc_to_honin.get(d), 99) == 1}
 print(f"  Step1通過:{len(after_step1)} → Step2通過:{len(after_step2)} → Step3通過:{len(after_step3)} ({'RW医師のみ' if INCLUDE_ONLY_RW else '全医師'}) → 1:1確認後:{len(candidate_docs)}")
 
 _pair_src = rw_list if INCLUDE_ONLY_RW else fac_doc_list
@@ -270,7 +278,6 @@ print(f"  5回目以上: {doctor_panel['view_5plus'].sum():,} 回")
 # ================================================================
 print("\n[TWFE回帰: 視聴回数別限界効果]")
 
-from linearmodels import PanelOLS
 
 # 医師FE + 時間FE
 panel_reg = doctor_panel.copy()
