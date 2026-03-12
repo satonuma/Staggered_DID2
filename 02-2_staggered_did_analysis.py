@@ -968,6 +968,32 @@ _cov.index.name = "facility_id"
 _cov["n_docs"] = pd.Series(n_docs_map).reindex(_cov.index, fill_value=1)
 print(f"  n_docs: 平均={_cov['n_docs'].mean():.1f}, 最大={_cov['n_docs'].max()}")
 
+# MR活動ベースライン（処置前期間: month_index < WASHOUT_MONTHS の月平均）
+# ※ CONTENT_TYPES（デジタルチャネル）を除いた面談・説明会等の活動に限定
+# ※ MR活動量の多い施設は処置確率にも影響するため傾向スコア共変量として追加
+_mr_bl_raw = activity_raw[
+    (activity_raw["品目コード"] == ENT_PRODUCT_CODE)
+    & (~activity_raw["活動種別"].isin(CONTENT_TYPES))
+].copy()
+if len(_mr_bl_raw) > 0:
+    _mr_bl_raw["活動日_dt"] = pd.to_datetime(_mr_bl_raw["活動日_dt"], format="mixed")
+    _mr_bl_raw["_midx"] = (
+        (_mr_bl_raw["活動日_dt"].dt.year - 2023) * 12
+        + _mr_bl_raw["活動日_dt"].dt.month - 4
+    )
+    _mr_bl_raw["_fac"] = _mr_bl_raw["fac_honin"].astype(str).str.strip()
+    _mr_bl = (
+        _mr_bl_raw[_mr_bl_raw["_midx"] < WASHOUT_MONTHS]
+        .groupby("_fac").size()
+        .div(max(WASHOUT_MONTHS, 1))   # 月平均に換算
+    )
+    _cov["fac_mr_activity_baseline"] = _mr_bl.reindex(_cov.index, fill_value=0)
+else:
+    _cov["fac_mr_activity_baseline"] = 0.0
+print(f"  fac_mr_activity_baseline: 平均={_cov['fac_mr_activity_baseline'].mean():.2f}, "
+      f"最大={_cov['fac_mr_activity_baseline'].max():.1f}, "
+      f"非ゼロ施設={(_cov['fac_mr_activity_baseline'] > 0).sum()}/{len(_cov)}")
+
 # 医師クインタイル施設平均スコア (連続共変量)
 for _qcol in DOCTOR_QUINTILE_COLS:
     if _qcol in _fac_quintile_means:
