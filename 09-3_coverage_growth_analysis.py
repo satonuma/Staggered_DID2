@@ -150,17 +150,8 @@ doc_attr_df = pd.read_csv(os.path.join(DATA_DIR, FILE_DOCTOR_ATTR))
 
 all_docs = set(fac_doc_list["doc"])
 
-# 医師フィルタ
-rw_doc_ids = set(rw_list["doc"])
-if INCLUDE_ONLY_RW:
-    analysis_docs_all = all_docs & rw_doc_ids
-    print(f"  RWフィルタ適用: {len(analysis_docs_all)} 名")
-elif INCLUDE_ONLY_NON_RW:
-    analysis_docs_all = all_docs - rw_doc_ids
-    print(f"  非RWフィルタ適用: {len(analysis_docs_all)} 名")
-else:
-    analysis_docs_all = all_docs
-    print(f"  全医師対象: {len(analysis_docs_all)} 名")
+# RW施設集合（fac_honinベース）- 施設レベルフィルタに使用
+rw_fac_honins_str = set(rw_list["fac_honin"].astype(str).str.strip())
 
 # 主施設割り当て（複数施設所属医師は平均納入額最大施設に割り当て）
 _doc_fac_list  = fac_doc_list[["doc", "fac_honin"]].drop_duplicates()
@@ -203,10 +194,30 @@ if _zero_docs_set:
 
 doc_primary_fac = pd.concat([_single_assign, _multi_assign])
 
-# 解析対象医師のみに絞って施設→医師リスト構築
-_prim_filt = doc_primary_fac[doc_primary_fac.index.isin(analysis_docs_all)]
-_prim_df   = pd.DataFrame({"doc": _prim_filt.index, "fac": _prim_filt.values})
+# 全医師で施設→医師リスト構築（Coverage分母を正確に算出するため医師フィルタは施設確定後に行う）
+_prim_df    = pd.DataFrame({"doc": doc_primary_fac.index, "fac": doc_primary_fac.values})
 fac_to_docs_all = _prim_df.groupby("fac")["doc"].agg(list).to_dict()
+
+# 施設レベルのRW/非RWフィルタ（fac_honinベース）
+# ※ 医師IDではなくrw_list.csvのfac_honinで施設を絞る
+if INCLUDE_ONLY_RW:
+    fac_to_docs_all = {
+        fac: docs for fac, docs in fac_to_docs_all.items()
+        if str(fac).strip() in rw_fac_honins_str
+    }
+    print(f"  RWフィルタ(fac_honin): {len(fac_to_docs_all)} 施設")
+elif INCLUDE_ONLY_NON_RW:
+    fac_to_docs_all = {
+        fac: docs for fac, docs in fac_to_docs_all.items()
+        if str(fac).strip() not in rw_fac_honins_str
+    }
+    print(f"  非RWフィルタ(fac_honin): {len(fac_to_docs_all)} 施設")
+else:
+    print(f"  全施設対象: {len(fac_to_docs_all)} 施設")
+
+# 解析対象医師 = フィルタ済み施設に所属する全医師（RW/非RW問わず全員）
+analysis_docs_all = set(d for docs in fac_to_docs_all.values() for d in docs)
+print(f"  解析対象医師: {len(analysis_docs_all)} 名")
 
 # 複数医師施設のみに絞り込み（メイン設定）
 fac_to_docs = {
