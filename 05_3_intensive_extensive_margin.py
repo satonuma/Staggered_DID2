@@ -640,19 +640,28 @@ x_labels = [bin_display_names[i] for i in range(actual_n_bins)]
 exp_values = [expected_effects[v] for v in bin_var_names]
 colors_exp = ["#4caf50"] + ["#2196f3"] * (actual_n_bins - 1)
 _xfont = max(6, 9 - actual_n_bins // 3)
+bin_sample_counts = [int(doctor_panel[v].sum()) for v in bin_var_names]
 
-def _setup_bar_ax(ax, vals, title, ylabel, colors=None, errs=None):
+def _setup_bar_ax(ax, vals, title, ylabel, colors=None, errs=None, n_labels=None):
     c = colors if colors is not None else ["#2196f3"] * len(vals)
     if errs is not None:
-        ax.bar(x_ticks, vals, yerr=errs, color=c, alpha=0.7, capsize=4)
+        bars = ax.bar(x_ticks, vals, yerr=errs, color=c, alpha=0.7, capsize=4)
     else:
-        ax.bar(x_ticks, vals, color=c, alpha=0.7)
+        bars = ax.bar(x_ticks, vals, color=c, alpha=0.7)
     ax.set_xticks(x_ticks)
     ax.set_xticklabels(x_labels, fontsize=_xfont, rotation=15, ha="right")
     ax.set_ylabel(ylabel, fontsize=11)
     ax.set_title(title, fontsize=12, fontweight="bold")
     ax.grid(axis="y", alpha=0.3)
     ax.axhline(0, color="black", linewidth=1)
+    if n_labels is not None:
+        y_min, y_max = ax.get_ylim()
+        y_range = y_max - y_min
+        for bar, n in zip(bars, n_labels):
+            bar_top = bar.get_height()
+            y_pos = bar_top + y_range * 0.02 if bar_top >= 0 else bar_top - y_range * 0.06
+            ax.text(bar.get_x() + bar.get_width() / 2, y_pos,
+                    f"N={n:,}", ha="center", va="bottom", fontsize=7, color="#444444")
 
 # スロットのインデックスから (row, col) を返すヘルパー
 def _slot(i):
@@ -663,7 +672,7 @@ _r, _c = _slot(0)
 ax_a = fig.add_subplot(gs[_r, _c])
 effects = [marginal_effects[v]["coefficient"] for v in bin_var_names]
 errors  = [marginal_effects[v]["se"]          for v in bin_var_names]
-_setup_bar_ax(ax_a, effects, "(a) 視聴回数別の限界効果（TWFE）", "限界効果（万円）", errs=errors)
+_setup_bar_ax(ax_a, effects, "(a) 視聴回数別の限界効果（TWFE）", "限界効果（万円）", errs=errors, n_labels=bin_sample_counts)
 
 # (b) 視聴確率（継続率）
 _r, _c = _slot(1)
@@ -683,7 +692,7 @@ ax_b.grid(alpha=0.3)
 # (c) 期待効果（全体）
 _r, _c = _slot(2)
 ax_c = fig.add_subplot(gs[_r, _c])
-_setup_bar_ax(ax_c, exp_values, "(c) 期待効果 = 視聴確率 × 限界効果", "期待効果（万円）", colors=colors_exp)
+_setup_bar_ax(ax_c, exp_values, "(c) 期待効果 = 視聴確率 × 限界効果", "期待効果（万円）", colors=colors_exp, n_labels=bin_sample_counts)
 
 # (d〜) チャネル別期待効果（チャネルごとに個別棒グラフ）
 for ci, ch in enumerate(channels_list):
@@ -695,6 +704,7 @@ for ci, ch in enumerate(channels_list):
         f"({chr(100+ci)}) チャネル別期待効果: {ch}",
         "期待効果（万円）",
         colors=[channel_palette[ci % len(channel_palette)]] * actual_n_bins,
+        n_labels=bin_sample_counts,
     )
 
 # サマリーテキスト（最終行、2列スパン）
