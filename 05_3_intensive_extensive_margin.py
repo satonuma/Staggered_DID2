@@ -234,27 +234,33 @@ if FILTER_SINGLE_FAC_DOCTOR:
     print(f"  [Step A] 1医師施設 (全ソース統合): {len(_single_honins_str)} / "
           f"総 {len(_honin_ndoc)} fac_honin")
 
-    # Step B: 1医師施設のうち、その1名がRW医師であるもののみ残す
-    #         rw_listのfac_honinをstr化してStep Aの結果と照合
-    _rw_copy = rw_list.copy()
-    _rw_copy["_fac_s"] = _rw_copy["fac_honin"].astype(str).str.strip()
-    _rw_single = (
-        _rw_copy[_rw_copy["_fac_s"].isin(_single_honins_str)][["doc", "fac_honin"]]
+    # Step B: 1医師施設の (doc, fac_honin) ペアを取得し、INCLUDE_ONLY_RW に応じて絞る
+    #         INCLUDE_ONLY_RW=True  → 1医師施設 かつ その医師が rw_list に存在
+    #         INCLUDE_ONLY_RW=False → 1医師施設 のすべて（RW・非RW問わず）
+    _fdl_copy = fac_doc_list.copy()
+    _fdl_copy["_fac_s"] = _fdl_copy["fac_honin"].astype(str).str.strip()
+    _single_pairs = (
+        _fdl_copy[_fdl_copy["_fac_s"].isin(_single_honins_str)][["doc", "fac_honin"]]
         .drop_duplicates()
     )
-    # 同一fac_honinに複数RW医師が残った場合は除外（安全策）
-    _dup_fac = _rw_single["fac_honin"].duplicated(keep=False)
+    if INCLUDE_ONLY_RW:
+        _single_pairs = _single_pairs[_single_pairs["doc"].isin(rw_doc_ids)].copy()
+        _step_b_label = "RW医師が1名所属する施設"
+    else:
+        _step_b_label = "1医師施設（全医師対象）"
+    # 同一fac_honinに複数行が残った場合は除外（安全策）
+    _dup_fac = _single_pairs["fac_honin"].duplicated(keep=False)
     if _dup_fac.sum() > 0:
-        print(f"  [Step B 保険] 同一施設に複数RW医師: {_dup_fac.sum()} 行除外")
-        _rw_single = _rw_single[~_dup_fac].copy()
-    print(f"  [Step B] RW医師が1名所属する施設: {len(_rw_single)} 施設")
+        print(f"  [Step B 保険] 同一施設に複数行: {_dup_fac.sum()} 行除外")
+        _single_pairs = _single_pairs[~_dup_fac].copy()
+    print(f"  [Step B] {_step_b_label}: {len(_single_pairs)} 施設")
 
     clean_pairs = (
-        _rw_single
+        _single_pairs
         .rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})
         .reset_index(drop=True)
     )
-    valid_doc_ids    = set(clean_pairs["doctor_id"])   # rw_listの元の型を維持
+    valid_doc_ids    = set(clean_pairs["doctor_id"])
     doc_to_fac_valid = dict(zip(clean_pairs["doctor_id"], clean_pairs["facility_id"]))
     print(f"  [クリーン1:1ペア] {len(valid_doc_ids)} 施設 / {len(valid_doc_ids)} 医師")
 else:
