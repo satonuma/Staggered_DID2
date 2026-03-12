@@ -236,23 +236,36 @@ if FILTER_SINGLE_FAC_DOCTOR:
     print(f"  [Step A] 1医師施設 (全ソース統合): {len(_single_honins_str)} / "
           f"総 {len(_honin_ndoc)} fac_honin")
 
-    # Step B: 1医師施設の (doc, fac_honin) ペアを取得し、INCLUDE_ONLY_RW に応じて絞る
-    #         INCLUDE_ONLY_RW=True  → 1医師施設 かつ その医師が rw_list に存在
-    #         INCLUDE_ONLY_RW=False → 1医師施設 のすべて（RW・非RW問わず）
+    # Step B: 1医師施設を rw_list の fac_honin で絞り込む
+    #   INCLUDE_ONLY_RW=True  → fac_honin が rw_list に存在する施設のみ
+    #   INCLUDE_ONLY_NON_RW=True → fac_honin が rw_list に存在しない施設のみ
+    #   両方False              → 全施設（RW+非RW）
+    # ※ rw_list の fac_honin = RW医師が担当として紐づく施設の識別子
+    _rw_fac_honins_str = set(rw_list["fac_honin"].astype(str).str.strip())
+
+    # _all_doc_fac（str型）から1医師施設の (doc_str, fac_str) ペアを取得
+    _single_pairs_str = _all_doc_fac[_all_doc_fac["_fac_s"].isin(_single_honins_str)].copy()
+
+    if INCLUDE_ONLY_RW:
+        _single_pairs_str = _single_pairs_str[
+            _single_pairs_str["_fac_s"].isin(_rw_fac_honins_str)
+        ].copy()
+        _step_b_label = "RW担当施設のみ"
+    elif INCLUDE_ONLY_NON_RW:
+        _single_pairs_str = _single_pairs_str[
+            ~_single_pairs_str["_fac_s"].isin(_rw_fac_honins_str)
+        ].copy()
+        _step_b_label = "非RW担当施設のみ"
+    else:
+        _step_b_label = "全施設（RW+非RW）"
+
+    # fac_doc_list（元の型）と照合して clean_pairs を元型で構築
     _fdl_copy = fac_doc_list.copy()
     _fdl_copy["_fac_s"] = _fdl_copy["fac_honin"].astype(str).str.strip()
     _single_pairs = (
-        _fdl_copy[_fdl_copy["_fac_s"].isin(_single_honins_str)][["doc", "fac_honin"]]
-        .drop_duplicates()
+        _fdl_copy[_fdl_copy["_fac_s"].isin(set(_single_pairs_str["_fac_s"]))]
+        [["doc", "fac_honin"]].drop_duplicates()
     )
-    if INCLUDE_ONLY_RW:
-        _single_pairs = _single_pairs[_single_pairs["doc"].isin(rw_doc_ids)].copy()
-        _step_b_label = "RW医師のみ"
-    elif INCLUDE_ONLY_NON_RW:
-        _single_pairs = _single_pairs[~_single_pairs["doc"].isin(rw_doc_ids)].copy()
-        _step_b_label = "非RW医師のみ"
-    else:
-        _step_b_label = "全医師（RW+非RW）"
     # 同一fac_honinに複数行が残った場合は除外（安全策）
     _dup_fac = _single_pairs["fac_honin"].duplicated(keep=False)
     if _dup_fac.sum() > 0:
