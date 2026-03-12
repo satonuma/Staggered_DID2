@@ -58,6 +58,11 @@ MIN_DOCS_PER_FAC = 2
 INCLUDE_ONLY_RW     = False
 INCLUDE_ONLY_NON_RW = False
 
+# ファイル名サフィックスをパラメータから自動生成
+_rw_tag      = "RW" if INCLUDE_ONLY_RW else ("nonRW" if INCLUDE_ONLY_NON_RW else "ALL")
+_docs_tag    = f"{MIN_DOCS_PER_FAC}docs"
+PARAM_SUFFIX = f"{_rw_tag}_{_docs_tag}"
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR   = os.path.join(SCRIPT_DIR, "本番データ")
 _required  = [FILE_SALES, FILE_DIGITAL, FILE_ACTIVITY, FILE_RW_LIST]
@@ -600,7 +605,7 @@ ax.set_title("(d) 施設医師数 × Coverage\n（色: 売上伸長率）", font
 ax.grid(True, alpha=0.3)
 
 plt.tight_layout()
-out_png = os.path.join(SCRIPT_DIR, "coverage_growth_multi_doc.png")
+out_png = os.path.join(SCRIPT_DIR, f"09_3_coverage_growth_{PARAM_SUFFIX}.png")
 plt.savefig(out_png, dpi=150, bbox_inches="tight")
 plt.close(fig)
 print(f"  保存: {out_png}")
@@ -658,7 +663,7 @@ for i, _cat in enumerate(["2〜3名", "4〜6名", "7名以上"]):
     print(f"  {_cat}: N={len(_sub)}, r={_r_s:.4f}, p={_p_s:.4f}")
 
 plt.tight_layout()
-out_png2 = os.path.join(SCRIPT_DIR, "coverage_growth_by_ndocs.png")
+out_png2 = os.path.join(SCRIPT_DIR, f"09_3_coverage_growth_by_ndocs_{PARAM_SUFFIX}.png")
 plt.savefig(out_png2, dpi=150, bbox_inches="tight")
 plt.close(fig2)
 print(f"  保存: {out_png2}")
@@ -709,7 +714,7 @@ output_json = {
     "by_ndocs_cat_corr": _ndocs_corr_results,
 }
 
-json_path = os.path.join(results_dir, "coverage_growth_multi_doc.json")
+json_path = os.path.join(results_dir, f"09_3_coverage_growth_{PARAM_SUFFIX}.json")
 with open(json_path, "w", encoding="utf-8") as f:
     json.dump(output_json, f, ensure_ascii=False, indent=2)
 print(f"  結果JSON: {json_path}")
