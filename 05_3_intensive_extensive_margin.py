@@ -63,8 +63,10 @@ FILE_DOCTOR_ATTR      = "doctor_attribute.csv"
 FILE_FAC_DOCTOR_LIST  = "施設医師リスト.csv"
 
 # --- 解析集団フィルタ ---
-INCLUDE_ONLY_RW          = True   # True: RW医師のみ / False: 全医師
-FILTER_SINGLE_FAC_DOCTOR = True   # True: 所属施設数==1の医師のみ
+INCLUDE_ONLY_RW          = True   # True: RW医師のみ
+INCLUDE_ONLY_NON_RW      = False  # True: 非RW医師のみ（INCLUDE_ONLY_RW=Falseのとき有効）
+# INCLUDE_ONLY_RW=False かつ INCLUDE_ONLY_NON_RW=False → 全医師（RW+非RW）
+FILTER_SINGLE_FAC_DOCTOR = True   # True: 1施設1医師先のみ
 DOCTOR_HONIN_FAC_COUNT_COL = "所属施設数"
 
 # --- 視聴回数ビニング ---
@@ -83,7 +85,7 @@ COST_PER_DISTRIBUTION = 0.5  # 万円
 # ================================================================
 # ファイル名サフィックスをパラメータから自動生成
 # ================================================================
-_rw_tag    = "RW"   if INCLUDE_ONLY_RW          else "ALL"
+_rw_tag    = "RW" if INCLUDE_ONLY_RW else ("nonRW" if INCLUDE_ONLY_NON_RW else "ALL")
 _fac_tag   = "1fac1doc" if FILTER_SINGLE_FAC_DOCTOR else "alldoc"
 _bin_tag   = f"{N_BINS}bins"
 PARAM_SUFFIX = f"{_rw_tag}_{_fac_tag}_{_bin_tag}"
@@ -245,9 +247,12 @@ if FILTER_SINGLE_FAC_DOCTOR:
     )
     if INCLUDE_ONLY_RW:
         _single_pairs = _single_pairs[_single_pairs["doc"].isin(rw_doc_ids)].copy()
-        _step_b_label = "RW医師が1名所属する施設"
+        _step_b_label = "RW医師のみ"
+    elif INCLUDE_ONLY_NON_RW:
+        _single_pairs = _single_pairs[~_single_pairs["doc"].isin(rw_doc_ids)].copy()
+        _step_b_label = "非RW医師のみ"
     else:
-        _step_b_label = "1医師施設（全医師対象）"
+        _step_b_label = "全医師（RW+非RW）"
     # 同一fac_honinに複数行が残った場合は除外（安全策）
     _dup_fac = _single_pairs["fac_honin"].duplicated(keep=False)
     if _dup_fac.sum() > 0:
