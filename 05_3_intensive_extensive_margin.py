@@ -206,16 +206,28 @@ else:
     after_step3 = after_step2
 
 if FILTER_SINGLE_FAC_DOCTOR:
-    # 1:1確認: fac_doc_list 全体（非RW含む全医師）でfac_honinごとの総医師数をカウント
-    # ★ after_step3（RW医師のみ）でカウントすると非RW医師が無視され、
-    #    1RW+1非RW施設が誤って1:1とみなされてしまうバグを修正
-    _honin_all_cnt: dict = {}
-    for _, _row in fac_doc_list.iterrows():
-        h = _row["fac_honin"]
-        if pd.notna(h) and str(h).strip() not in ("", "nan"):
-            _honin_all_cnt[h] = _honin_all_cnt.get(h, 0) + 1
+    # 1:1確認: 全データソース（fac_doc_list + digital_raw + activity_raw）から
+    # fac_honinごとのユニーク医師数を集計する包括的チェック
+    # ★ fac_doc_listがRW医師のみの場合、非RW医師が他ソースに存在しても
+    #    fac_doc_list単独では検出できないため全ソースを統合する
+    _src_parts = [fac_doc_list[["doc", "fac_honin"]].copy()]
+    if "doc" in digital_raw.columns and "fac_honin" in digital_raw.columns:
+        _src_parts.append(digital_raw[["doc", "fac_honin"]].copy())
+    if "doc" in activity_raw.columns and "fac_honin" in activity_raw.columns:
+        _src_parts.append(activity_raw[["doc", "fac_honin"]].copy())
+    _all_doc_fac = pd.concat(_src_parts, ignore_index=True)
+    _all_doc_fac["fac_honin"] = _all_doc_fac["fac_honin"].astype(str).str.strip()
+    _all_doc_fac = _all_doc_fac[
+        _all_doc_fac["doc"].notna()
+        & (_all_doc_fac["fac_honin"] != "")
+        & (_all_doc_fac["fac_honin"] != "nan")
+    ].drop_duplicates()
+    _honin_all_cnt = _all_doc_fac.groupby("fac_honin")["doc"].nunique().to_dict()
+    _n_single_h = sum(1 for v in _honin_all_cnt.values() if v == 1)
+    print(f"  [包括的1:1チェック] 全ソース統合: 1医師施設={_n_single_h}件 / 総施設={len(_honin_all_cnt)}件")
+
     candidate_docs = {d for d in after_step3
-                      if _honin_all_cnt.get(_doc_to_honin.get(d), 99) == 1}
+                      if _honin_all_cnt.get(str(_doc_to_honin.get(d, "")), 99) == 1}
     print(f"  Step1:{len(after_step1)} → Step2:{len(after_step2)} → Step3:{len(after_step3)} "
           f"({'RW医師のみ' if INCLUDE_ONLY_RW else '全医師'}) → 1:1確認後:{len(candidate_docs)}")
 
