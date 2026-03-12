@@ -226,6 +226,13 @@ if FILTER_SINGLE_FAC_DOCTOR:
         & (clean_pairs["fac_honin"].astype(str).str.strip().isin(["", "nan"]) == False)
     ].copy()
     clean_pairs = clean_pairs.rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})
+    # ★ 最終保険: rw_list と fac_doc_list の fac_honin が一致しない場合に
+    #    同一施設に複数医師が残ることがあるため、facility_id が重複する行をすべて除外
+    _fac_dup_mask = clean_pairs["facility_id"].duplicated(keep=False)
+    _n_dup = _fac_dup_mask.sum()
+    if _n_dup > 0:
+        print(f"  [最終1:1保険] facility_id重複 {_n_dup} 行除外（rw_list/fac_doc_list間のfac_honin不一致）")
+        clean_pairs = clean_pairs[~_fac_dup_mask].copy()
     valid_doc_ids    = set(clean_pairs["doctor_id"])
     doc_to_fac_valid = dict(zip(clean_pairs["doctor_id"], clean_pairs["facility_id"]))
     print(f"  [クリーン1:1ペア] {len(valid_doc_ids)} 施設 / {len(valid_doc_ids)} 医師")
