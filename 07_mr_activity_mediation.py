@@ -178,21 +178,27 @@ _doc_to_honin = dict(zip(fac_doc_list["doc"], fac_doc_list["fac_honin"]))
 all_docs = set(fac_doc_list["doc"])  # 全医師は施設医師リスト.csv
 after_step1 = {d for d in all_docs if _doc_to_fac.get(d) in single_staff_fac}
 after_step2 = after_step1 & single_honin_docs
-if INCLUDE_ONLY_RW:
-    after_step3 = after_step2 & rw_doc_ids
-    _step3_label = "RW医師のみ"
-elif INCLUDE_ONLY_NON_RW:
-    after_step3 = after_step2 - rw_doc_ids
-    _step3_label = "非RW医師のみ"
-else:
-    after_step3 = after_step2
-    _step3_label = "全医師"
+# _honin_cnt を after_step2 全員（RW有無問わず）で計算し1:1施設を正しく特定
+# ※ after_step3(RW絞り)でカウントすると非RW医師が同一施設にいる場合に混入する
+rw_fac_honins_str = set(rw_list["fac_honin"].astype(str).str.strip())
 _honin_cnt: dict = {}
-for d in after_step3:
+for d in after_step2:
     h = _doc_to_honin[d]
     _honin_cnt[h] = _honin_cnt.get(h, 0) + 1
-candidate_docs = {d for d in after_step3 if _honin_cnt[_doc_to_honin[d]] == 1}
-print(f"  Step1通過:{len(after_step1)} → Step2通過:{len(after_step2)} → Step3通過:{len(after_step3)} ({_step3_label}) → 1:1確認後:{len(candidate_docs)}")
+_single_honins = {h for h, cnt in _honin_cnt.items() if cnt == 1}
+
+# fac_honin レベルで RW フィルタ
+if INCLUDE_ONLY_RW:
+    _target_honins = _single_honins & rw_fac_honins_str
+    _step3_label = "RW担当施設のみ"
+elif INCLUDE_ONLY_NON_RW:
+    _target_honins = _single_honins - rw_fac_honins_str
+    _step3_label = "非RW担当施設のみ"
+else:
+    _target_honins = _single_honins
+    _step3_label = "全施設（RW+非RW）"
+candidate_docs = {d for d in after_step2 if _doc_to_honin[d] in _target_honins}
+print(f"  Step1通過:{len(after_step1)} → Step2通過:{len(after_step2)} → 1:1確認後:{len(candidate_docs)} ({_step3_label})")
 
 _pair_src = rw_list if INCLUDE_ONLY_RW else fac_doc_list
 clean_pairs = _pair_src[_pair_src["doc"].isin(candidate_docs)][["doc", "fac_honin"]].drop_duplicates()

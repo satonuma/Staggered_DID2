@@ -589,22 +589,31 @@ if _zero_docs_set:
 _doc_primary_all = pd.concat([_single_assign, _multi_assign])
 doc_primary_fac = _doc_primary_all  # doc → fac_honin
 
-# 医師フィルタ
-rw_doc_ids = set(rw_list["doc"])
-if INCLUDE_ONLY_RW:
-    analysis_docs_all = all_docs & rw_doc_ids
-    print(f"  [Step 3] RWフィルタ適用: {len(analysis_docs_all)} 名")
-elif INCLUDE_ONLY_NON_RW:
-    analysis_docs_all = all_docs - rw_doc_ids
-    print(f"  [Step 3] 非RWフィルタ適用: {len(analysis_docs_all)} 名")
-else:
-    analysis_docs_all = all_docs
-    print(f"  [Step 3] スキップ (全医師): {len(analysis_docs_all)} 名")
+# Step 3: 施設レベルのRW/非RWフィルタ（fac_honinベース）
+# ※ 医師IDで絞ると「RW医師の主施設 ≠ rw_list.fac_honin」な施設が混入するため
+rw_fac_honins_str = set(rw_list["fac_honin"].astype(str).str.strip())
 
-# 施設→医師リスト (1:N)
-_prim_filt = doc_primary_fac[doc_primary_fac.index.isin(analysis_docs_all)]
-_prim_df = pd.DataFrame({"doc": _prim_filt.index, "fac": _prim_filt.values})
+# 施設→医師リスト (1:N、全医師から構築してからフィルタ)
+_prim_df = pd.DataFrame({"doc": doc_primary_fac.index, "fac": doc_primary_fac.values})
 fac_to_docs = _prim_df.groupby("fac")["doc"].agg(list).to_dict()
+
+if INCLUDE_ONLY_RW:
+    fac_to_docs = {
+        fac: docs for fac, docs in fac_to_docs.items()
+        if str(fac).strip() in rw_fac_honins_str
+    }
+    print(f"  [Step 3] RWフィルタ(fac_honin): {len(fac_to_docs)} 施設")
+elif INCLUDE_ONLY_NON_RW:
+    fac_to_docs = {
+        fac: docs for fac, docs in fac_to_docs.items()
+        if str(fac).strip() not in rw_fac_honins_str
+    }
+    print(f"  [Step 3] 非RWフィルタ(fac_honin): {len(fac_to_docs)} 施設")
+else:
+    print(f"  [Step 3] スキップ (全施設): {len(fac_to_docs)} 施設")
+
+# 解析対象医師 = フィルタ済み施設の全所属医師
+analysis_docs_all = set(d for docs in fac_to_docs.values() for d in docs)
 
 n_docs_map = {fac: len(docs) for fac, docs in fac_to_docs.items()}
 
