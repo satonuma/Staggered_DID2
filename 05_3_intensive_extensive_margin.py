@@ -206,46 +206,55 @@ else:
     after_step3 = after_step2
 
 if FILTER_SINGLE_FAC_DOCTOR:
-    # 1:1確認: 全データソース（fac_doc_list + digital_raw + activity_raw）から
-    # fac_honinごとのユニーク医師数を集計する包括的チェック
-    # ★ fac_doc_listがRW医師のみの場合、非RW医師が他ソースに存在しても
-    #    fac_doc_list単独では検出できないため全ソースを統合する
-    _src_parts = [fac_doc_list[["doc", "fac_honin"]].copy()]
+    # ================================================================
+    # 施設単位フィルタ（正しいロジック）
+    # ① まず「1施設1医師」の施設を特定（全データソース統合）
+    # ② 次にその施設の唯一の医師がRW医師であるもののみ残す
+    # ================================================================
+
+    # Step A: 全データソース（fac_doc_list + digital_raw + activity_raw）を統合し
+    #         fac_honinごとのユニーク医師数を集計
+    #         → str型に統一してカウントすることで型不一致による漏れを防ぐ
+    _src_parts = [fac_doc_list[["doc", "fac_honin"]]]
     if "doc" in digital_raw.columns and "fac_honin" in digital_raw.columns:
-        _src_parts.append(digital_raw[["doc", "fac_honin"]].copy())
+        _src_parts.append(digital_raw[["doc", "fac_honin"]])
     if "doc" in activity_raw.columns and "fac_honin" in activity_raw.columns:
-        _src_parts.append(activity_raw[["doc", "fac_honin"]].copy())
+        _src_parts.append(activity_raw[["doc", "fac_honin"]])
+
     _all_doc_fac = pd.concat(_src_parts, ignore_index=True)
-    _all_doc_fac["fac_honin"] = _all_doc_fac["fac_honin"].astype(str).str.strip()
+    _all_doc_fac["_doc_s"] = _all_doc_fac["doc"].astype(str).str.strip()
+    _all_doc_fac["_fac_s"] = _all_doc_fac["fac_honin"].astype(str).str.strip()
     _all_doc_fac = _all_doc_fac[
-        _all_doc_fac["doc"].notna()
-        & (_all_doc_fac["fac_honin"] != "")
-        & (_all_doc_fac["fac_honin"] != "nan")
-    ].drop_duplicates()
-    _honin_all_cnt = _all_doc_fac.groupby("fac_honin")["doc"].nunique().to_dict()
-    _n_single_h = sum(1 for v in _honin_all_cnt.values() if v == 1)
-    print(f"  [包括的1:1チェック] 全ソース統合: 1医師施設={_n_single_h}件 / 総施設={len(_honin_all_cnt)}件")
+        (_all_doc_fac["_doc_s"] != "") & (_all_doc_fac["_doc_s"] != "nan") &
+        (_all_doc_fac["_fac_s"] != "") & (_all_doc_fac["_fac_s"] != "nan")
+    ][["_doc_s", "_fac_s"]].drop_duplicates()
 
-    candidate_docs = {d for d in after_step3
-                      if _honin_all_cnt.get(str(_doc_to_honin.get(d, "")), 99) == 1}
-    print(f"  Step1:{len(after_step1)} → Step2:{len(after_step2)} → Step3:{len(after_step3)} "
-          f"({'RW医師のみ' if INCLUDE_ONLY_RW else '全医師'}) → 1:1確認後:{len(candidate_docs)}")
+    _honin_ndoc = _all_doc_fac.groupby("_fac_s")["_doc_s"].nunique()
+    _single_honins_str = set(_honin_ndoc[_honin_ndoc == 1].index)  # str型のfac_honin集合
+    print(f"  [Step A] 1医師施設 (全ソース統合): {len(_single_honins_str)} / "
+          f"総 {len(_honin_ndoc)} fac_honin")
 
-    _pair_src = rw_list if INCLUDE_ONLY_RW else fac_doc_list
-    clean_pairs = _pair_src[_pair_src["doc"].isin(candidate_docs)][["doc", "fac_honin"]].drop_duplicates()
-    clean_pairs = clean_pairs[
-        clean_pairs["fac_honin"].notna()
-        & (clean_pairs["fac_honin"].astype(str).str.strip().isin(["", "nan"]) == False)
-    ].copy()
-    clean_pairs = clean_pairs.rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})
-    # ★ 最終保険: rw_list と fac_doc_list の fac_honin が一致しない場合に
-    #    同一施設に複数医師が残ることがあるため、facility_id が重複する行をすべて除外
-    _fac_dup_mask = clean_pairs["facility_id"].duplicated(keep=False)
-    _n_dup = _fac_dup_mask.sum()
-    if _n_dup > 0:
-        print(f"  [最終1:1保険] facility_id重複 {_n_dup} 行除外（rw_list/fac_doc_list間のfac_honin不一致）")
-        clean_pairs = clean_pairs[~_fac_dup_mask].copy()
-    valid_doc_ids    = set(clean_pairs["doctor_id"])
+    # Step B: 1医師施設のうち、その1名がRW医師であるもののみ残す
+    #         rw_listのfac_honinをstr化してStep Aの結果と照合
+    _rw_copy = rw_list.copy()
+    _rw_copy["_fac_s"] = _rw_copy["fac_honin"].astype(str).str.strip()
+    _rw_single = (
+        _rw_copy[_rw_copy["_fac_s"].isin(_single_honins_str)][["doc", "fac_honin"]]
+        .drop_duplicates()
+    )
+    # 同一fac_honinに複数RW医師が残った場合は除外（安全策）
+    _dup_fac = _rw_single["fac_honin"].duplicated(keep=False)
+    if _dup_fac.sum() > 0:
+        print(f"  [Step B 保険] 同一施設に複数RW医師: {_dup_fac.sum()} 行除外")
+        _rw_single = _rw_single[~_dup_fac].copy()
+    print(f"  [Step B] RW医師が1名所属する施設: {len(_rw_single)} 施設")
+
+    clean_pairs = (
+        _rw_single
+        .rename(columns={"doc": "doctor_id", "fac_honin": "facility_id"})
+        .reset_index(drop=True)
+    )
+    valid_doc_ids    = set(clean_pairs["doctor_id"])   # rw_listの元の型を維持
     doc_to_fac_valid = dict(zip(clean_pairs["doctor_id"], clean_pairs["facility_id"]))
     print(f"  [クリーン1:1ペア] {len(valid_doc_ids)} 施設 / {len(valid_doc_ids)} 医師")
 else:
