@@ -1,0 +1,101 @@
+{
+  "analysis_settings": {
+    "script": "09-3_coverage_growth_analysis.py",
+    "target": "複数医師施設のみ（2名以上）",
+    "rationale": "1施設1医師ではCoverageが0/1バイナリになりバイアスが生じるため除外",
+    "pre_period": "month 0-11 (12ヶ月)",
+    "post_period": "month 12-32 (21ヶ月)",
+    "outcome": "後期月平均 - 前期月平均（円）/ 前期月平均（%）",
+    "coverage_def": "解析期間中に視聴した医師数 / 施設の総医師数"
+  },
+  "sample_sizes": {
+    "all_facilities": 191,
+    "single_doc_excluded": 106,
+    "multi_doc_analyzed": 85,
+    "washout_excluded": 11,
+    "treated_fac": 54,
+    "control_fac": 22
+  },
+  "coverage_stats": {
+    "treated_mean": 0.5222222222222223,
+    "treated_median": 0.5,
+    "treated_std": 0.23712109795279632,
+    "n_full_coverage": 8
+  },
+  "regression": {
+    "pearson_r": 0.3498284891046221,
+    "pearson_p": 0.009512851480230303,
+    "spearman_rho": 0.367436838219855,
+    "spearman_p": 0.006271323523569546,
+    "ols_coef_coverage": 24.12861005529978,
+    "ols_se": 10.118632116999986,
+    "ols_p": 0.01709898682392021,
+    "ols_r2": 0.12237997178922266
+  },
+  "category_stats": [
+    {
+      "category": "未視聴",
+      "n": 22,
+      "mean_growth_rate": 28.486405447606924,
+      "sd": 15.362544849900273,
+      "se": 3.2753055670439317,
+      "mean_coverage": 0.0,
+      "ci_lo": 22.06680653620082,
+      "ci_hi": 34.90600435901303
+    },
+    {
+      "category": "低Coverage",
+      "n": 40,
+      "mean_growth_rate": 36.741897566692,
+      "sd": 15.718454673694866,
+      "se": 2.4853059033497265,
+      "mean_coverage": 0.40499999999999997,
+      "ci_lo": 31.870697996126538,
+      "ci_hi": 41.61309713725747,
+      "vs_control_diff": 8.25549211908508,
+      "vs_control_p": 0.050782984645360366,
+      "vs_control_sig": "†"
+    },
+    {
+      "category": "中Coverage",
+      "n": 6,
+      "mean_growth_rate": 34.15119507561401,
+      "sd": 8.748662883177106,
+      "se": 3.5716266659017046,
+      "mean_coverage": 0.6666666666666666,
+      "ci_lo": 27.15080681044667,
+      "ci_hi": 41.15158334078135,
+      "vs_control_diff": 5.664789628007089,
+      "vs_control_p": 0.2612778015201385,
+      "vs_control_sig": "n.s."
+    },
+    {
+      "category": "高Coverage",
+      "n": 8,
+      "mean_growth_rate": 53.58557546868281,
+      "sd": 17.367170606601622,
+      "se": 6.1402220529758464,
+      "mean_coverage": 1.0,
+      "ci_lo": 41.550740244850154,
+      "ci_hi": 65.62041069251546,
+      "vs_control_diff": 25.09917002107589,
+      "vs_control_p": 0.003981260890287362,
+      "vs_control_sig": "**"
+    }
+  ],
+  "by_ndocs_cat_corr": {
+    "2〜3名": {
+      "n": 41,
+      "r": 0.2117280202725203,
+      "p": 0.1838747690363952
+    },
+    "4〜6名": {
+      "n": 13,
+      "r": 0.6226283810758763,
+      "p": 0.023036339362930064
+    },
+    "7名以上": {
+      "n": 0
+    }
+  }
+}
