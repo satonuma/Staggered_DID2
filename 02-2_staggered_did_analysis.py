@@ -36,6 +36,7 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 ENT_PRODUCT_CODE = "00001"              # ENT品目コード (5桁文字列、パラメータ)
 CONTENT_TYPES = ["webiner", "e_contents", "Web講演会"]  # チャネル大分類 (拡張可能)
 ACTIVITY_CHANNEL_FILTER = "Web講演会"   # 活動データから抽出する活動種別
+MR_ACTIVITY_TYPES = ["面談", "面談_アポ", "説明会"]  # MR活動種別 (非デジタル対面活動)
 
 # ===================================================================
 # 共変量設定 (ver2: 施設レベル属性 + 施設医師数)
@@ -885,11 +886,10 @@ print("\n" + "=" * 70)
 print(" Part 5b: ロバストネスチェック (MR活動共変量)")
 print("=" * 70)
 
-# 1. 活動データから非デジタル活動 (面談, 面談_アポ, 説明会, その他) を抽出
-#    CONTENT_TYPES (webiner, e_contents, Web講演会) は処置変数 → 除外
+# 1. 活動データからMR活動 (面談, 面談_アポ, 説明会) を抽出
 mr_activity = activity_raw[
     (activity_raw["品目コード"] == ENT_PRODUCT_CODE)
-    & (~activity_raw["活動種別"].isin(CONTENT_TYPES))
+    & (activity_raw["活動種別"].isin(MR_ACTIVITY_TYPES))
 ].copy()
 
 # 2. 施設×月次で集計
@@ -906,7 +906,7 @@ mr_counts = (
 )
 mr_counts = mr_counts.rename(columns={"mr_facility_id": "facility_id"})
 
-print(f"\n  MR活動レコード数 (非デジタル): {len(mr_activity):,}")
+print(f"\n  MR活動レコード数 (面談・面談_アポ・説明会): {len(mr_activity):,}")
 print(f"  活動種別内訳:")
 for act_type, cnt in mr_activity["活動種別"].value_counts().items():
     print(f"    {act_type}: {cnt:,}")
@@ -969,11 +969,11 @@ _cov["n_docs"] = pd.Series(n_docs_map).reindex(_cov.index, fill_value=1)
 print(f"  n_docs: 平均={_cov['n_docs'].mean():.1f}, 最大={_cov['n_docs'].max()}")
 
 # MR活動ベースライン（処置前期間: month_index < WASHOUT_MONTHS の月平均）
-# ※ CONTENT_TYPES（デジタルチャネル）を除いた面談・説明会等の活動に限定
+# ※ MR_ACTIVITY_TYPES（面談・面談_アポ・説明会）に限定
 # ※ MR活動量の多い施設は処置確率にも影響するため傾向スコア共変量として追加
 _mr_bl_raw = activity_raw[
     (activity_raw["品目コード"] == ENT_PRODUCT_CODE)
-    & (~activity_raw["活動種別"].isin(CONTENT_TYPES))
+    & (activity_raw["活動種別"].isin(MR_ACTIVITY_TYPES))
 ].copy()
 if len(_mr_bl_raw) > 0:
     _mr_bl_raw["活動日_dt"] = pd.to_datetime(_mr_bl_raw["活動日_dt"], format="mixed")
