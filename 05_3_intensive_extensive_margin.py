@@ -637,9 +637,25 @@ channel_palette = ["#2196f3", "#ff9800", "#4caf50", "#e91e63", "#9c27b0"]
 # チャネル別ビン期待効果
 # P(view via channel c in bin i) × marginal_effect[bin i]
 channel_bin_expected = {}
+channel_bin_counts   = {}   # チャネル×ビン別の実視聴イベント数（N表示用）
+
+# 施設×チャネル別の総視聴回数（ピーク閾値以上割合の計算に使用）
+_ch_fac_total = (
+    channel_monthly.groupby(["facility_id", "channel_category"])["ch_view_count"]
+    .sum().reset_index(name="total_ch_views")
+)
+# 全施設を分母とするため 0 で埋める
+_all_facs_df = pd.DataFrame({"facility_id": fac_list})
+ch_fac_total_wide = {}
+for ch in channels_list:
+    _tmp = _ch_fac_total[_ch_fac_total["channel_category"] == ch][["facility_id", "total_ch_views"]]
+    _merged = _all_facs_df.merge(_tmp, on="facility_id", how="left").fillna(0)
+    ch_fac_total_wide[ch] = _merged.set_index("facility_id")["total_ch_views"]
+
 for ch in channels_list:
     ch_data = channel_with_cum[channel_with_cum["channel_category"] == ch]
     ch_expected = []
+    ch_counts   = []
     for i, var in enumerate(bin_var_names):
         lo_edge = bin_edges[i]
         hi_edge = bin_edges[i + 1]
@@ -653,8 +669,20 @@ for ch in channels_list:
         ]["ch_view_count"].sum())
         prob_ch = n_ch / n_denom if n_denom > 0 else 0.0
         ch_expected.append(prob_ch * marginal_effects[var]["coefficient"])
+        ch_counts.append(n_ch)
     channel_bin_expected[ch] = ch_expected
+    channel_bin_counts[ch]   = ch_counts
     print(f"  {ch}: " + ", ".join(f"{v:.2f}" for v in ch_expected))
+
+# チャネル別ピーク閾値以上割合
+channel_peak_stats = {}
+print(f"\n  チャネル別ピーク閾値（累積{_peak_lo}回以上）割合:")
+for ch in channels_list:
+    _ch_views = ch_fac_total_wide[ch]
+    _n_above  = int((_ch_views >= _peak_lo).sum())
+    _pct      = _n_above / _n_total_fac if _n_total_fac > 0 else 0.0
+    channel_peak_stats[ch] = {"n_above": _n_above, "pct_above": _pct}
+    print(f"    {ch}: {_n_above}/{_n_total_fac} ({_pct:.1%})")
 
 # ================================================================
 # 可視化（2列レイアウト）
@@ -757,12 +785,20 @@ for ci, ch in enumerate(channels_list):
     _r, _c = _slot(4 + ci)
     ax_ch = fig.add_subplot(gs[_r, _c])
     ch_vals = channel_bin_expected[ch]
+    _ps = channel_peak_stats[ch]
     _setup_bar_ax(
         ax_ch, ch_vals,
         f"({chr(101+ci)}) チャネル別期待効果: {ch}",
         "期待効果（万円）",
         colors=[channel_palette[ci % len(channel_palette)]] * actual_n_bins,
-        n_labels=bin_sample_counts,
+        n_labels=channel_bin_counts[ch],
+    )
+    # ピーク閾値以上割合をグラフ右上に注釈
+    ax_ch.text(
+        0.98, 0.97,
+        f"累積{_peak_lo}回以上\n{_ps['n_above']}/{_n_total_fac} ({_ps['pct_above']:.1%})",
+        transform=ax_ch.transAxes, fontsize=8, va="top", ha="right",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="lightyellow", alpha=0.8),
     )
 
 # サマリーテキスト（最終行、2列スパン）
@@ -846,6 +882,10 @@ output_json = {
         "threshold_stats": _threshold_stats,
         "final_cum_views_describe": {
             k: float(v) for k, v in fac_final_cum["final_cum_views"].describe().items()
+        },
+        "channel_peak_stats": {
+            ch: {"n_above": s["n_above"], "pct_above": float(s["pct_above"])}
+            for ch, s in channel_peak_stats.items()
         },
     },
     "interpretation": {
