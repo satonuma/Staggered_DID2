@@ -429,7 +429,7 @@ try:
 
     if _full_mask.sum() > 0 and _part_mask.sum() >= 4:
         # coverage=1.0を「高Coverage」, 残りをqcutで低/中に分割
-        unit_df["coverage_cat"] = np.nan
+        unit_df["coverage_cat"] = None  # object dtype で初期化
         unit_df.loc[_full_mask, "coverage_cat"] = "高Coverage"
         _part_cats = pd.qcut(
             unit_df.loc[_part_mask, "coverage"],
@@ -441,16 +441,17 @@ try:
             unit_df["coverage"].where(unit_df["treated"] == 1),
             q=3, labels=["低Coverage", "中Coverage", "高Coverage"],
             duplicates="drop"
-        )
+        ).astype(object)  # Categorical → object に変換して「未視聴」代入を可能にする
 
-    # 対照群は「未視聴」
+    # 対照群は「未視聴」（object型でないと代入できない）
+    unit_df["coverage_cat"] = unit_df["coverage_cat"].astype(object)
     unit_df.loc[unit_df["treated"] == 0, "coverage_cat"] = "未視聴"
 
 except Exception as e:
     print(f"  カテゴリ分け失敗: {e}")
     # フォールバック: 中央値で2分割
     _med = _treated_cov.median()
-    unit_df["coverage_cat"] = np.nan
+    unit_df["coverage_cat"] = None  # object dtype で初期化
     unit_df.loc[unit_df["treated"] == 0, "coverage_cat"] = "未視聴"
     unit_df.loc[(unit_df["treated"] == 1) & (unit_df["coverage"] <= _med), "coverage_cat"] = "低Coverage"
     unit_df.loc[(unit_df["treated"] == 1) & (unit_df["coverage"] > _med),  "coverage_cat"] = "高Coverage"
