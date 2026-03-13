@@ -614,6 +614,11 @@ for ts in _threshold_stats:
 # ================================================================
 print("\n[チャネル別期待効果]")
 
+# 施設→医師マッピング（ユニーク施設数・医師数の計算に使用）
+_fac_to_docs_map: dict = {}
+for _d, _f in doc_to_fac_valid.items():
+    _fac_to_docs_map.setdefault(_f, set()).add(_d)
+
 # viewing_clean に month_id を付与してチャネル×ビン別視聴数を集計（施設単位）
 channel_monthly = (
     viewing_clean.groupby(["facility_id", "year_month", "channel_category"])
@@ -636,8 +641,9 @@ channel_palette = ["#2196f3", "#ff9800", "#4caf50", "#e91e63", "#9c27b0"]
 
 # チャネル別ビン期待効果
 # P(view via channel c in bin i) × marginal_effect[bin i]
-channel_bin_expected = {}
-channel_bin_counts   = {}   # チャネル×ビン別の実視聴イベント数（N表示用）
+channel_bin_expected   = {}
+channel_bin_fac_counts = {}   # チャネル×ビン別ユニーク施設数
+channel_bin_doc_counts = {}   # チャネル×ビン別ユニーク医師数
 
 # 施設×チャネル別の総視聴回数（ピーク閾値以上割合の計算に使用）
 _ch_fac_total = (
@@ -655,23 +661,30 @@ for ch in channels_list:
 for ch in channels_list:
     ch_data = channel_with_cum[channel_with_cum["channel_category"] == ch]
     ch_expected = []
-    ch_counts   = []
+    ch_fac_bin  = []
+    ch_doc_bin  = []
     for i, var in enumerate(bin_var_names):
         lo_edge = bin_edges[i]
         hi_edge = bin_edges[i + 1]
-        n_denom = len(doctor_panel[
+        _bin_mask_panel = (
             (doctor_panel["cumulative_views"] > lo_edge)
             & (doctor_panel["cumulative_views"] <= hi_edge)
-        ])
-        n_ch = int(ch_data[
+        )
+        n_denom = int(_bin_mask_panel.sum())
+        _ch_bin_mask = (
             (ch_data["cumulative_views"] > lo_edge)
             & (ch_data["cumulative_views"] <= hi_edge)
-        ]["ch_view_count"].sum())
+        )
+        n_ch = int(ch_data.loc[_ch_bin_mask, "ch_view_count"].sum())
         prob_ch = n_ch / n_denom if n_denom > 0 else 0.0
         ch_expected.append(prob_ch * marginal_effects[var]["coefficient"])
-        ch_counts.append(n_ch)
-    channel_bin_expected[ch] = ch_expected
-    channel_bin_counts[ch]   = ch_counts
+        # ユニーク施設数・医師数（そのビンにcumulative_viewsが属し、かつチャネルイベントあり）
+        _ch_facs = set(ch_data.loc[_ch_bin_mask, "facility_id"].unique())
+        ch_fac_bin.append(len(_ch_facs))
+        ch_doc_bin.append(sum(len(_fac_to_docs_map.get(f, set())) for f in _ch_facs))
+    channel_bin_expected[ch]   = ch_expected
+    channel_bin_fac_counts[ch] = ch_fac_bin
+    channel_bin_doc_counts[ch] = ch_doc_bin
     print(f"  {ch}: " + ", ".join(f"{v:.2f}" for v in ch_expected))
 
 # チャネル別ピーク閾値以上割合
@@ -710,9 +723,15 @@ x_labels = [bin_display_names[i] for i in range(actual_n_bins)]
 exp_values = [expected_effects[v] for v in bin_var_names]
 colors_exp = ["#4caf50"] + ["#2196f3"] * (actual_n_bins - 1)
 _xfont = max(6, 9 - actual_n_bins // 3)
-bin_sample_counts = [int(doctor_panel[v].sum()) for v in bin_var_names]
+# ビン別ユニーク施設数・医師数
+bin_fac_counts = []
+bin_doc_counts = []
+for v in bin_var_names:
+    _facs = set(doctor_panel.loc[doctor_panel[v].astype(bool), "facility_id"])
+    bin_fac_counts.append(len(_facs))
+    bin_doc_counts.append(sum(len(_fac_to_docs_map.get(f, set())) for f in _facs))
 
-def _setup_bar_ax(ax, vals, title, ylabel, colors=None, errs=None, n_labels=None):
+def _setup_bar_ax(ax, vals, title, ylabel, colors=None, errs=None, n_fac=None, n_doc=None):
     c = colors if colors is not None else ["#2196f3"] * len(vals)
     if errs is not None:
         bars = ax.bar(x_ticks, vals, yerr=errs, color=c, alpha=0.7, capsize=4)
@@ -724,20 +743,18 @@ def _setup_bar_ax(ax, vals, title, ylabel, colors=None, errs=None, n_labels=None
     ax.set_title(title, fontsize=12, fontweight="bold")
     ax.grid(axis="y", alpha=0.3)
     ax.axhline(0, color="black", linewidth=1)
-    if n_labels is not None:
+    if n_fac is not None and n_doc is not None:
         y_min, y_max = ax.get_ylim()
         y_range = y_max - y_min
         label_y_tops = []
-        for i, (bar, n) in enumerate(zip(bars, n_labels)):
+        for i, (bar, nf, nd) in enumerate(zip(bars, n_fac, n_doc)):
             bar_top = bar.get_height()
-            # エラーバーがある場合はエラーバー上端の上にラベルを配置（上空白を防ぐ）
             err_i = float(errs[i]) if (errs is not None and i < len(errs)) else 0.0
             label_base = (bar_top + err_i) if bar_top >= 0 else bar_top
             y_pos = label_base + y_range * 0.02 if bar_top >= 0 else bar_top - y_range * 0.06
             ax.text(bar.get_x() + bar.get_width() / 2, y_pos,
-                    f"N={n:,}", ha="center", va="bottom", fontsize=7, color="#444444")
-            label_y_tops.append(y_pos + y_range * 0.02)
-        # y軸をラベルが収まるよう拡張
+                    f"施設{nf}\n医師{nd}", ha="center", va="bottom", fontsize=6, color="#444444")
+            label_y_tops.append(y_pos + y_range * 0.04)
         ax.set_ylim(y_min, max(y_max, max(label_y_tops)))
 
 # スロットのインデックスから (row, col) を返すヘルパー
@@ -749,7 +766,7 @@ _r, _c = _slot(0)
 ax_a = fig.add_subplot(gs[_r, _c])
 effects = [marginal_effects[v]["coefficient"] for v in bin_var_names]
 errors  = [marginal_effects[v]["se"]          for v in bin_var_names]
-_setup_bar_ax(ax_a, effects, "(a) 視聴回数別の限界効果（TWFE）", "限界効果（万円）", errs=errors, n_labels=bin_sample_counts)
+_setup_bar_ax(ax_a, effects, "(a) 視聴回数別の限界効果（TWFE）", "限界効果（万円）", errs=errors, n_fac=bin_fac_counts, n_doc=bin_doc_counts)
 
 # (b) 視聴確率（継続率）
 _r, _c = _slot(1)
@@ -769,7 +786,7 @@ ax_b.grid(alpha=0.3)
 # (c) 期待効果（全体）
 _r, _c = _slot(2)
 ax_c = fig.add_subplot(gs[_r, _c])
-_setup_bar_ax(ax_c, exp_values, "(c) 期待効果 = 視聴確率 × 限界効果", "期待効果（万円）", colors=colors_exp, n_labels=bin_sample_counts)
+_setup_bar_ax(ax_c, exp_values, "(c) 期待効果 = 視聴確率 × 限界効果", "期待効果（万円）", colors=colors_exp, n_fac=bin_fac_counts, n_doc=bin_doc_counts)
 
 # (d) 解析対象集団の視聴数分布とピーク閾値
 _r, _c = _slot(3)
@@ -806,7 +823,8 @@ for ci, ch in enumerate(channels_list):
         f"({_letter1}) チャネル別期待効果: {ch}",
         "期待効果（万円）",
         colors=[_ch_color] * actual_n_bins,
-        n_labels=channel_bin_counts[ch],
+        n_fac=channel_bin_fac_counts[ch],
+        n_doc=channel_bin_doc_counts[ch],
     )
     ax_ch.text(
         0.98, 0.97,
@@ -886,7 +904,8 @@ output_json = {
             "display_name": bin_display_names[i],
             "lo_cumulative": int(np.floor(bin_edges[i])) + 1,
             "hi_cumulative": int(np.floor(bin_edges[i + 1])),
-            "sample_count": int(doctor_panel[bin_var_names[i]].sum()),
+            "n_facilities": bin_fac_counts[i],
+            "n_doctors": bin_doc_counts[i],
         }
         for i in range(actual_n_bins)
     },
