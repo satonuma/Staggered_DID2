@@ -1,0 +1,360 @@
+{
+  "params": {
+    "INCLUDE_ONLY_RW": true,
+    "FILTER_SINGLE_FAC_DOCTOR": false,
+    "N_BINS": 10,
+    "actual_n_bins": 10,
+    "ENT_PRODUCT_CODE": "00001",
+    "COST_PER_DISTRIBUTION": 0.5,
+    "param_suffix": "RW_alldoc_10bins"
+  },
+  "bin_info": {
+    "view_bin_1": {
+      "display_name": "累積0-1回→視聴\n（1-2回目）",
+      "lo_cumulative": 0,
+      "hi_cumulative": 1,
+      "sample_count": 198
+    },
+    "view_bin_2": {
+      "display_name": "累積2回→視聴\n（3回目）",
+      "lo_cumulative": 2,
+      "hi_cumulative": 2,
+      "sample_count": 67
+    },
+    "view_bin_3": {
+      "display_name": "累積3-5回→視聴\n（4-6回目）",
+      "lo_cumulative": 3,
+      "hi_cumulative": 5,
+      "sample_count": 173
+    },
+    "view_bin_4": {
+      "display_name": "累積6-7回→視聴\n（7-8回目）",
+      "lo_cumulative": 6,
+      "hi_cumulative": 7,
+      "sample_count": 99
+    },
+    "view_bin_5": {
+      "display_name": "累積8-10回→視聴\n（9-11回目）",
+      "lo_cumulative": 8,
+      "hi_cumulative": 10,
+      "sample_count": 131
+    },
+    "view_bin_6": {
+      "display_name": "累積11-14回→視聴\n（12-15回目）",
+      "lo_cumulative": 11,
+      "hi_cumulative": 14,
+      "sample_count": 130
+    },
+    "view_bin_7": {
+      "display_name": "累積15-19回→視聴\n（16-20回目）",
+      "lo_cumulative": 15,
+      "hi_cumulative": 19,
+      "sample_count": 122
+    },
+    "view_bin_8": {
+      "display_name": "累積20-26回→視聴\n（21-27回目）",
+      "lo_cumulative": 20,
+      "hi_cumulative": 26,
+      "sample_count": 131
+    },
+    "view_bin_9": {
+      "display_name": "累積27-39回→視聴\n（28-40回目）",
+      "lo_cumulative": 27,
+      "hi_cumulative": 39,
+      "sample_count": 125
+    },
+    "view_bin_10": {
+      "display_name": "累積40-117回→視聴\n（41-118回目）",
+      "lo_cumulative": 40,
+      "hi_cumulative": 117,
+      "sample_count": 129
+    }
+  },
+  "mr_activity_coef": {
+    "coefficient": -0.27078465136559837,
+    "se": 0.4869345466146589,
+    "p": 0.5781671441185376
+  },
+  "marginal_effects": {
+    "view_bin_1": {
+      "coefficient": -0.5174540910586423,
+      "se": 3.345210217470339,
+      "p": 0.8770759050667474,
+      "sig": "n.s."
+    },
+    "view_bin_2": {
+      "coefficient": -3.4225858178642103,
+      "se": 6.215032292352386,
+      "p": 0.5818677825716656,
+      "sig": "n.s."
+    },
+    "view_bin_3": {
+      "coefficient": 6.250244985782941,
+      "se": 4.706773318729111,
+      "p": 0.1842639132259345,
+      "sig": "n.s."
+    },
+    "view_bin_4": {
+      "coefficient": 2.696704750869097,
+      "se": 3.723592459626037,
+      "p": 0.46896415376075473,
+      "sig": "n.s."
+    },
+    "view_bin_5": {
+      "coefficient": 9.578052074070104,
+      "se": 4.932285920775688,
+      "p": 0.05220474893886018,
+      "sig": "n.s."
+    },
+    "view_bin_6": {
+      "coefficient": 17.362665203446763,
+      "se": 4.595012780316632,
+      "p": 0.00015957342065608948,
+      "sig": "***"
+    },
+    "view_bin_7": {
+      "coefficient": 24.078816933503557,
+      "se": 5.848880986002902,
+      "p": 3.903832560014919e-05,
+      "sig": "***"
+    },
+    "view_bin_8": {
+      "coefficient": 37.866628222263586,
+      "se": 5.65645525129449,
+      "p": 2.4059199077441917e-11,
+      "sig": "***"
+    },
+    "view_bin_9": {
+      "coefficient": 56.960826845847,
+      "se": 10.488950841584515,
+      "p": 5.8864250807033613e-08,
+      "sig": "***"
+    },
+    "view_bin_10": {
+      "coefficient": 124.7768496883703,
+      "se": 21.914391667887873,
+      "p": 1.3138601095974423e-08,
+      "sig": "***"
+    }
+  },
+  "continuation_rates": {
+    "0": 0.06363989134652696,
+    "1": 0.3446808510638298,
+    "2": 0.4421768707482993,
+    "3": 0.3125,
+    "4": 0.475,
+    "5": 0.40707964601769914,
+    "6": 0.5151515151515151,
+    "7": 0.42201834862385323,
+    "8": 0.3877551020408163,
+    "9": 0.4430379746835443,
+    "10": 0.47619047619047616
+  },
+  "initial_viewing_rate": 0.04150799695354151,
+  "viewing_probs": {
+    "view_bin_1": 0.04150799695354151,
+    "view_bin_2": 0.4421768707482993,
+    "view_bin_3": 0.3981932153392331,
+    "view_bin_4": 0.4685849318876842,
+    "view_bin_5": 0.4356611843049456,
+    "view_bin_6": 0.47620005228222706,
+    "view_bin_7": 0.5059011697119115,
+    "view_bin_8": 0.5864912864912865,
+    "view_bin_9": 0.6082978127349326,
+    "view_bin_10": 0.6243228993228993
+  },
+  "expected_effects": {
+    "view_bin_1": -0.021478482835259712,
+    "view_bin_2": -1.5133882868107051,
+    "view_bin_3": 2.4888051475468282,
+    "view_bin_4": 1.2636352120071903,
+    "view_bin_5": 4.1727855099238225,
+    "view_bin_6": 8.268102077640153,
+    "view_bin_7": 12.181501651938431,
+    "view_bin_8": 22.208447501162627,
+    "view_bin_9": 34.64914638190196,
+    "view_bin_10": 77.90104456582095
+  },
+  "expected_roi": {
+    "view_bin_1": -0.042956965670519424,
+    "view_bin_2": -3.0267765736214103,
+    "view_bin_3": 4.9776102950936565,
+    "view_bin_4": 2.5272704240143806,
+    "view_bin_5": 8.345571019847645,
+    "view_bin_6": 16.536204155280306,
+    "view_bin_7": 24.363003303876862,
+    "view_bin_8": 44.416895002325255,
+    "view_bin_9": 69.29829276380391,
+    "view_bin_10": 155.8020891316419
+  },
+  "optimal_strategy": {
+    "message": "累積2回視聴済みの既存医師への配信より新規医師への初回配信が有効",
+    "new_doctor_expected": -0.021478482835259712
+  },
+  "channel_bin_expected": {
+    "Web講演会": {
+      "view_bin_1": -0.013897441580577416,
+      "view_bin_2": -0.8667587460824947,
+      "view_bin_3": 1.0635921089252485,
+      "view_bin_4": 0.6963322126657293,
+      "view_bin_5": 3.0822105290260198,
+      "view_bin_6": 6.772670824039518,
+      "view_bin_7": 8.470413861983465,
+      "view_bin_8": 19.431559219319475,
+      "view_bin_9": 32.105193313113766,
+      "view_bin_10": 101.47514884295175
+    },
+    "e_contents": {
+      "view_bin_1": -0.016604735394975614,
+      "view_bin_2": -0.6222883305207655,
+      "view_bin_3": 1.129245942809523,
+      "view_bin_4": 0.7216533840353921,
+      "view_bin_5": 1.8890967758546573,
+      "view_bin_6": 4.248311698715697,
+      "view_bin_7": 6.947642830615651,
+      "view_bin_8": 15.11343494835959,
+      "view_bin_9": 23.302156436937413,
+      "view_bin_10": 107.48849099660816
+    },
+    "webiner": {
+      "view_bin_1": -0.014980359106336697,
+      "view_bin_2": -0.6667374969865345,
+      "view_bin_3": 1.1948997766937974,
+      "view_bin_4": 0.772295726774718,
+      "view_bin_5": 2.452511603741134,
+      "view_bin_6": 4.679299842063667,
+      "view_bin_7": 5.615218178168814,
+      "view_bin_8": 12.45612770469197,
+      "view_bin_9": 25.63237208063115,
+      "view_bin_10": 117.2601719962998
+    }
+  },
+  "viewing_distribution": {
+    "peak_bin": "view_bin_10",
+    "peak_threshold_lo": 40,
+    "peak_threshold_hi": 117,
+    "n_total_facilities": 156,
+    "n_above_peak": 17,
+    "pct_above_peak": 0.10897435897435898,
+    "threshold_stats": [
+      {
+        "bin": "view_bin_1",
+        "threshold": 0,
+        "n_above": 156,
+        "pct_above": 1.0
+      },
+      {
+        "bin": "view_bin_2",
+        "threshold": 2,
+        "n_above": 101,
+        "pct_above": 0.6474358974358975
+      },
+      {
+        "bin": "view_bin_3",
+        "threshold": 3,
+        "n_above": 94,
+        "pct_above": 0.6025641025641025
+      },
+      {
+        "bin": "view_bin_4",
+        "threshold": 6,
+        "n_above": 83,
+        "pct_above": 0.532051282051282
+      },
+      {
+        "bin": "view_bin_5",
+        "threshold": 8,
+        "n_above": 78,
+        "pct_above": 0.5
+      },
+      {
+        "bin": "view_bin_6",
+        "threshold": 11,
+        "n_above": 71,
+        "pct_above": 0.4551282051282051
+      },
+      {
+        "bin": "view_bin_7",
+        "threshold": 15,
+        "n_above": 56,
+        "pct_above": 0.358974358974359
+      },
+      {
+        "bin": "view_bin_8",
+        "threshold": 20,
+        "n_above": 44,
+        "pct_above": 0.28205128205128205
+      },
+      {
+        "bin": "view_bin_9",
+        "threshold": 27,
+        "n_above": 36,
+        "pct_above": 0.23076923076923078
+      },
+      {
+        "bin": "view_bin_10",
+        "threshold": 40,
+        "n_above": 17,
+        "pct_above": 0.10897435897435898
+      }
+    ],
+    "final_cum_views_describe": {
+      "count": 156.0,
+      "mean": 15.647435897435898,
+      "std": 21.79961659537942,
+      "min": 0.0,
+      "25%": 0.0,
+      "50%": 7.5,
+      "75%": 24.0,
+      "max": 117.0
+    },
+    "channel_peak_stats": {
+      "Web講演会": {
+        "n_above": 2,
+        "pct_above": 0.01282051282051282,
+        "ch_cum_views_describe": {
+          "count": 156.0,
+          "mean": 5.897435897435898,
+          "std": 8.851593249826864,
+          "min": 0.0,
+          "25%": 0.0,
+          "50%": 0.5,
+          "75%": 11.0,
+          "max": 44.0
+        }
+      },
+      "e_contents": {
+        "n_above": 1,
+        "pct_above": 0.00641025641025641,
+        "ch_cum_views_describe": {
+          "count": 156.0,
+          "mean": 5.038461538461538,
+          "std": 8.44556353503528,
+          "min": 0.0,
+          "25%": 0.0,
+          "50%": 0.0,
+          "75%": 8.0,
+          "max": 49.0
+        }
+      },
+      "webiner": {
+        "n_above": 3,
+        "pct_above": 0.019230769230769232,
+        "ch_cum_views_describe": {
+          "count": 156.0,
+          "mean": 5.153846153846154,
+          "std": 9.196180024724745,
+          "min": 0.0,
+          "25%": 0.0,
+          "50%": 0.0,
+          "75%": 8.0,
+          "max": 51.0
+        }
+      }
+    }
+  },
+  "interpretation": {
+    "binning_method": "qcut（均等サンプル数ビニング）",
+    "warning": "視聴は医師の自発的行動（内生変数）であり、因果効果ではなく相関関係"
+  }
+}
