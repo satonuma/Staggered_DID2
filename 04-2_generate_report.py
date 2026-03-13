@@ -74,6 +74,12 @@ else:
     _single_sfx = ""
 _suffix = _pop_sfx + _zero_sfx + _single_sfx
 
+# 05-3 出力ファイルのサフィックス（05-3と同じロジック）
+N_BINS_05_3 = 10
+_05_3_rw_tag  = "RW" if INCLUDE_ONLY_RW else ("nonRW" if INCLUDE_ONLY_NON_RW else "ALL")
+_05_3_fac_tag = "1fac1doc" if FILTER_SINGLE_FAC_DOCTOR else "alldoc"
+_05_3_suffix  = f"{_05_3_rw_tag}_{_05_3_fac_tag}_{N_BINS_05_3}bins"
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "本番データ")
 _required = [FILE_SALES, FILE_DIGITAL, FILE_ACTIVITY, FILE_RW_LIST]
@@ -218,6 +224,14 @@ if os.path.exists(psm_growth_rate_path):
     with open(psm_growth_rate_path, "r", encoding="utf-8") as f:
         psm_growth_rate_results = json.load(f)
     loaded_files.append("psm_growth_rate_v2.json")
+
+# 05-3 視聴回数別限界効果分析（qcut均等サンプル版）
+_05_3_json_path = os.path.join(RESULTS_DIR, f"05_3_physician_viewing_{_05_3_suffix}.json")
+physician_viewing_05_3 = None
+if os.path.exists(_05_3_json_path):
+    with open(_05_3_json_path, "r", encoding="utf-8") as f:
+        physician_viewing_05_3 = json.load(f)
+    loaded_files.append(f"05_3_physician_viewing_{_05_3_suffix}.json")
 
 print(f"  did_results.json, cate_results.json, {', '.join(loaded_files) if loaded_files else '(医師視聴分析なし)'} 読み込み完了")
 
@@ -726,6 +740,7 @@ png_files = [
     (f"psm_channel_coverage_growth_v2{_suffix}.png", "psm_channel_coverage_growth_v2.png"),
     (f"coverage_sample_v2{_suffix}.png",             "coverage_sample_v2.png"),
     (f"coverage_dose_response_v2{_suffix}.png",   "coverage_dose_response_v2.png"),
+    (f"05_3_physician_viewing_{_05_3_suffix}.png", "05_3_physician_viewing.png"),
 ]
 for actual_name, key_name in png_files:
     path = os.path.join(SCRIPT_DIR, actual_name)
@@ -1891,6 +1906,46 @@ IPW（傾向スコア重み付け: LogisticRegression）とOR（結果回帰: Ri
 <p>医師視聴パターン分析結果が見つかりません。<code>05_intensive_extensive_margin.py</code>を実行してください。</p>
 {% endif %}
 
+<!-- 7.1b: 05-3 視聴回数別限界効果（qcut均等サンプル版） -->
+<hr style="margin:30px 0;">
+<h3 id="sec7-1b">7.1b 視聴回数別限界効果 + 期待効果分析（均等サンプルビニング・チャネル別分布）</h3>
+<p>
+  <code>05_3</code> により、視聴回数ビンを <strong>qcut均等サンプル</strong> で分割し、チャネル別の期待効果および視聴数分布を可視化。
+  対象パラメータ: <strong>{{ _05_3_suffix }}</strong>
+</p>
+
+{% if pv_05_3 %}
+{% if pv_05_3.viewing_distribution %}
+{% set _vd = pv_05_3.viewing_distribution %}
+<div class="highlight-box">
+  <strong>ピーク期待効果ビン:</strong>
+  {{ _vd.peak_bin }} （累積{{ _vd.peak_threshold_lo }}回以上）<br>
+  <strong>ピーク閾値以上の施設:</strong>
+  {{ _vd.n_above_peak }} / {{ _vd.n_total_facilities }} ({{ "%.1f"|format(_vd.pct_above_peak * 100) }}%)<br>
+  {% if _vd.channel_peak_stats %}
+  <strong>チャネル別ピーク閾値以上割合:</strong>
+  {% for ch, cs in _vd.channel_peak_stats.items() %}
+    {{ ch }}: {{ cs.n_above }}/{{ _vd.n_total_facilities }} ({{ "%.1f"|format(cs.pct_above * 100) }}%)
+    {%- if not loop.last %}、{% endif %}
+  {% endfor %}
+  {% endif %}
+</div>
+{% endif %}
+{% endif %}
+
+{% if png_05_3 %}
+<div class="img-container">
+  <img src="data:image/png;base64,{{ png_05_3 }}" alt="05-3 Physician Viewing Analysis">
+</div>
+<p style="font-size:0.9em; color:#616161; margin-top:8px;">
+  (a) 視聴回数別限界効果（TWFE・qcut均等サンプル） / (b) 視聴確率（継続率） /
+  (c) 期待効果（全体） / (d) 視聴数分布とピーク閾値 /
+  各チャネル: 期待効果（棒グラフ）+ 視聴数分布（ヒストグラム）
+</p>
+{% else %}
+<p><code>05_3_physician_viewing_{{ _05_3_suffix }}.png</code> が見つかりません。<code>05_3_intensive_extensive_margin.py</code> を実行してください。</p>
+{% endif %}
+
 <!-- 7.2: セッションベース視聴パターン + 傾向スコア調整 -->
 <hr style="margin:30px 0;">
 <h3 id="sec7-2">7.2 セッションベース視聴パターン + 傾向スコア調整</h3>
@@ -2815,6 +2870,11 @@ template_data = {
     "png_coverage_sample": existing_pngs.get("coverage_sample_v2.png", ""),
     # Coverage 用量反応 (09-2)
     "png_coverage_dose": existing_pngs.get("coverage_dose_response_v2.png", ""),
+
+    # 05-3 視聴回数別限界効果分析（qcut均等サンプル版）
+    "png_05_3": existing_pngs.get("05_3_physician_viewing.png", ""),
+    "pv_05_3": physician_viewing_05_3,
+    "_05_3_suffix": _05_3_suffix,
 
     # 解析集団パラメータ
     "include_only_rw": INCLUDE_ONLY_RW,
