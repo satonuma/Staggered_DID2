@@ -694,7 +694,7 @@ from matplotlib.gridspec import GridSpec
 # レイアウト: 上4スロット（a,b,c,d）+ チャネル別各1スロット + サマリー（2列スパン）
 # スロット配置: [a,b], [c,d], [ch1,ch2], ..., [summary(span)]
 n_ch = len(channels_list)
-_slots_above_summary = 4 + n_ch          # a, b, c, d + 各チャネル
+_slots_above_summary = 4 + n_ch * 2      # a, b, c, d + チャネル別(期待効果+視聴分布)×n_ch
 _n_content_rows = (_slots_above_summary + 1) // 2
 _total_rows = _n_content_rows + 1        # +1 はサマリー行
 _fig_h = max(18, _total_rows * 5)        # 行あたり5インチ（コンパクト化）
@@ -790,26 +790,53 @@ _ylim = ax_d.get_ylim()
 ax_d.axvspan(_peak_lo - 0.5, _hist_max + 1, alpha=0.12, color="red")
 ax_d.set_ylim(_ylim)
 
-# (e〜) チャネル別期待効果（チャネルごとに個別棒グラフ）
+# (e〜) チャネル別：期待効果（棒グラフ）+ 視聴数分布（ヒストグラム）を横並び
 for ci, ch in enumerate(channels_list):
-    _r, _c = _slot(4 + ci)
-    ax_ch = fig.add_subplot(gs[_r, _c])
+    _letter1 = chr(101 + ci * 2)   # e, g, i, ...
+    _letter2 = chr(102 + ci * 2)   # f, h, j, ...
+    _ch_color = channel_palette[ci % len(channel_palette)]
     ch_vals = channel_bin_expected[ch]
     _ps = channel_peak_stats[ch]
+
+    # チャネル期待効果（棒グラフ）
+    _r, _c = _slot(4 + ci * 2)
+    ax_ch = fig.add_subplot(gs[_r, _c])
     _setup_bar_ax(
         ax_ch, ch_vals,
-        f"({chr(101+ci)}) チャネル別期待効果: {ch}",
+        f"({_letter1}) チャネル別期待効果: {ch}",
         "期待効果（万円）",
-        colors=[channel_palette[ci % len(channel_palette)]] * actual_n_bins,
+        colors=[_ch_color] * actual_n_bins,
         n_labels=channel_bin_counts[ch],
     )
-    # ピーク閾値以上割合をグラフ右上に注釈
     ax_ch.text(
         0.98, 0.97,
         f"累積{_peak_lo}回以上\n{_ps['n_above']}/{_n_total_fac} ({_ps['pct_above']:.1%})",
         transform=ax_ch.transAxes, fontsize=8, va="top", ha="right",
         bbox=dict(boxstyle="round,pad=0.3", facecolor="lightyellow", alpha=0.8),
     )
+
+    # チャネル視聴数分布（ヒストグラム）
+    _r, _c = _slot(4 + ci * 2 + 1)
+    ax_ch_hist = fig.add_subplot(gs[_r, _c])
+    _ch_views = ch_fac_total_wide[ch]
+    _ch_max = _ch_views.max()
+    if _ch_max > 0:
+        _ch_hist_max = min(int(_ch_views.quantile(0.99)) + 2, int(_ch_max) + 1)
+        _ch_hist_max = max(_ch_hist_max, _peak_lo + 1)
+        ax_ch_hist.hist(_ch_views.clip(upper=_ch_hist_max),
+                        bins=min(30, _ch_hist_max + 1),
+                        color=_ch_color, alpha=0.6, edgecolor="white")
+    ax_ch_hist.axvline(_peak_lo - 0.5, color="red", linestyle="--", linewidth=1.5,
+                       label=f"累積{_peak_lo}回以上\n{_ps['n_above']}/{_n_total_fac} ({_ps['pct_above']:.1%})")
+    _ch_ylim = ax_ch_hist.get_ylim()
+    _ch_xmax = _ch_hist_max + 1 if _ch_max > 0 else _peak_lo + 5
+    ax_ch_hist.axvspan(_peak_lo - 0.5, _ch_xmax, alpha=0.12, color="red")
+    ax_ch_hist.set_ylim(_ch_ylim)
+    ax_ch_hist.set_xlabel(f"{ch} 累積視聴回数", fontsize=10)
+    ax_ch_hist.set_ylabel("施設数", fontsize=10)
+    ax_ch_hist.set_title(f"({_letter2}) {ch} 視聴数分布", fontsize=12, fontweight="bold")
+    ax_ch_hist.legend(fontsize=8)
+    ax_ch_hist.grid(axis="y", alpha=0.3)
 
 # サマリーテキスト（最終行、2列スパン）
 ax_sum = fig.add_subplot(gs[_total_rows - 1, :])
@@ -894,7 +921,13 @@ output_json = {
             k: float(v) for k, v in fac_final_cum["final_cum_views"].describe().items()
         },
         "channel_peak_stats": {
-            ch: {"n_above": s["n_above"], "pct_above": float(s["pct_above"])}
+            ch: {
+                "n_above": s["n_above"],
+                "pct_above": float(s["pct_above"]),
+                "ch_cum_views_describe": {
+                    k: float(v) for k, v in ch_fac_total_wide[ch].describe().items()
+                },
+            }
             for ch, s in channel_peak_stats.items()
         },
     },
